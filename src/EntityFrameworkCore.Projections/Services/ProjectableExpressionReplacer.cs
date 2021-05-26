@@ -22,11 +22,15 @@ namespace EntityFrameworkCore.Projections.Services
                     if (node.Object is not null)
                     {
                         var expressionArgumentReplacer = new ExpressionArgumentReplacer(node.Object);
-                        return expressionArgumentReplacer.Visit(reflectedExpresssion.Body);
+                        return Visit(
+                            expressionArgumentReplacer.Visit(reflectedExpresssion.Body)
+                        );
                     }
                     else
                     {
-                        return reflectedExpresssion.Body;
+                        return Visit(
+                            reflectedExpresssion.Body
+                        );
                     }
                 }
             }
@@ -45,11 +49,15 @@ namespace EntityFrameworkCore.Projections.Services
                     if (node.Expression is not null)
                     {
                         var expressionArgumentReplacer = new ExpressionArgumentReplacer(node.Expression);
-                        return expressionArgumentReplacer.Visit(reflectedExpression.Body);
+                        return Visit(
+                            expressionArgumentReplacer.Visit(reflectedExpression.Body)
+                        );
                     }
                     else
                     {
-                        return reflectedExpression.Body;
+                        return Visit(
+                            reflectedExpression.Body
+                        );
                     }
                 }
             }
