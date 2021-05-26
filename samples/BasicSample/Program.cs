@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace BasicSample
@@ -116,7 +117,6 @@ namespace BasicSample
             };
 
             dbContext.Users.Add(user);
-
             dbContext.SaveChanges();
 
             var query = dbContext.Users
@@ -124,10 +124,12 @@ namespace BasicSample
                      Name = x.FullName,
                      x.TotalSpent
                  });
-            
-            Console.WriteLine(query.ToQueryString());
 
-            var r1 = query.ToArray();
+            var result = query.FirstOrDefault();
+
+            Console.WriteLine($"Our user {result.Name} spent {result.TotalSpent}");
+            Console.WriteLine($"We used the following query:");
+            Console.WriteLine(query.ToQueryString());
         }
     }
 }
