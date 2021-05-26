@@ -3,6 +3,7 @@ using System.Linq;
 using EntityFrameworkCore.Projections;
 
 namespace EntityFrameworkCore.Projections.Generated
+#nullable disable
 {
     public static class Foo_C_Foo
     {
