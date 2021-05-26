@@ -1,0 +1,11 @@
+using System;
+using EntityFrameworkCore.Projections;
+
+namespace EntityFrameworkCore.Projections.Generated
+{
+    public static class Foo_C_Foo
+    {
+        public static System.Linq.Expressions.Expression<System.Func<Foo.C, int>> Expression(int i) => 
+            projectionTarget => i;
+    }
+}
