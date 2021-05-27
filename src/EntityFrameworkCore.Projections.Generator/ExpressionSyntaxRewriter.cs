@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projections.Generator
 {
+
     public class ExpressionSyntaxRewriter : CSharpSyntaxRewriter
     {
         readonly INamedTypeSymbol _targetTypeSymbol;

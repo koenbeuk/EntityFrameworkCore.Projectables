@@ -4,9 +4,11 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using System.Linq;
 
@@ -26,6 +28,14 @@ namespace BasicSample
 
         [Projectable]
         public double TotalSpent => Orders.Sum(x => x.PriceSum);
+
+        [Projectable]
+        public Order MostValuableOrder
+            => Orders.OrderByDescending(x => x.PriceSum).FirstOrDefault();
+
+        [Projectable]
+        public IEnumerable<Product> FindOrderedProducts(string namePrefix)
+            => Orders.SelectMany(x => x.Items).Select(x => x.Product).Where(x => x.Name.StartsWith(namePrefix));
     }
 
     public class Product
@@ -85,7 +95,8 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>(options => {
                     options
                         .UseSqlite(dbConnection)
-                        .UseProjections();
+                        .UseProjections()
+                        .UseLoggerFactory(LoggerFactory.Create(builder => builder.AddConsole()));
                 })
                 .BuildServiceProvider();
 
@@ -119,17 +130,43 @@ namespace BasicSample
             dbContext.Users.Add(user);
             dbContext.SaveChanges();
 
-            var query = dbContext.Users
-                .Select(x => new {
-                     Name = x.FullName,
-                     x.TotalSpent
-                 });
+            // What did our user spent in total
+            {
+                var query = dbContext.Users
+                    .Select(x => new {
+                        Name = x.FullName,
+                        x.TotalSpent
+                    });
 
-            var result = query.FirstOrDefault();
+                var result = query.FirstOrDefault();
 
-            Console.WriteLine($"Our user {result.Name} spent {result.TotalSpent}");
-            Console.WriteLine($"We used the following query:");
-            Console.WriteLine(query.ToQueryString());
+                Console.WriteLine($"Our user ({result.Name}) spent {result.TotalSpent}");
+            }
+
+            {
+                var query = dbContext.Users
+                    .Select(x => new {
+                        Name = x.FullName,
+                        x.MostValuableOrder
+                    });
+
+                var result = query.FirstOrDefault();
+
+                Console.WriteLine($"Our users spent {result.MostValuableOrder.PriceSum} on its biggest order");
+            }
+
+            {
+                var query = dbContext.Users
+                    .Select(x => new {
+                        Name = x.FullName,
+                        Ordered = x.FindOrderedProducts("Red").Select(x => x.Name)
+                    });
+
+                var result = query.FirstOrDefault();
+
+                Console.WriteLine($"Our users bought the following products starting with 'Red': {string.Join(", ", result.Ordered)}");
+            }
+
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using EntityFrameworkCore.Projections;
+using Foo;
 
 namespace EntityFrameworkCore.Projections.Generated
 #nullable disable

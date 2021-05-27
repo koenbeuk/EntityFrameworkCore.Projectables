@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -16,27 +17,26 @@ namespace EntityFrameworkCore.Projections.Infrastructure.Internal
             Info = new ExtensionInfo(this);
         }
 
-        public DbContextOptionsExtensionInfo Info { get; } 
+        public DbContextOptionsExtensionInfo Info { get; }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "EF1001:Internal EF Core API usage.", Justification = "Needed")]
         public void ApplyServices(IServiceCollection services)
         {
-            var existingPreprocessorFactoryRegistration = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryTranslationPreprocessorFactory));
-
-            if (existingPreprocessorFactoryRegistration?.ImplementationType is null)
+            var queryCompilerRegistration = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
+            if (queryCompilerRegistration?.ImplementationType is null)
             {
-                throw new InvalidOperationException("Expected a QueryTranslationPreprocessor to be registered. Please make sure to register your database provider first");
+                throw new InvalidOperationException("No queryCompiler is configured yet. Please make sure to configure a database provider first"); ;
             }
 
-            // Ensure that we can still resolve this factory
-            services.Add(new ServiceDescriptor(existingPreprocessorFactoryRegistration.ImplementationType, existingPreprocessorFactoryRegistration.ImplementationType, existingPreprocessorFactoryRegistration.Lifetime));
-            services.Remove(existingPreprocessorFactoryRegistration);
+            // Ensure that we can still resolve this queryCompiler
+            services.Add(new ServiceDescriptor(queryCompilerRegistration.ImplementationType, queryCompilerRegistration.ImplementationType, queryCompilerRegistration.Lifetime));
+            services.Remove(queryCompilerRegistration);
 
             services.Add(new ServiceDescriptor(
-                typeof(IQueryTranslationPreprocessorFactory),
-                serviceProvider => new WrappedQueryTranslationPreprocessorFactory((IQueryTranslationPreprocessorFactory)serviceProvider.GetRequiredService(existingPreprocessorFactoryRegistration.ImplementationType), serviceProvider.GetRequiredService<QueryTranslationPreprocessorDependencies>()),
-                existingPreprocessorFactoryRegistration.Lifetime
+                typeof(IQueryCompiler),
+                serviceProvider => new WrappedQueryCompiler((IQueryCompiler)serviceProvider.GetRequiredService(queryCompilerRegistration.ImplementationType)),
+                queryCompilerRegistration.Lifetime
             ));
-
         }
 
         public void Validate(IDbContextOptions options)

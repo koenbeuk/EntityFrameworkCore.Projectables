@@ -1,17 +1,14 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System.Collections.Generic;
+using System.Linq;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projections.Generator
 {
     public static class ProjectableInterpreter
     {
-        static IEnumerable<string> GetNestedInClassPath(INamedTypeSymbol namedTypeSymbol)
+        static IEnumerable<string> GetNestedInClassPath(ITypeSymbol namedTypeSymbol)
         {
             if (namedTypeSymbol.ContainingType is not null)
             {
@@ -34,6 +31,7 @@ namespace EntityFrameworkCore.Projections.Generator
                 return null;
             }
 
+
             var projectableAttributeTypeSymbol = context.Compilation.GetTypeByMetadataName("EntityFrameworkCore.Projections.ProjectableAttribute");
 
             var projectableAttributeClass = memberSymbol.GetAttributes()
@@ -46,20 +44,32 @@ namespace EntityFrameworkCore.Projections.Generator
             }
 
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel);
+            var parameterSyntaxRewriter = new ParameterSyntaxRewriter(semanticModel);
 
-            var descriptor = new ProjectableDescriptor
-            {
+            var descriptor = new ProjectableDescriptor {
                 ClassName = memberSymbol.ContainingType.Name,
                 ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
                 NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType)
             };
 
+            if (memberSymbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
+            {
+                var targetTypeSymbol = methodSymbol.Parameters.First().Type;
+                descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
+                descriptor.TargetNestedInClassNames = GetNestedInClassPath(targetTypeSymbol);
+            }
+            else
+            {
+                descriptor.TargetClassNamespace = descriptor.ClassNamespace;
+                descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
+            }
+
             if (memberDeclarationSyntax is MethodDeclarationSyntax methodDeclarationSyntax)
             {
                 descriptor.ReturnTypeName = methodDeclarationSyntax.ReturnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
-                descriptor.ParametersListString = methodDeclarationSyntax.ParameterList.ToString();
+                descriptor.ParametersListString = parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList).ToString();
             }
             else if (memberDeclarationSyntax is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {

@@ -12,14 +12,14 @@ using Xunit;
 
 namespace EntityFrameworkCore.Projections.FunctionalTests
 {
-    public partial class StatelessComplexFunctionTests
+    public partial class StatefullComplexFunctionTests
     {
         public record Entity
         {
             public int Id { get; set; }
             
             [Projectable]
-            public int Computed(int argument1) => argument1; 
+            public int Computed(int argument) => Id + argument; 
         }
 
         [Scenario(NamingPolicy = ScenarioTestMethodNamingPolicy.Test)]
@@ -30,40 +30,40 @@ namespace EntityFrameworkCore.Projections.FunctionalTests
 
             scenario.Fact("We can filter on a projectable property", () => {
                 const string expectedQueryString =
-@"DECLARE @__p_0 bit = CAST(0 AS bit);
+@"DECLARE @__argument_0 int = 1;
 
 SELECT [e].[Id]
 FROM [Entity] AS [e]
-WHERE @__p_0 = CAST(1 AS bit)";
+WHERE ([e].[Id] + @__argument_0) = 2";
 
                 var query = dbContext.Set<Entity>().AsQueryable()
-                    .Where(x => x.Computed(0) == 1);
+                    .Where(x => x.Computed(1) == 2);
 
                 Assert.Equal(expectedQueryString, query.ToQueryString());
             });
 
             scenario.Fact("We can select on a projectable property", () => {
                 const string expectedQueryString =
-@"DECLARE @__argument1_0 int = 0;
+@"DECLARE @__argument_0 int = 1;
 
-SELECT @__argument1_0
+SELECT [e].[Id] + @__argument_0
 FROM [Entity] AS [e]";
 
                 var query = dbContext.Set<Entity>()
                     .AsQueryable()
-                    .Select(x => x.Computed(0));
+                    .Select(x => x.Computed(1));
 
                  Assert.Equal(expectedQueryString, query.ToQueryString());
             });
 
             scenario.Fact("We can pass in variables", () => {
                 const string expectedQueryString =
-@"DECLARE @__argument1_0 int = 0;
+@"DECLARE @__argument_0 int = 1;
 
-SELECT @__argument1_0
+SELECT [e].[Id] + @__argument_0
 FROM [Entity] AS [e]";
 
-                var argument = 0;
+                var argument = 1;
                 var query = dbContext.Set<Entity>()
                     .Select(x => x.Computed(argument));
 

@@ -15,6 +15,10 @@ namespace EntityFrameworkCore.Projections.Generator
 
         public IEnumerable<string> NestedInClassNames { get; set; }
 
+        public string TargetClassNamespace { get; set; }
+
+        public IEnumerable<string> TargetNestedInClassNames { get; set; }
+
         public string ClassName { get; set; }
 
         public string MemberName { get; set; }

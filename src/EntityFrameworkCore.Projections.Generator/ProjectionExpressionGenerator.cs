@@ -38,6 +38,16 @@ namespace EntityFrameworkCore.Projections.Generator
                         resultBuilder.AppendLine(usingDirective);
                     }
 
+                    if (projectable.TargetClassNamespace is not null && !projectable.UsingDirectives.Contains(projectable.TargetClassNamespace))
+                    {
+                        resultBuilder.AppendLine($"using {projectable.TargetClassNamespace};");
+                    }
+
+                    if (projectable.ClassNamespace is not null && projectable.ClassNamespace != projectable.TargetClassNamespace && !projectable.UsingDirectives.Contains(projectable.ClassNamespace))
+                    {
+                        resultBuilder.AppendLine($"using {projectable.ClassNamespace};");
+                    }
+
                     var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(projectable.ClassNamespace, projectable.NestedInClassNames, projectable.MemberName);
 
                     resultBuilder.Append($@"
@@ -46,7 +56,7 @@ namespace EntityFrameworkCore.Projections.Generated
 {{
     public static class {generatedClassName}
     {{
-        public static System.Linq.Expressions.Expression<System.Func<{projectable.ClassNamespace}.{string.Join(".", projectable.NestedInClassNames)}, {projectable.ReturnTypeName}>> Expression{projectable.ParametersListString} => 
+        public static System.Linq.Expressions.Expression<System.Func<{projectable.TargetClassNamespace}.{string.Join(".", projectable.TargetNestedInClassNames)}, {projectable.ReturnTypeName}>> Expression{projectable.ParametersListString} => 
             {ProjectionTargetParameterName} => {projectable.Body};
     }}
 }}");

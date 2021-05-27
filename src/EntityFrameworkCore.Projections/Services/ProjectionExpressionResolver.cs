@@ -43,17 +43,22 @@ namespace EntityFrameworkCore.Projections.Services
                     }
                     else
                     {
-                        var test1 = argumentExpressions.Cast<ParameterExpression>()!;
+                        var parameterExtractor = new ParameterExtractor();
+                        foreach (var argument in argumentExpressions)
+                        {
+                            parameterExtractor.Visit(argument);
+                        }
 
-                        var expressionFactoryConstructionMethod =
-                            Expression.Lambda<Func<LambdaExpression>>(
+                        var lambda = Expression.Lambda<Func<LambdaExpression>>(
                                 Expression.Call(
                                     expressionFactoryMethod,
                                     argumentExpressions
-                                )
-                            ).Compile();
+                                ),
+                                parameterExtractor.ExtractedParameters
+                            );
 
-                        return expressionFactoryConstructionMethod.Invoke();
+
+                        return lambda.Compile().Invoke();
                     }
                 });
             }); 
