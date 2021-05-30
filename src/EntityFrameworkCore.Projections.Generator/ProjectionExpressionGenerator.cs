@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -50,7 +51,7 @@ namespace EntityFrameworkCore.Projections.Generator
 
                     if (projectable.ClassNamespace is not null && projectable.ClassNamespace != projectable.TargetClassNamespace)
                     {
-                        var classUsingDirective = $"using {projectable.TargetClassNamespace};";
+                        var classUsingDirective = $"using {projectable.ClassNamespace};";
 
                         if (!projectable.UsingDirectives.Contains(classUsingDirective))
                         {
