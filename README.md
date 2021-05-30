@@ -38,7 +38,7 @@ public static class UserExtensions {
     public static Order GetMostRecentOrderForUser(this User user, DateTime? cutoffDate) => 
         user.Orders
             .Where(x => cutoffDate == null || x.CreatedDate >= cutoffDate)
-            .OrderByDescending(x => X.CreatedDate)
+            .OrderByDescending(x => x.CreatedDate)
             .FirstOrDefault();
 }
 
@@ -107,7 +107,7 @@ Yes you can! Any projectable property/method can call into other properties and 
 #### Can I use projectable extensions methods on non-entity types?
 Yes you can. It's perfectly acceptable to have the following code:
 ```csharp
-[Projectable]s
+[Projectable]
 public static int Squared(this int i) => i * i;
 ```
 Any call to squared given any int will perfertly translate to SQL.
