@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using EntityFrameworkCore.Projections;
+using Foo;
 
 namespace EntityFrameworkCore.Projections.Generated
 #nullable disable
