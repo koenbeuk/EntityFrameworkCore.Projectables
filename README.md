@@ -1,3 +1,7 @@
+> DISCLAIMER: This project and this readme in particular are still a WIP. Expect a first version coming coon.
+
+> DISCLAIMER: The final name of this project has not yet been settled upon. EntityFrameworkCore.Projections is quite non descriptive as projections are a core concept of EFCore already. Feel free to open up an issue suggesting a better name
+
 # EntitiyFrameworkCore.Projections
 Flexible projection magic for EFCore
 
@@ -118,4 +122,4 @@ There are a few projects like [LinqKit](https://github.com/scottksmith95/LINQKit
 Yes it is! there is no difference between any of these versions and you can upgrade/downgrade whenever you want.
 
 #### What is next for this project?
-TBD...
+TBD... However one thing I'd like to improve is our Expression generation logic as its currently making a few assumptions (have yet to experience it breaking). Community contributions are very welcome!
