@@ -8,11 +8,13 @@ using EntityFrameworkCore.Projections.FunctionalTests.Helpers;
 using EntityFrameworkCore.Projections.Services;
 using Microsoft.EntityFrameworkCore;
 using ScenarioTests;
+using VerifyXunit;
 using Xunit;
 
 namespace EntityFrameworkCore.Projections.FunctionalTests
 {
-    public partial class StatefullComplexFunctionTests
+    [UsesVerify]
+    public class StatefullComplexFunctionTests
     {
         public record Entity
         {
@@ -22,53 +24,51 @@ namespace EntityFrameworkCore.Projections.FunctionalTests
             public int Computed(int argument) => Id + argument; 
         }
 
-        [Scenario(NamingPolicy = ScenarioTestMethodNamingPolicy.Test)]
-        public void PlayScenario(ScenarioContext scenario)
+
+        [Fact]
+        public Task FilterOnProjectableProperty()
         {
-            // Setup
-            using var dbContext = new SampleDbContext<Entity>(); 
+            using var dbContext = new SampleDbContext<Entity>();
 
-            scenario.Fact("We can filter on a projectable property", () => {
-                const string expectedQueryString =
-@"DECLARE @__argument_0 int = 1;
+            var query = dbContext.Set<Entity>()
+                .Where(x => x.Computed(1) == 2);
 
-SELECT [e].[Id]
-FROM [Entity] AS [e]
-WHERE ([e].[Id] + @__argument_0) = 2";
+            return Verifier.Verify(query.ToQueryString());
+        }
 
-                var query = dbContext.Set<Entity>().AsQueryable()
-                    .Where(x => x.Computed(1) == 2);
+        [Fact]
+        public Task SelectProjectableProperty()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
 
-                Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Computed(1));
 
-            scenario.Fact("We can select on a projectable property", () => {
-                const string expectedQueryString =
-@"DECLARE @__argument_0 int = 1;
+            return Verifier.Verify(query.ToQueryString());
+        }
 
-SELECT [e].[Id] + @__argument_0
-FROM [Entity] AS [e]";
 
-                var query = dbContext.Set<Entity>()
-                    .AsQueryable()
-                    .Select(x => x.Computed(1));
+        [Fact]
+        public Task PassInVariableArguments()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
 
-                 Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+            var argument = 1;
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Computed(argument));
 
-            scenario.Fact("We can pass in variables", () => {
-                const string expectedQueryString =
-@"DECLARE @__argument_0 int = 1;
+            return Verifier.Verify(query.ToQueryString());
+        }
 
-SELECT [e].[Id] + @__argument_0
-FROM [Entity] AS [e]";
+        [Fact]
+        public Task PassInReferenceArguments()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
 
-                var argument = 1;
-                var query = dbContext.Set<Entity>()
-                    .Select(x => x.Computed(argument));
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Computed(x.Id));
 
-                Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+            return Verifier.Verify(query.ToQueryString());
         }
     }
 }

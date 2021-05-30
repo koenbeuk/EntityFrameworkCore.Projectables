@@ -1,5 +1,6 @@
 ﻿using EntityFrameworkCore.Projections.Services;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
@@ -12,8 +13,6 @@ namespace EntityFrameworkCore.Projections.Generator
     [Generator]
     public class ProjectionExpressionGenerator : ISourceGenerator
     {
-        public const string ProjectionTargetParameterName = "projectionTarget";
-
         public void Execute(GeneratorExecutionContext context)
         {
             if (context.SyntaxReceiver is not SyntaxReceiver receiver)
@@ -49,6 +48,11 @@ namespace EntityFrameworkCore.Projections.Generator
                     }
 
                     var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(projectable.ClassNamespace, projectable.NestedInClassNames, projectable.MemberName);
+                    var lambdaTypeArguments = SyntaxFactory.TypeArgumentList(
+                        SyntaxFactory.SeparatedList(
+                            projectable.ParametersList.Parameters.Select(p => p.Type)
+                        )
+                    );
 
                     resultBuilder.Append($@"
 namespace EntityFrameworkCore.Projections.Generated
@@ -56,8 +60,8 @@ namespace EntityFrameworkCore.Projections.Generated
 {{
     public static class {generatedClassName}
     {{
-        public static System.Linq.Expressions.Expression<System.Func<{projectable.TargetClassNamespace}.{string.Join(".", projectable.TargetNestedInClassNames)}, {projectable.ReturnTypeName}>> Expression{projectable.ParametersListString} => 
-            {ProjectionTargetParameterName} => {projectable.Body};
+        public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression => 
+            {projectable.ParametersList} => {projectable.Body};
     }}
 }}");
 

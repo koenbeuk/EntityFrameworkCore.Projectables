@@ -6,27 +6,35 @@ using System.Threading.Tasks;
 using EntityFrameworkCore.Projections.FunctionalTests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using ScenarioTests;
+using VerifyXunit;
 using Xunit;
 
 namespace EntityFrameworkCore.Projections.FunctionalTests.ExtensionMethods
 {
 
-    public partial class ExtensionMethodTests
+    [UsesVerify]
+    public class ExtensionMethodTests
     {
-        [Scenario(NamingPolicy = ScenarioTestMethodNamingPolicy.Test)]
-        public void PlayScenario(ScenarioContext scenario)
+        [Fact]
+        public Task ExtensionOnPrimitive()
         {
             using var dbContext = new SampleDbContext<Entity>();
 
-            scenario.Fact("We can select on a projectable extension method", () => {
-                const string expectedQueryString = "SELECT [e].[Id]\r\nFROM [Entity] AS [e]";
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Id.Squared());
 
-                var query = dbContext.Set<Entity>()
-                    .Select(x => x.Foo());
+            return Verifier.Verify(query.ToQueryString());
+        }
 
-                Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+        [Fact]
+        public Task SelectProjectableExtensionMethod()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
 
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Foo());
+
+            return Verifier.Verify(query.ToQueryString());
         }
     }
 }

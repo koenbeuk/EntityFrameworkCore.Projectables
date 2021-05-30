@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace EntityFrameworkCore.Projections.Generator
 
         public string ReturnTypeName { get; set; }
 
-        public string ParametersListString { get; set; }
+        public ParameterListSyntax ParametersList { get; set; }
 
         public SyntaxNode Body { get; set; }
     }

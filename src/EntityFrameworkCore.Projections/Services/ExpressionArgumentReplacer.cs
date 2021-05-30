@@ -9,23 +9,26 @@ namespace EntityFrameworkCore.Projections.Services
 {
     public class ExpressionArgumentReplacer : ExpressionVisitor
     {
-        readonly Expression _targetExpression;
+        readonly IEnumerable<(ParameterExpression parameter, Expression argument)>? _parameterArgumentMapping;
 
-        public ExpressionArgumentReplacer(Expression targetExpression)
+        public ExpressionArgumentReplacer(IEnumerable<(ParameterExpression, Expression)>? parameterArgumentMapping = null)
         {
-            _targetExpression = targetExpression;
+            _parameterArgumentMapping = parameterArgumentMapping;
         }
 
         protected override Expression VisitParameter(ParameterExpression node)
         {
-            if (node.Name == "projectionTarget")
+            var mappedArgument = _parameterArgumentMapping?
+                .Where(x => x.parameter == node)
+                .Select(x => x.argument)
+                .FirstOrDefault();
+
+            if (mappedArgument is not null)
             {
-                return _targetExpression;
+                return mappedArgument;
             }
-            else
-            {
-                return base.VisitParameter(node);
-            }
+
+            return base.VisitParameter(node);
         }
     }
 }

@@ -15,24 +15,25 @@ namespace EntityFrameworkCore.Projections.Services
         {
             if (node.Method.GetCustomAttributes(true).OfType<ProjectableAttribute>().Any())
             {
-                var reflectedExpressionFactory = _resolver.FindGeneratedExpressionFactory(node.Method);
-                var reflectedExpresssion = reflectedExpressionFactory(node.Arguments);
-                if (reflectedExpresssion is not null)
+                var reflectedExpression = _resolver.FindGeneratedExpression(node.Method);
+
+                var parameterArgumentMapping = node.Object is not null
+                    ? Enumerable.Repeat((reflectedExpression.Parameters[0], node.Object), 1)
+                    : Enumerable.Empty<(ParameterExpression, Expression)>();
+
+                if (reflectedExpression.Parameters.Count > 0)
                 {
-                    if (node.Object is not null)
-                    {
-                        var expressionArgumentReplacer = new ExpressionArgumentReplacer(node.Object);
-                        return Visit(
-                            expressionArgumentReplacer.Visit(reflectedExpresssion.Body)
-                        );
-                    }
-                    else
-                    {
-                        return Visit(
-                            reflectedExpresssion.Body
-                        );
-                    }
+                    parameterArgumentMapping = parameterArgumentMapping.Concat(
+                        node.Object is not null 
+                            ? reflectedExpression.Parameters.Skip(1).Zip(node.Arguments)
+                            : reflectedExpression.Parameters.Zip(node.Arguments)
+                    );
                 }
+
+                var expressionArgumentReplacer = new ExpressionArgumentReplacer(parameterArgumentMapping);
+                return Visit(
+                    expressionArgumentReplacer.Visit(reflectedExpression.Body)
+                );
             }
 
             return base.VisitMethodCall(node);
@@ -40,25 +41,24 @@ namespace EntityFrameworkCore.Projections.Services
 
         protected override Expression VisitMember(MemberExpression node)
         {
-            if (node.Member.GetCustomAttributes(true).OfType<ProjectableAttribute>().Any())
+            if (node.Member.GetCustomAttributes(false).OfType<ProjectableAttribute>().Any())
             {
-                var reflectedExpressionFactory = _resolver.FindGeneratedExpressionFactory(node.Member);
-                var reflectedExpression = reflectedExpressionFactory(null);
-                if (reflectedExpression is not null)
+                var reflectedExpression = _resolver.FindGeneratedExpression(node.Member);
+                
+                if (node.Expression is not null)
                 {
-                    if (node.Expression is not null)
-                    {
-                        var expressionArgumentReplacer = new ExpressionArgumentReplacer(node.Expression);
-                        return Visit(
-                            expressionArgumentReplacer.Visit(reflectedExpression.Body)
-                        );
-                    }
-                    else
-                    {
-                        return Visit(
-                            reflectedExpression.Body
-                        );
-                    }
+                    var expressionArgumentReplacer = new ExpressionArgumentReplacer(
+                        Enumerable.Repeat((reflectedExpression.Parameters[0], node.Expression), 1)
+                    );
+                    return Visit(
+                        expressionArgumentReplacer.Visit(reflectedExpression.Body)
+                    );
+                }
+                else
+                {
+                    return Visit(
+                        reflectedExpression.Body
+                    );
                 }
             }
 

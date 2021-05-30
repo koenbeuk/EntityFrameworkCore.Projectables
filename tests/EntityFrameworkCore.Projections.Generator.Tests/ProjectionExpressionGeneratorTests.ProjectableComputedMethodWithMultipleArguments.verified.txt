@@ -7,7 +7,7 @@ namespace EntityFrameworkCore.Projections.Generated
 {
     public static class Foo_C_Foo
     {
-        public static System.Linq.Expressions.Expression<System.Func<Foo.C, int>> Expression(int a, string b, object d) => 
-            projectionTarget => a;
+        public static System.Linq.Expressions.Expression<System.Func<global::Foo.C ,int ,string ,object, int>> Expression => 
+            (global::Foo.C @this,int a,string b,object d) => a;
     }
 }

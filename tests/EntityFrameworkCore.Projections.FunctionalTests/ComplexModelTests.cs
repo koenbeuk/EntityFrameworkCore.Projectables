@@ -8,14 +8,16 @@ using EntityFrameworkCore.Projections.FunctionalTests.Helpers;
 using EntityFrameworkCore.Projections.Services;
 using Microsoft.EntityFrameworkCore;
 using ScenarioTests;
+using VerifyXunit;
 using Xunit;
 
 #nullable disable
 
 namespace EntityFrameworkCore.Projections.FunctionalTests
 {
-    
-    public partial class ComplexModelTests
+
+    [UsesVerify]
+    public class ComplexModelTests
     {
         public class User
         {
@@ -45,45 +47,27 @@ namespace EntityFrameworkCore.Projections.FunctionalTests
             public DateTime RecordDate { get; set; }
         } 
 
-        [Scenario(NamingPolicy = ScenarioTestMethodNamingPolicy.Test)]
-        public void PlayScenario(ScenarioContext scenario)
+        [Fact]
+        public Task ProjectOverNavigationProperty()
         {
             using var dbContext = new SampleDbContext<User>();
 
-            scenario.Fact("We can project over a projectable navigation property", () => {
-                const string expectedQueryString = 
-@"SELECT (
-    SELECT TOP(1) [o].[RecordDate]
-    FROM [Order] AS [o]
-    WHERE [u].[Id] = [o].[UserId]
-    ORDER BY [o].[RecordDate] DESC)
-FROM [User] AS [u]";
+            var query = dbContext.Set<User>()
+                .Select(x => x.LastOrder.RecordDate);
 
-                var query = dbContext.Set<User>()
-                    .Select(x => x.LastOrder.RecordDate);
+            return Verifier.Verify(query.ToQueryString());
+        }
 
-                Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+        [Fact]
+        public Task ProjectOverCollectionNavigationProperty()
+        {
+            using var dbContext = new SampleDbContext<User>();
 
-            scenario.Fact("We can project over a projectable navigation collection property", () => {
-                const string expectedQueryString = 
-@"SELECT [t0].[RecordDate]
-FROM [User] AS [u]
-INNER JOIN (
-    SELECT [t].[RecordDate], [t].[UserId]
-    FROM (
-        SELECT [o].[RecordDate], [o].[UserId], ROW_NUMBER() OVER(PARTITION BY [o].[UserId] ORDER BY [o].[RecordDate] DESC) AS [row]
-        FROM [Order] AS [o]
-    ) AS [t]
-    WHERE [t].[row] <= 2
-) AS [t0] ON [u].[Id] = [t0].[UserId]";
+            var query = dbContext.Set<User>()
+                .SelectMany(x => x.Last2Orders)
+                .Select(x => x.RecordDate);
 
-                var query = dbContext.Set<User>()
-                    .SelectMany(x => x.Last2Orders)
-                    .Select(x => x.RecordDate);
-
-                Assert.Equal(expectedQueryString, query.ToQueryString());
-            });
+            return Verifier.Verify(query.ToQueryString());
         }
     }
 }

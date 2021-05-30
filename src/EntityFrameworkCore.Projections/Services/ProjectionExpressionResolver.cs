@@ -12,9 +12,9 @@ namespace EntityFrameworkCore.Projections.Services
 {
     public sealed class ProjectionExpressionResolver
     {
-        readonly ConcurrentDictionary<string, Func<IReadOnlyCollection<Expression>?, LambdaExpression>> _lookupCache = new();
+        readonly ConcurrentDictionary<string, LambdaExpression> _lookupCache = new();
 
-        public Func<IReadOnlyCollection<Expression>?, LambdaExpression> FindGeneratedExpressionFactory(MemberInfo projectableMemberInfo)
+        public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
         {
             var reflectedType = projectableMemberInfo.ReflectedType ?? throw new InvalidOperationException("Expected a valid type here");
             var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(reflectedType.Namespace, reflectedType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
@@ -35,32 +35,7 @@ namespace EntityFrameworkCore.Projections.Services
                     };
                 }
 
-                return new Func<IReadOnlyCollection<Expression>?, LambdaExpression>(argumentExpressions => 
-                {
-                    if (argumentExpressions is null || argumentExpressions.Count is 0)
-                    {
-                        return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
-                    }
-                    else
-                    {
-                        var parameterExtractor = new ParameterExtractor();
-                        foreach (var argument in argumentExpressions)
-                        {
-                            parameterExtractor.Visit(argument);
-                        }
-
-                        var lambda = Expression.Lambda<Func<LambdaExpression>>(
-                                Expression.Call(
-                                    expressionFactoryMethod,
-                                    argumentExpressions
-                                ),
-                                parameterExtractor.ExtractedParameters
-                            );
-
-
-                        return lambda.Compile().Invoke();
-                    }
-                });
+                return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
             }); 
         }
     }

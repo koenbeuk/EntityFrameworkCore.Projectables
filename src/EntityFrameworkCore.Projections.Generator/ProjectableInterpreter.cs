@@ -50,8 +50,25 @@ namespace EntityFrameworkCore.Projections.Generator
                 ClassName = memberSymbol.ContainingType.Name,
                 ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
-                NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType)
+                NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType),
+                ParametersList = SyntaxFactory.ParameterList()
             };
+
+            if (!memberDeclarationSyntax.Modifiers.Any(SyntaxKind.StaticKeyword))
+            {
+                descriptor.ParametersList = descriptor.ParametersList.AddParameters(
+                    SyntaxFactory.Parameter(
+                            SyntaxFactory.Identifier("@this")
+                        ).WithType(
+                            SyntaxFactory.ParseTypeName(
+                                memberSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                            )
+                            .WithTrailingTrivia(
+                                SyntaxFactory.SyntaxTrivia(SyntaxKind.WhitespaceTrivia, " ")
+                            )
+                        )
+                );
+            }
 
             if (memberSymbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
             {
@@ -69,18 +86,22 @@ namespace EntityFrameworkCore.Projections.Generator
             {
                 descriptor.ReturnTypeName = methodDeclarationSyntax.ReturnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
-                descriptor.ParametersListString = parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList).ToString();
+                foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
+                {
+                    descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
+                }
             }
             else if (memberDeclarationSyntax is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
                 descriptor.ReturnTypeName = propertyDeclarationSyntax.Type.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
-                descriptor.ParametersListString = "()";
             }
             else
             {
                 return null;
             }
+
+
 
             descriptor.UsingDirectives =
                 memberDeclarationSyntax.SyntaxTree

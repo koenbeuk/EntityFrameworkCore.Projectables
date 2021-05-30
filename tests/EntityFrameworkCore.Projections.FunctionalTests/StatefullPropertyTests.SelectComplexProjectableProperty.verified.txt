@@ -1,0 +1,2 @@
+SELECT [e].[Id] * 2
+FROM [Entity] AS [e]

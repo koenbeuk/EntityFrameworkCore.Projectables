@@ -35,7 +35,7 @@ namespace EntityFrameworkCore.Projections.Generator
                     if (nextNode is not null)
                     {
                         return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.IdentifierName(ProjectionExpressionGenerator.ProjectionTargetParameterName),
+                            SyntaxFactory.IdentifierName("@this"),
                                 nextNode
                             );
                     }
@@ -52,7 +52,7 @@ namespace EntityFrameworkCore.Projections.Generator
             if (symbolInfo.Symbol is not null && symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
             {
                 return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                    SyntaxFactory.IdentifierName(ProjectionExpressionGenerator.ProjectionTargetParameterName),
+                    SyntaxFactory.IdentifierName("@this"),
                     node
                 );
             }
