@@ -30,8 +30,8 @@ namespace EntityFrameworkCore.Projections.Services
                 {
                     parameterArgumentMapping = parameterArgumentMapping.Concat(
                         node.Object is not null 
-                            ? reflectedExpression.Parameters.Skip(1).Zip(node.Arguments)
-                            : reflectedExpression.Parameters.Zip(node.Arguments)
+                            ? reflectedExpression.Parameters.Skip(1).Zip(node.Arguments, (parameter, argument) => (parameter, argument))
+                            : reflectedExpression.Parameters.Zip(node.Arguments, (parameter, argument) => (parameter, argument))
                     );
                 }
 
