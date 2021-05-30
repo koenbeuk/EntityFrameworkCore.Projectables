@@ -84,6 +84,13 @@ namespace EntityFrameworkCore.Projections.Generator
 
             if (memberDeclarationSyntax is MethodDeclarationSyntax methodDeclarationSyntax)
             {
+                if (methodDeclarationSyntax.ExpressionBody is null)
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    context.ReportDiagnostic(diagnostic);
+                    return null;
+                }
+
                 descriptor.ReturnTypeName = methodDeclarationSyntax.ReturnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
                 foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
@@ -93,6 +100,13 @@ namespace EntityFrameworkCore.Projections.Generator
             }
             else if (memberDeclarationSyntax is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
+                if (propertyDeclarationSyntax.ExpressionBody is null)
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    context.ReportDiagnostic(diagnostic);
+                    return null;
+                }
+
                 descriptor.ReturnTypeName = propertyDeclarationSyntax.Type.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
             }
