@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projections.Generator
@@ -32,19 +33,29 @@ namespace EntityFrameworkCore.Projections.Generator
                 {
                     resultBuilder.Clear();
 
-                    foreach (var usingDirective in projectable.UsingDirectives)
+                    foreach (var usingDirective in projectable.UsingDirectives.Distinct())
                     {
                         resultBuilder.AppendLine(usingDirective);
                     }
 
-                    if (projectable.TargetClassNamespace is not null && !projectable.UsingDirectives.Contains(projectable.TargetClassNamespace))
+                    if (projectable.TargetClassNamespace is not null)
                     {
-                        resultBuilder.AppendLine($"using {projectable.TargetClassNamespace};");
+                        var targetClassUsingDirective = $"using {projectable.TargetClassNamespace};";
+
+                        if (!projectable.UsingDirectives.Contains(targetClassUsingDirective))
+                        {
+                            resultBuilder.AppendLine(targetClassUsingDirective);
+                        }
                     }
 
-                    if (projectable.ClassNamespace is not null && projectable.ClassNamespace != projectable.TargetClassNamespace && !projectable.UsingDirectives.Contains(projectable.ClassNamespace))
+                    if (projectable.ClassNamespace is not null && projectable.ClassNamespace != projectable.TargetClassNamespace)
                     {
-                        resultBuilder.AppendLine($"using {projectable.ClassNamespace};");
+                        var classUsingDirective = $"using {projectable.TargetClassNamespace};";
+
+                        if (!projectable.UsingDirectives.Contains(classUsingDirective))
+                        {
+                            resultBuilder.AppendLine(classUsingDirective);
+                        }
                     }
 
                     var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(projectable.ClassNamespace, projectable.NestedInClassNames, projectable.MemberName);
