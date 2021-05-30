@@ -2,8 +2,10 @@
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -22,22 +24,34 @@ namespace EntityFrameworkCore.Projections.Infrastructure.Internal
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "EF1001:Internal EF Core API usage.", Justification = "Needed")]
         public void ApplyServices(IServiceCollection services)
         {
-            var queryCompilerRegistration = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
-            if (queryCompilerRegistration?.ImplementationType is null)
+            static object CreateTargetInstance(IServiceProvider services, ServiceDescriptor descriptor)
             {
-                throw new InvalidOperationException("No queryCompiler is configured yet. Please make sure to configure a database provider first"); ;
+                if (descriptor.ImplementationInstance is not null)
+                    return descriptor.ImplementationInstance;
+
+                if (descriptor.ImplementationFactory is not null)
+                    return descriptor.ImplementationFactory(services);
+
+                Debug.Assert(descriptor.ImplementationType is not null);
+
+                return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
             }
 
-            // Ensure that we can still resolve this queryCompiler
-            services.Add(new ServiceDescriptor(queryCompilerRegistration.ImplementationType, queryCompilerRegistration.ImplementationType, queryCompilerRegistration.Lifetime));
-            services.Remove(queryCompilerRegistration);
+            var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryTranslationPreprocessorFactory));
+            if (targetDescriptor is null)
+            {
+                throw new InvalidOperationException("No QueryTranslationPreprocessorFactory is configured yet. Please make sure to configure a database provider first"); ;
+            }
 
-            services.Add(new ServiceDescriptor(
-                typeof(IQueryCompiler),
-                serviceProvider => new WrappedQueryCompiler((IQueryCompiler)serviceProvider.GetRequiredService(queryCompilerRegistration.ImplementationType)),
-                queryCompilerRegistration.Lifetime
+            var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryTranslationPreprocessorFactory), new [] { targetDescriptor.ServiceType });
+
+            services.Replace(ServiceDescriptor.Describe(
+                targetDescriptor.ServiceType,
+                serviceProvider => decoratorObjectFactory(serviceProvider, new[] { CreateTargetInstance(serviceProvider, targetDescriptor) }),
+                targetDescriptor.Lifetime
             ));
         }
+
 
         public void Validate(IDbContextOptions options)
         {
