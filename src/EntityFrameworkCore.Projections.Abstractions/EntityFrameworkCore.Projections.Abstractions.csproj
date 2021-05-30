@@ -15,7 +15,7 @@
   
   <ItemGroup>
     <!-- Package the generator in the analyzer directory of the nuget package -->
-    <None Include="$(OutputPath)\$(AssemblyName).Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(OutputPath)\$EntityFrameworkCore.Projections.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
 </Project>
