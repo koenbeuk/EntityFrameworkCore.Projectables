@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projections.Infrastructure.Internal
     {
         readonly IQueryTranslationPreprocessorFactory _decoratedFactory;
         readonly QueryTranslationPreprocessorDependencies _queryTranslationPreprocessorDependencies;
-        readonly ProjectableExpressionReplacer _projectableExpressionReplacer = new();
+        readonly ProjectableExpressionReplacer _projectableExpressionReplacer = new(new ProjectionExpressionResolver());
 
         public CustomQueryTranslationPreprocessorFactory(IQueryTranslationPreprocessorFactory decoratedFactory, QueryTranslationPreprocessorDependencies queryTranslationPreprocessorDependencies)
         {

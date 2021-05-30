@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projections.Services
 {
-    public class ExpressionArgumentReplacer : ExpressionVisitor
+    public sealed class ExpressionArgumentReplacer : ExpressionVisitor
     {
         readonly IEnumerable<(ParameterExpression parameter, Expression argument)>? _parameterArgumentMapping;
 

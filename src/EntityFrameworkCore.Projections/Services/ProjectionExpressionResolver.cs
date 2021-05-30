@@ -10,7 +10,7 @@ using EntityFrameworkCore.Projections.Extensions;
 
 namespace EntityFrameworkCore.Projections.Services
 {
-    public sealed class ProjectionExpressionResolver
+    public sealed class ProjectionExpressionResolver : IProjectionExpressionResolver
     {
         readonly ConcurrentDictionary<string, LambdaExpression> _lookupCache = new();
 
@@ -36,7 +36,7 @@ namespace EntityFrameworkCore.Projections.Services
                 }
 
                 return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
-            }); 
+            });
         }
     }
 }

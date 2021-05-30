@@ -7,13 +7,18 @@ using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projections.Services
 {
-    public class ProjectableExpressionReplacer : ExpressionVisitor
+    public sealed class ProjectableExpressionReplacer : ExpressionVisitor
     {
-        readonly ProjectionExpressionResolver _resolver = new();
+        readonly IProjectionExpressionResolver _resolver;
+
+        public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver)
+        {
+            _resolver = projectionExpressionResolver;
+        }
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            if (node.Method.GetCustomAttributes(true).OfType<ProjectableAttribute>().Any())
+            if (node.Method.GetCustomAttributes(false).OfType<ProjectableAttribute>().Any())
             {
                 var reflectedExpression = _resolver.FindGeneratedExpression(node.Method);
 
