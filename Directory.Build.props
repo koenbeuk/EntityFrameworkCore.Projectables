@@ -4,11 +4,18 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <NoWarn>CS1591</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
     <Authors>Koen Bekkenutte</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projections</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projections.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projections/releases</PackageReleaseNotes>
   </PropertyGroup>
 
 </Project>

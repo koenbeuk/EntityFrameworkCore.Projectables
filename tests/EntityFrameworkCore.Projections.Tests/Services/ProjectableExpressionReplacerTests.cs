@@ -24,7 +24,7 @@ namespace EntityFrameworkCore.Projections.Tests.Services
             public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo) => _implementation(projectableMemberInfo);
         }
 
-        public class Entity
+        class Entity
         {
             public int Id { get; set; }
 
