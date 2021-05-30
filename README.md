@@ -122,4 +122,4 @@ There are a few projects like [LinqKit](https://github.com/scottksmith95/LINQKit
 Yes it is! there is no difference between any of these versions and you can upgrade/downgrade whenever you want.
 
 #### What is next for this project?
-TBD...
+TBD... However one thing I'd like to improve is our Expression generation logic as its currently making a few assumptions (have yet to experience it breaking). Community contributions are very welcome!
