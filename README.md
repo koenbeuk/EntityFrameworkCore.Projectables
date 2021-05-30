@@ -1,3 +1,7 @@
+> DISCLAIMER: This project and this readme in particular are still a WIP. Expect a first version coming coon.
+
+> DISCLAIMER: The final name of this project has not yet been settled upon. EntityFrameworkCore.Projections is quite non descriptive as projections are a core concept of EFCore already. Feel free to open up an issue suggesting a better name
+
 # EntitiyFrameworkCore.Projections
 Flexible projection magic for EFCore
 
