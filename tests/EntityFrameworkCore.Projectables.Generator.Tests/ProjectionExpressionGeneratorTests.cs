@@ -21,7 +21,7 @@ namespace EntityFrameworkCore.Projectables.Generator.Tests
         }
 
         [Fact]
-        public void EmtpyCode_Noop()
+        public void EmptyCode_Noop()
         {
             var compilation = CreateCompilation(@"
 class C { }
