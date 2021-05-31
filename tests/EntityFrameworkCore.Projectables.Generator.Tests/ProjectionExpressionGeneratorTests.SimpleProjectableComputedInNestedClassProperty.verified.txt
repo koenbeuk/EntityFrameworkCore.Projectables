@@ -1,3 +1,4 @@
+﻿//HintName: Foo_C_D_Foo_Generated.cs
 using System;
 using EntityFrameworkCore.Projectables;
 using Foo;
