@@ -1,7 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using VerifyXunit;
@@ -21,16 +19,14 @@ namespace EntityFrameworkCore.Projections.Generator.Tests
         }
 
         [Fact]
-        public void EmptyCode_Noop()
+        public Task EmptyCode_Noop()
         {
             var compilation = CreateCompilation(@"
 class C { }
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Empty(result.GeneratedTrees);
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -48,11 +44,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -69,11 +61,7 @@ namespace Foo {
 }
 ");
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -93,11 +81,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -119,11 +103,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -143,11 +123,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -167,11 +143,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
 
@@ -192,11 +164,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -214,11 +182,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -236,11 +200,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -258,11 +218,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -274,7 +230,7 @@ using System.Linq;
 using EntityFrameworkCore.Projections;
 namespace Foo {
     class D { }
-    
+
     class C {
         public System.Collections.Generic.List<D> Dees { get; set; }
 
@@ -285,11 +241,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -301,7 +253,7 @@ using System.Linq;
 using EntityFrameworkCore.Projections;
 namespace Foo {
     class D { }
-    
+
     static class C {
         [Projectable]
         public static int Foo(this D d) => 1;
@@ -310,11 +262,7 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
@@ -333,15 +281,11 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Empty(result.Diagnostics);
-            Assert.Single(result.GeneratedTrees);
-
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result);
         }
 
         [Fact]
-        public void BlockBodiedMember_RaisesDiagnostics()
+        public Task BlockBodiedMember_RaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
 using System;
@@ -349,7 +293,7 @@ using EntityFrameworkCore.Projections;
 namespace Foo {
     class C {
         [Projectable]
-        public int Foo 
+        public int Foo
         {
             get => 1;
         }
@@ -358,12 +302,11 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Single(result.Diagnostics);
+            return Verifier.Verify(result);
         }
 
         [Fact]
-        public void BlockBodiedMethod_RaisesDiagnostics()
+        public Task BlockBodiedMethod_RaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
 using System;
@@ -371,7 +314,7 @@ using EntityFrameworkCore.Projections;
 namespace Foo {
     class C {
         [Projectable]
-        public int Foo() 
+        public int Foo()
         {
             return 1;
         }
@@ -380,48 +323,20 @@ namespace Foo {
 ");
 
             var result = RunGenerator(compilation);
-
-            Assert.Single(result.Diagnostics);
+            return Verifier.Verify(result);
         }
 
         #region Helpers
 
-        Compilation CreateCompilation(string source, bool expectedToCompile = true)
+        Compilation CreateCompilation(string source)
         {
             var references = Basic.Reference.Assemblies.NetStandard20.All.ToList();
             references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
 
-            var assemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location);
-
-            var compilation = CSharpCompilation.Create("compilation",
+            return CSharpCompilation.Create("compilation",
                 new[] { CSharpSyntaxTree.ParseText(source) },
                 references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-#if DEBUG
-
-            if (expectedToCompile)
-            {
-                var compilationDiagnostics = compilation.GetDiagnostics();
-
-                if (!compilationDiagnostics.IsEmpty)
-                {
-                    _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
-
-                    foreach (var diagnostic in compilationDiagnostics)
-                    {
-                        _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
-                    }
-
-                    if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
-                    {
-                        Debug.Fail("Compilation diagnostics produced");
-                    }
-                }
-            }
-#endif
-
-            return compilation;
         }
 
         private GeneratorDriverRunResult RunGenerator(Compilation compilation)
@@ -432,29 +347,6 @@ namespace Foo {
             var driver = CSharpGeneratorDriver
                 .Create(subject)
                 .RunGenerators(compilation);
-
-            var result = driver.GetRunResult();
-
-            if (result.Diagnostics.IsEmpty)
-            {
-                _testOutputHelper.WriteLine("Run did not produce diagnostics");
-            }
-            else
-            {
-                _testOutputHelper.WriteLine($"Diagnostics produced:");
-
-                foreach (var diagnostic in result.Diagnostics)
-                {
-                    _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
-                }
-            }
-
-            foreach (var newSyntaxTree in result.GeneratedTrees)
-            {
-                _testOutputHelper.WriteLine($"Produced syntax tree with path produced: {newSyntaxTree.FilePath}");
-                _testOutputHelper.WriteLine(newSyntaxTree.GetText().ToString());
-            }
-
             return driver.GetRunResult();
         }
 

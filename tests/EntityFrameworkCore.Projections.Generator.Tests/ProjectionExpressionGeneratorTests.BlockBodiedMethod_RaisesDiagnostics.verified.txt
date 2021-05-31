@@ -1,0 +1,13 @@
+﻿{
+  Diagnostics: [
+    {
+      Id: EFP0001,
+      Title: Method or property should expose an expression body definition,
+      Severity: Error,
+      WarningLevel: 0,
+      Location: SourceFile([97..181)),
+      MessageFormat: Method or property '{0}' should expose an expression body definition,
+      Category: Design
+    }
+  ]
+}
