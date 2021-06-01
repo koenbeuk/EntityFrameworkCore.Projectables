@@ -13,7 +13,10 @@ Flexible projection magic for EFCore
 - EntityFrameworkCore.Projectables [![NuGet version](https://img.shields.io/nuget/v/EntityFrameworkCore.Projectables.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/) [![NuGet](https://img.shields.io/nuget/dt/EntityFrameworkCore.Projectables.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/)
 
 ## Getting started
-TODO
+1. Install the package from [NuGet](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/)
+2. Enable Projectables in your DbContext by calling: `dbContextOptions.UseProjectables()`
+3. Implement projectable properties and methods and mark them with the [Projectable] attribute.
+4. View our [samples](https://github.com/koenbeuk/EntityFrameworkCore.Projectables/tree/master/samples)
 
 ### Example
 Assuming this sample:
