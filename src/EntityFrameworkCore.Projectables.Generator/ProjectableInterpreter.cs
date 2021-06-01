@@ -45,6 +45,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel);
             var parameterSyntaxRewriter = new ParameterSyntaxRewriter(semanticModel);
+            var returnTypeSyntaxRewriter = new ReturnTypeSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {
                 ClassName = memberSymbol.ContainingType.Name,
@@ -91,7 +92,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                descriptor.ReturnTypeName = methodDeclarationSyntax.ReturnType.ToString();
+                descriptor.ReturnTypeName = returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType).ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
                 foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {

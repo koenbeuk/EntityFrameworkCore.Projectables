@@ -384,6 +384,32 @@ namespace Foo {
             Assert.Single(result.Diagnostics);
         }
 
+        [Fact]
+        public Task NullableReferenceTypesAreBeingEliminated()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+#nullable enable
+
+namespace Foo {
+    static class C {
+        [Projectable]
+        public static object? NextFoo(this object? unusedArgument, int? nullablePrimitiveArgument) => null;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
