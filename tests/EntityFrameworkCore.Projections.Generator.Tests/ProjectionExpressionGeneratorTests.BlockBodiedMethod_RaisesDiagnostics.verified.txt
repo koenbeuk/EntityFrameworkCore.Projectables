@@ -5,7 +5,7 @@
       Title: Method or property should expose an expression body definition,
       Severity: Error,
       WarningLevel: 0,
-      Location: SourceFile([97..181)),
+      Location: : (5,8)-(9,9),
       MessageFormat: Method or property '{0}' should expose an expression body definition,
       Category: Design
     }
