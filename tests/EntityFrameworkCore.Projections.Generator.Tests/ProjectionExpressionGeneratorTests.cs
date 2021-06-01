@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System.Diagnostics;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using System.Linq;
 using System.Threading.Tasks;
@@ -328,15 +329,39 @@ namespace Foo {
 
         #region Helpers
 
-        Compilation CreateCompilation(string source)
+        Compilation CreateCompilation(string source, bool expectedToCompile = true)
         {
             var references = Basic.Reference.Assemblies.NetStandard20.All.ToList();
             references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
 
-            return CSharpCompilation.Create("compilation",
+            var compilation = CSharpCompilation.Create("compilation",
                 new[] { CSharpSyntaxTree.ParseText(source) },
                 references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+#if DEBUG
+            if (expectedToCompile)
+            {
+                var compilationDiagnostics = compilation.GetDiagnostics();
+
+                if (!compilationDiagnostics.IsEmpty)
+                {
+                    _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
+
+                    foreach (var diagnostic in compilationDiagnostics)
+                    {
+                        _testOutputHelper.WriteLine($" > " + diagnostic);
+                    }
+
+                    if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
+                    {
+                        Debug.Fail("Compilation diagnostics produced");
+                    }
+                }
+            }
+#endif
+
+            return compilation;
         }
 
         private GeneratorDriverRunResult RunGenerator(Compilation compilation)
