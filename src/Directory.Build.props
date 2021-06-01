@@ -5,7 +5,6 @@
   <PropertyGroup Label="Build">
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <PropertyGroup Label="Signing">
@@ -22,9 +21,4 @@
   <ItemGroup Label="Package References">
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" Version="1.0.0" />
   </ItemGroup>
-
-  <ItemGroup Label="Files">
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
-
 </Project>
