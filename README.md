@@ -1,7 +1,5 @@
 > DISCLAIMER: This project and this readme in particular are still a WIP. Expect a first version coming coon.
 
-> DISCLAIMER: The final name of this project has not yet been settled upon. EntityFrameworkCore.Projectables is quite non descriptive as Projectables are a core concept of EFCore already. Feel free to open up an issue suggesting a better name
-
 # EntitiyFrameworkCore.Projectables
 Flexible projection magic for EFCore
 
