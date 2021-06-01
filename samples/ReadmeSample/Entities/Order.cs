@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using EntityFrameworkCore.Projections;
+using EntityFrameworkCore.Projectables;
 
 namespace ReadmeSample.Entities
 {

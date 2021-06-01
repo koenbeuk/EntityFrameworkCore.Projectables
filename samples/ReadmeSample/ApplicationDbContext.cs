@@ -4,7 +4,7 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
-using EntityFrameworkCore.Projections.Extensions;
+using EntityFrameworkCore.Projectables.Extensions;
 using Microsoft.EntityFrameworkCore;
 using ReadmeSample.Entities;
 
@@ -19,7 +19,7 @@ namespace ReadmeSample
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             optionsBuilder.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ReadmeSample;Trusted_Connection=True");
-            optionsBuilder.UseProjections();
+            optionsBuilder.UseProjectables();
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -1,15 +1,15 @@
 > DISCLAIMER: This project and this readme in particular are still a WIP. Expect a first version coming coon.
 
-> DISCLAIMER: The final name of this project has not yet been settled upon. EntityFrameworkCore.Projections is quite non descriptive as projections are a core concept of EFCore already. Feel free to open up an issue suggesting a better name
+> DISCLAIMER: The final name of this project has not yet been settled upon. EntityFrameworkCore.Projectables is quite non descriptive as Projectables are a core concept of EFCore already. Feel free to open up an issue suggesting a better name
 
-# EntitiyFrameworkCore.Projections
+# EntitiyFrameworkCore.Projectables
 Flexible projection magic for EFCore
 
-[![NuGet version (EntityFrameworkCore.Projections)](https://img.shields.io/nuget/v/EntityFrameworkCore.Projections.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projections.Abstractions/)
+[![NuGet version (EntityFrameworkCore.Projectables)](https://img.shields.io/nuget/v/EntityFrameworkCore.Projectables.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables.Abstractions/)
 
 ## NuGet packages
-- EntityFrameworkCore.Projections.Abstractions [![NuGet version](https://img.shields.io/nuget/v/EntityFrameworkCore.Projections.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projections.Abstractions/) [![NuGet](https://img.shields.io/nuget/dt/EntityFrameworkCore.Projections.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projections.Abstractions/)
-- EntityFrameworkCore.Projections [![NuGet version](https://img.shields.io/nuget/v/EntityFrameworkCore.Projections.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projections/) [![NuGet](https://img.shields.io/nuget/dt/EntityFrameworkCore.Projections.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projections/)
+- EntityFrameworkCore.Projectables.Abstractions [![NuGet version](https://img.shields.io/nuget/v/EntityFrameworkCore.Projectables.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables.Abstractions/) [![NuGet](https://img.shields.io/nuget/dt/EntityFrameworkCore.Projectables.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables.Abstractions/)
+- EntityFrameworkCore.Projectables [![NuGet version](https://img.shields.io/nuget/v/EntityFrameworkCore.Projectables.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/) [![NuGet](https://img.shields.io/nuget/dt/EntityFrameworkCore.Projectables.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/)
 
 ## Getting started
 TODO
@@ -99,7 +99,7 @@ There is currently no support for overloaded methods. Each method name needs to 
 No; The runtime component injects itself within the EFCore query compilation pipeline and thus has no impact on the database provider used. Of course you're still limited to whatever your database provider can do.
 
 #### Are there performance implications that I should be aware of?
-Yes and no; using EntityFrameworkCore.Projections does not add any measerable overhead on top of normal use of EFCore (Expect a proper benchmark soon...) however it does make it easier to write more complex queries. As such: Always consider the generated SQL and ensure that it's performance implications are acceptable.
+Yes and no; using EntityFrameworkCore.Projectables does not add any measerable overhead on top of normal use of EFCore (Expect a proper benchmark soon...) however it does make it easier to write more complex queries. As such: Always consider the generated SQL and ensure that it's performance implications are acceptable.
 
 #### Can I call additional properties and methods from my Projectable properties and methods?
 Yes you can! Any projectable property/method can call into other properties and methods as long as those properties/methods are native to EFCore or as long as they are marked with a `Projectable` attribute.
@@ -116,7 +116,7 @@ Any call to squared given any int will perfertly translate to SQL.
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existance so shame on me. Currently Expressionify targets a more focusses scope of what this project is doing and thereby it seems to be more limiting in its capabilities. Check them out though!
 
 #### How does this relate to LinqKit/LinqExpander/...?
-There are a few projects like [LinqKit](https://github.com/scottksmith95/LINQKit) that were created before we had code generators in dotnet. These are great options if you're stuck with classical EF or don't want to rely on code generation. Otherwise I would suggest that EntityFrameworkCore.Projections and Expresssionify are superior approaches as they are able to rely on SourceGenerators to do most of the hard work.
+There are a few projects like [LinqKit](https://github.com/scottksmith95/LINQKit) that were created before we had code generators in dotnet. These are great options if you're stuck with classical EF or don't want to rely on code generation. Otherwise I would suggest that EntityFrameworkCore.Projectables and Expresssionify are superior approaches as they are able to rely on SourceGenerators to do most of the hard work.
 
 #### Is the available for EFCore 3.1, 5 and 6?
 Yes it is! there is no difference between any of these versions and you can upgrade/downgrade whenever you want.

@@ -1,0 +1,14 @@
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+using Foo;
+
+namespace EntityFrameworkCore.Projectables.Generated
+#nullable disable
+{
+    public static class Foo_C_Foo
+    {
+        public static System.Linq.Expressions.Expression<System.Func<D, int>> Expression => 
+            (D d) => 1;
+    }
+}

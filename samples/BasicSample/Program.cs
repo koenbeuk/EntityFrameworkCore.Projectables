@@ -1,5 +1,5 @@
-﻿using EntityFrameworkCore.Projections;
-using EntityFrameworkCore.Projections.Extensions;
+﻿using EntityFrameworkCore.Projectables;
+using EntityFrameworkCore.Projectables.Extensions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -95,7 +95,7 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>(options => {
                     options
                         .UseSqlite(dbConnection)
-                        .UseProjections()
+                        .UseProjectables()
                         .UseLoggerFactory(LoggerFactory.Create(builder => builder.AddConsole()));
                 })
                 .BuildServiceProvider();
