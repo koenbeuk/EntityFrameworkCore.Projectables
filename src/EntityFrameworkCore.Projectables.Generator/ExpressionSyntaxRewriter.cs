@@ -49,17 +49,34 @@ namespace EntityFrameworkCore.Projectables.Generator
         {
             var symbolInfo = _semanticModel.GetSymbolInfo(node);
 
-            if (symbolInfo.Symbol is not null && symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+            if (symbolInfo.Symbol is not null)
             {
-                return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                    SyntaxFactory.IdentifierName("@this"),
-                    node
-                );
+                if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                {
+                    return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("@this"),
+                        node
+                    );
+                }
+                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType)
+                {
+                    var typeInfo = _semanticModel.GetTypeInfo(node);
+
+                    if (typeInfo.Type is not null)
+                    {
+                        return SyntaxFactory.ParseTypeName(
+                            typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        );
+                    }
+                }
             }
-            else
-            {
-                return base.VisitIdentifierName(node);
-            }
+         
+            return base.VisitIdentifierName(node);
+        }
+
+        public override SyntaxNode? VisitQualifiedName(QualifiedNameSyntax node)
+        {
+            return base.VisitQualifiedName(node);
         }
     }
 }

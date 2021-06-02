@@ -293,6 +293,33 @@ namespace Foo {
         }
 
         [Fact]
+        public Task TypesInBodyGetsFullyQualified()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class D { }
+    
+    class C {
+        public System.Collections.Generic.List<D> Dees { get; set; }
+
+        [Projectable]
+        public int Foo => Dees.OfType<D>().Count();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task ProjectableExtensionMethod()
         {
             var compilation = CreateCompilation(@"

@@ -92,7 +92,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                descriptor.ReturnTypeName = returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType).ToString();
+                var returnTypeSymbol = semanticModel.GetSymbolInfo(returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType)).Symbol;
+                if (returnTypeSymbol is null)
+                {
+                    return null;
+                }
+
+                descriptor.ReturnTypeName = returnTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
                 foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
@@ -108,7 +114,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                descriptor.ReturnTypeName = propertyDeclarationSyntax.Type.ToString();
+                var returnTypeSymbol = semanticModel.GetSymbolInfo(returnTypeSyntaxRewriter.Visit(propertyDeclarationSyntax.Type)).Symbol;
+                if (returnTypeSymbol is null)
+                {
+                    return null;
+                }
+
+                descriptor.ReturnTypeName = returnTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
             }
             else
