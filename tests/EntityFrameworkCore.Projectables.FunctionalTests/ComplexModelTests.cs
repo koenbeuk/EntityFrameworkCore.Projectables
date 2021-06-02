@@ -38,11 +38,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             public IEnumerable<EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order> Last2Orders =>
                 Orders.OrderByDescending(x => x.RecordDate).Take(2);
 
+            [Projectable]
+            public EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order GetLastOrderFromExternalDbContext(DbContext dbContext)
+                => dbContext.Set<EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order>().Where(x => x.UserId == Id).OrderByDescending(x => x.RecordDate).FirstOrDefault();
+
         }
 
         public class Order
         {
             public int Id { get; set; }
+
+            public int UserId { get; set; }
 
             public DateTime RecordDate { get; set; }
         } 
@@ -66,6 +72,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             var query = dbContext.Set<User>()
                 .SelectMany(x => x.Last2Orders)
                 .Select(x => x.RecordDate);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ProjectOverMethodTakingDbContext()
+        {
+            using var dbContext = new SampleDbContext<User>();
+
+            var query = dbContext.Set<User>()
+                .Select(x => x.GetLastOrderFromExternalDbContext(dbContext));
 
             return Verifier.Verify(query.ToQueryString());
         }

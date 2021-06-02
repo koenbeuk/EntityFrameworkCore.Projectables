@@ -37,13 +37,13 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
             }
 
-            var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryTranslationPreprocessorFactory));
+            var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
             if (targetDescriptor is null)
             {
-                throw new InvalidOperationException("No QueryTranslationPreprocessorFactory is configured yet. Please make sure to configure a database provider first"); ;
+                throw new InvalidOperationException("No QueryProvider is configured yet. Please make sure to configure a database provider first"); ;
             }
-
-            var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryTranslationPreprocessorFactory), new [] { targetDescriptor.ServiceType });
+            
+            var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryProvider), new [] { targetDescriptor.ServiceType });
 
             services.Replace(ServiceDescriptor.Describe(
                 targetDescriptor.ServiceType,
@@ -51,7 +51,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 targetDescriptor.Lifetime
             ));
         }
-
 
         public void Validate(IDbContextOptions options)
         {
