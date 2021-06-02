@@ -58,7 +58,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         node
                     );
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType)
+                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType && node.Parent.Kind() is not SyntaxKind.QualifiedName)
                 {
                     var typeInfo = _semanticModel.GetTypeInfo(node);
 
@@ -76,6 +76,23 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitQualifiedName(QualifiedNameSyntax node)
         {
+            var symbolInfo = _semanticModel.GetSymbolInfo(node);
+
+            if (symbolInfo.Symbol is not null)
+            {
+                if (symbolInfo.Symbol.Kind is SymbolKind.NamedType)
+                {
+                    var typeInfo = _semanticModel.GetTypeInfo(node);
+
+                    if (typeInfo.Type is not null)
+                    {
+                        return SyntaxFactory.ParseTypeName(
+                            typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        );
+                    }
+                }
+            }
+
             return base.VisitQualifiedName(node);
         }
     }
