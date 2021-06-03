@@ -14,10 +14,20 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 {
     public class ProjectionOptionsExtension : IDbContextOptionsExtension
     {
+        CompatibilityMode _compatibilityMode = CompatibilityMode.Full;
+
         public ProjectionOptionsExtension()
         {
             Info = new ExtensionInfo(this);
         }
+
+        public ProjectionOptionsExtension(ProjectionOptionsExtension copyFrom)
+            : this()
+        {
+            _compatibilityMode = copyFrom._compatibilityMode;
+        }
+
+        protected ProjectionOptionsExtension Clone() => new(this);
 
         public DbContextOptionsExtensionInfo Info { get; }
 
@@ -37,19 +47,47 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
             }
 
-            var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
-            if (targetDescriptor is null)
+            if (_compatibilityMode is CompatibilityMode.Full)
             {
-                throw new InvalidOperationException("No QueryProvider is configured yet. Please make sure to configure a database provider first"); ;
-            }
-            
-            var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryProvider), new [] { targetDescriptor.ServiceType });
+                var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
+                if (targetDescriptor is null)
+                {
+                    throw new InvalidOperationException("No QueryProvider is configured yet. Please make sure to configure a database provider first"); ;
+                }
 
-            services.Replace(ServiceDescriptor.Describe(
-                targetDescriptor.ServiceType,
-                serviceProvider => decoratorObjectFactory(serviceProvider, new[] { CreateTargetInstance(serviceProvider, targetDescriptor) }),
-                targetDescriptor.Lifetime
-            ));
+                var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryProvider), new[] { targetDescriptor.ServiceType });
+
+                services.Replace(ServiceDescriptor.Describe(
+                    targetDescriptor.ServiceType,
+                    serviceProvider => decoratorObjectFactory(serviceProvider, new[] { CreateTargetInstance(serviceProvider, targetDescriptor) }),
+                    targetDescriptor.Lifetime
+                ));
+            }
+            else
+            {
+                var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryTranslationPreprocessorFactory));
+                if (targetDescriptor is null)
+                {
+                    throw new InvalidOperationException("No QueryTranslationPreprocessorFactory is configured yet. Please make sure to configure a database provider first"); ;
+                }
+
+                var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryTranslationPreprocessorFactory), new[] { targetDescriptor.ServiceType });
+
+                services.Replace(ServiceDescriptor.Describe(
+                    targetDescriptor.ServiceType,
+                    serviceProvider => decoratorObjectFactory(serviceProvider, new[] { CreateTargetInstance(serviceProvider, targetDescriptor) }),
+                    targetDescriptor.Lifetime
+                ));
+            }
+        }
+
+        public ProjectionOptionsExtension WithCompatibilityMode(CompatibilityMode compatibilityMode)
+        {
+            var clone = Clone();
+
+            clone._compatibilityMode = compatibilityMode;
+
+            return clone;
         }
 
         public void Validate(IDbContextOptions options)
@@ -58,13 +96,29 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 
         sealed class ExtensionInfo : DbContextOptionsExtensionInfo
         {
+            private int? _serviceProviderHash;
+
             public ExtensionInfo(IDbContextOptionsExtension extension) : base(extension)
             {
             }
 
             public override bool IsDatabaseProvider => false;
             public override string LogFragment => string.Empty;
-            public override long GetServiceProviderHashCode() => 0;
+            public override long GetServiceProviderHashCode()
+            {
+                if (_serviceProviderHash == null)
+                {
+                    var hashCode = nameof(ProjectionOptionsExtension).GetHashCode();
+
+                    var extension = (ProjectionOptionsExtension)Extension;
+
+                    hashCode ^= extension._compatibilityMode.GetHashCode();
+
+                    _serviceProviderHash = hashCode;
+                }
+
+                return _serviceProviderHash.Value;
+            }
             
             public override void PopulateDebugInfo(IDictionary<string, string> debugInfo)
             {
@@ -72,6 +126,8 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 {
                     throw new ArgumentNullException(nameof(debugInfo));
                 }
+
+                debugInfo["Projectables:CompatibilityMode"] = ((ProjectionOptionsExtension)Extension)._compatibilityMode.ToString();
             }
         }
     }

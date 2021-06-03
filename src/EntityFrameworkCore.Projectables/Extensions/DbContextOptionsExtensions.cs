@@ -1,4 +1,5 @@
-﻿using EntityFrameworkCore.Projectables.Infrastructure.Internal;
+﻿using EntityFrameworkCore.Projectables.Infrastructure;
+using EntityFrameworkCore.Projectables.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System;
@@ -12,14 +13,16 @@ namespace EntityFrameworkCore.Projectables.Extensions
 {
     public static class DbContextOptionsExtensions
     {
-        public static DbContextOptionsBuilder<TContext> UseProjectables<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder)
+        public static DbContextOptionsBuilder<TContext> UseProjectables<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder, Action<ProjectableOptionsBuilder>? configure = null)
             where TContext : DbContext
-            => (DbContextOptionsBuilder<TContext>)UseProjectables((DbContextOptionsBuilder)optionsBuilder);
+            => (DbContextOptionsBuilder<TContext>)UseProjectables((DbContextOptionsBuilder)optionsBuilder, configure);
 
-        public static DbContextOptionsBuilder UseProjectables(this DbContextOptionsBuilder optionsBuilder)
+        public static DbContextOptionsBuilder UseProjectables(this DbContextOptionsBuilder optionsBuilder, Action<ProjectableOptionsBuilder>? configure = null)
         {
             var extension = optionsBuilder.Options.FindExtension<ProjectionOptionsExtension>() ?? new ProjectionOptionsExtension();
             ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(extension);
+
+            configure?.Invoke(new ProjectableOptionsBuilder(optionsBuilder));
 
             return optionsBuilder;
         }
