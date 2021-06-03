@@ -6,14 +6,8 @@ using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projectables.Benchmarks.Helpers
 {
-    public class TestEntity
+    public static class TestEntityExtensions
     {
-        public int Id { get; set; }
-
-        [Projectable]
-        public int IdPlus1 => Id + 1;
-
-        [Projectable]
-        public int IdPlus1Method() => Id + 1;
+        public static int IdPlus1ExtensionMethod(this TestEntity entity) => entity.Id + 1;
     }
 }

@@ -1,14 +1,15 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using EntityFrameworkCore.Projectables.Benchmarks.Helpers;
-using EntityFrameworkCore.Projectables.Extensions;
-using EntityFrameworkCore.Projectables.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace EntityFrameworkCore.Projectables.Benchmarks
 {
-    public class ProjectableProperties
+    public class ProjectableExtensionMethods
     {
         const int innerLoop = 10000;
 
@@ -19,8 +20,7 @@ namespace EntityFrameworkCore.Projectables.Benchmarks
 
             for (int i = 0; i < innerLoop; i++)
             {
-                if (1 == i)
-                throw new Exception(dbContext.Entities.Select(x => x.Id + 1).ToQueryString());
+                dbContext.Entities.Select(x => x.Id + 1).ToQueryString();
             }
         }
 
@@ -31,7 +31,7 @@ namespace EntityFrameworkCore.Projectables.Benchmarks
 
             for (int i = 0; i < innerLoop; i++)
             {
-                dbContext.Entities.Select(x => x.IdPlus1).ToQueryString();
+                dbContext.Entities.Select(x => x.IdPlus1Method()).ToQueryString();
             }
         }
 
@@ -42,7 +42,7 @@ namespace EntityFrameworkCore.Projectables.Benchmarks
 
             for (int i = 0; i < innerLoop; i++)
             {
-                dbContext.Entities.Select(x => x.IdPlus1).ToQueryString();
+                dbContext.Entities.Select(x => x.IdPlus1Method()).ToQueryString();
             }
         }
     }
