@@ -54,6 +54,8 @@ var result = _dbContext.Users
 
 The following query gets generated (assuming SQL Server as a database provider)
 ```sql
+DECLARE @__sampleUser_UserName_0 nvarchar(4000) = N'Jon';
+
 SELECT (
     SELECT COALESCE(SUM([p].[ListPrice] * CAST([o].[Quantity] AS decimal(18,2))), 0.0)
     FROM [OrderItem] AS [o]
@@ -61,30 +63,18 @@ SELECT (
     WHERE (
         SELECT TOP(1) [o0].[Id]
         FROM [Orders] AS [o0]
-        WHERE ([u].[Id] = [o0].[UserId]) AND ([o0].[CreatedDate] >= DATEADD(day, CAST(-30.0E0 AS int), GETUTCDATE()))
+        WHERE ([u].[Id] = [o0].[UserId]) AND [o0].[FulfilledDate] IS NOT NULL
         ORDER BY [o0].[CreatedDate] DESC) IS NOT NULL AND ((
         SELECT TOP(1) [o1].[Id]
         FROM [Orders] AS [o1]
-        WHERE ([u].[Id] = [o1].[UserId]) AND ([o1].[CreatedDate] >= DATEADD(day, CAST(-30.0E0 AS int), GETUTCDATE()))
-        ORDER BY [o1].[CreatedDate] DESC) = [o].[OrderId])) + ((
-    SELECT COALESCE(SUM([p0].[ListPrice] * CAST([o2].[Quantity] AS decimal(18,2))), 0.0)
-    FROM [OrderItem] AS [o2]
-    INNER JOIN [Products] AS [p0] ON [o2].[ProductId] = [p0].[Id]
-    WHERE (
-        SELECT TOP(1) [o3].[Id]
-        FROM [Orders] AS [o3]
-        WHERE ([u].[Id] = [o3].[UserId]) AND ([o3].[CreatedDate] >= DATEADD(day, CAST(-30.0E0 AS int), GETUTCDATE()))
-        ORDER BY [o3].[CreatedDate] DESC) IS NOT NULL AND ((
-        SELECT TOP(1) [o4].[Id]
-        FROM [Orders] AS [o4]
-        WHERE ([u].[Id] = [o4].[UserId]) AND ([o4].[CreatedDate] >= DATEADD(day, CAST(-30.0E0 AS int), GETUTCDATE()))
-        ORDER BY [o4].[CreatedDate] DESC) = [o2].[OrderId])) * (
-    SELECT TOP(1) [o5].[TaxRate]
-    FROM [Orders] AS [o5]
-    WHERE ([u].[Id] = [o5].[UserId]) AND ([o5].[CreatedDate] >= DATEADD(day, CAST(-30.0E0 AS int), GETUTCDATE()))
-    ORDER BY [o5].[CreatedDate] DESC)) AS [GrandTotal]
+        WHERE ([u].[Id] = [o1].[UserId]) AND [o1].[FulfilledDate] IS NOT NULL
+        ORDER BY [o1].[CreatedDate] DESC) = [o].[OrderId])) * (
+    SELECT TOP(1) [o2].[TaxRate]
+    FROM [Orders] AS [o2]
+    WHERE ([u].[Id] = [o2].[UserId]) AND [o2].[FulfilledDate] IS NOT NULL
+    ORDER BY [o2].[CreatedDate] DESC) AS [GrandTotal]
 FROM [Users] AS [u]
-WHERE [u].[UserName] = N'Jon'
+WHERE [u].[UserName] = @__sampleUser_UserName_0
 ```
 
 Projectable properties and methods have been inlined! the generated SQL could be improved but this is what EFCore (v5) gives us.
