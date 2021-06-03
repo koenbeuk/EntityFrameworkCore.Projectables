@@ -4,6 +4,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
+using EntityFrameworkCore.Projectables.Extensions;
 using EntityFrameworkCore.Projectables.Services;
 using Microsoft.EntityFrameworkCore.Query;
 
@@ -13,7 +14,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
     {
         readonly IQueryTranslationPreprocessorFactory _decoratedFactory;
         readonly QueryTranslationPreprocessorDependencies _queryTranslationPreprocessorDependencies;
-        readonly ProjectableExpressionReplacer _projectableExpressionReplacer = new(new ProjectionExpressionResolver());
 
         public CustomQueryTranslationPreprocessorFactory(IQueryTranslationPreprocessorFactory decoratedFactory, QueryTranslationPreprocessorDependencies queryTranslationPreprocessorDependencies)
         {
@@ -22,21 +22,19 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
         }
 
         public QueryTranslationPreprocessor Create(QueryCompilationContext queryCompilationContext)
-            => new CustomQueryTranslationPreprocessor(_decoratedFactory.Create(queryCompilationContext), _queryTranslationPreprocessorDependencies, queryCompilationContext, _projectableExpressionReplacer);
+            => new CustomQueryTranslationPreprocessor(_decoratedFactory.Create(queryCompilationContext), _queryTranslationPreprocessorDependencies, queryCompilationContext);
     }
 
     public class CustomQueryTranslationPreprocessor : QueryTranslationPreprocessor
     {
         readonly QueryTranslationPreprocessor _decoratedPreprocessor;
-        readonly ProjectableExpressionReplacer _projectableExpressionReplacer;
 
-        public CustomQueryTranslationPreprocessor(QueryTranslationPreprocessor decoratedPreprocessor, QueryTranslationPreprocessorDependencies dependencies, QueryCompilationContext queryCompilationContext, ProjectableExpressionReplacer projectableExpressionReplacer) : base(dependencies, queryCompilationContext)
+        public CustomQueryTranslationPreprocessor(QueryTranslationPreprocessor decoratedPreprocessor, QueryTranslationPreprocessorDependencies dependencies, QueryCompilationContext queryCompilationContext) : base(dependencies, queryCompilationContext)
         {
             _decoratedPreprocessor = decoratedPreprocessor;
-            _projectableExpressionReplacer = projectableExpressionReplacer;
         }
 
         public override Expression Process(Expression query)
-            => _decoratedPreprocessor.Process(_projectableExpressionReplacer.Visit(query));
+            => _decoratedPreprocessor.Process(query.ExpandQuaryables());
     }
 }
