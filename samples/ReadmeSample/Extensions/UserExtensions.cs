@@ -11,7 +11,10 @@ namespace ReadmeSample.Extensions
     public static class UserExtensions
     {
         [Projectable]
-        public static Order GetMostRecentOrderForUser(this User user, DateTime? cutoffDate)
-            => user.Orders.Where(x => x.CreatedDate >= cutoffDate).OrderByDescending(x => x.CreatedDate).FirstOrDefault();
+        public static Order GetMostRecentOrderForUser(this User user, bool includeUnfulfilled) => 
+            user.Orders
+                .Where(x => !includeUnfulfilled ? x .FulfilledDate != null : true)
+                .OrderByDescending(x => x.CreatedDate)
+                .FirstOrDefault();
     }
 }

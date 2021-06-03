@@ -23,7 +23,8 @@ namespace ReadmeSample
             var sampleOrder = new Order {
                 User = sampleUser,
                 TaxRate = .19m,
-                CreatedDate = DateTime.UtcNow,
+                CreatedDate = DateTime.UtcNow.AddDays(-1),
+                FulfilledDate = DateTime.UtcNow,
                 Items = new List<OrderItem> {
                     new OrderItem { Product = sampleProduct, Quantity = 5  }
                 }
@@ -36,7 +37,7 @@ namespace ReadmeSample
             var query = dbContext.Users
                 .Where(x => x.UserName == "Jon")
                 .Select(x => new {
-                    x.GetMostRecentOrderForUser(DateTime.UtcNow.AddDays(-30)).GrandTotal
+                    GrandTotal = x.GetMostRecentOrderForUser(/* includeUnfulfilled: */ false).GrandTotal
                 });
 
             var result = query.First();

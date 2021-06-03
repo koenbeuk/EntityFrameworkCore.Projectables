@@ -12,6 +12,7 @@ namespace ReadmeSample.Entities
         public int Id { get; set; }
         public int UserId { get; set; }
         public DateTime CreatedDate { get; set; }
+        public DateTime? FulfilledDate { get; set; }
 
         public decimal TaxRate { get; set; }
 
@@ -20,6 +21,6 @@ namespace ReadmeSample.Entities
 
         [Projectable] public decimal Subtotal => Items.Sum(item => item.Product.ListPrice * item.Quantity);
         [Projectable] public decimal Tax => Subtotal * TaxRate;
-        [Projectable] public decimal GrandTotal => Subtotal + Tax;
+        [Projectable] public decimal GrandTotal => Subtotal * TaxRate;
     }
 }
