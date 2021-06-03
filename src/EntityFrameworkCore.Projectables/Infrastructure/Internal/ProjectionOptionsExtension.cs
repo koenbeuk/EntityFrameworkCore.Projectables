@@ -14,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 {
     public class ProjectionOptionsExtension : IDbContextOptionsExtension
     {
-        CompatibilityMode _compatibilityMode = CompatibilityMode.Full;
+        CompatibilityMode _compatibilityMode = CompatibilityMode.Limited;
 
         public ProjectionOptionsExtension()
         {
