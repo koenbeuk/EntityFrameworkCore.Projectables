@@ -9,7 +9,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EntityFrameworkCore.Projectables.Extensions
+namespace Microsoft.EntityFrameworkCore
 {
     public static class DbContextOptionsExtensions
     {
