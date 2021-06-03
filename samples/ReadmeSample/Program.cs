@@ -33,9 +33,8 @@ namespace ReadmeSample
             dbContext.AddRange(sampleUser, sampleProduct, sampleOrder);
             dbContext.SaveChanges();
 
-            // Lets try a query!
             var query = dbContext.Users
-                .Where(x => x.UserName == "Jon")
+                .Where(x => x.UserName == sampleUser.UserName)
                 .Select(x => new {
                     GrandTotal = x.GetMostRecentOrderForUser(/* includeUnfulfilled: */ false).GrandTotal
                 });
