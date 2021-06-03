@@ -22,19 +22,21 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
         }
 
         public QueryTranslationPreprocessor Create(QueryCompilationContext queryCompilationContext)
-            => new CustomQueryTranslationPreprocessor(_queryTranslationPreprocessorDependencies, queryCompilationContext, _projectableExpressionReplacer);
+            => new CustomQueryTranslationPreprocessor(_decoratedFactory.Create(queryCompilationContext), _queryTranslationPreprocessorDependencies, queryCompilationContext, _projectableExpressionReplacer);
     }
 
     public class CustomQueryTranslationPreprocessor : QueryTranslationPreprocessor
     {
+        readonly QueryTranslationPreprocessor _decoratedPreprocessor;
         readonly ProjectableExpressionReplacer _projectableExpressionReplacer;
 
-        public CustomQueryTranslationPreprocessor(QueryTranslationPreprocessorDependencies dependencies, QueryCompilationContext queryCompilationContext, ProjectableExpressionReplacer projectableExpressionReplacer) : base(dependencies, queryCompilationContext)
+        public CustomQueryTranslationPreprocessor(QueryTranslationPreprocessor decoratedPreprocessor, QueryTranslationPreprocessorDependencies dependencies, QueryCompilationContext queryCompilationContext, ProjectableExpressionReplacer projectableExpressionReplacer) : base(dependencies, queryCompilationContext)
         {
+            _decoratedPreprocessor = decoratedPreprocessor;
             _projectableExpressionReplacer = projectableExpressionReplacer;
         }
 
         public override Expression Process(Expression query)
-            => base.Process(_projectableExpressionReplacer.Visit(query));
+            => _decoratedPreprocessor.Process(_projectableExpressionReplacer.Visit(query));
     }
 }
