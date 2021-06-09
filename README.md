@@ -1,5 +1,3 @@
-> DISCLAIMER: This project and this readme in particular are still a WIP. Expect a first version coming coon.
-
 # EntitiyFrameworkCore.Projectables
 Flexible projection magic for EFCore
 
