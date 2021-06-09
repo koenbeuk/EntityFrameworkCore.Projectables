@@ -10,7 +10,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 {
     public class SyntaxReceiver : ISyntaxReceiver
     {
-        public List<MemberDeclarationSyntax> Candidates { get; } = new List<MemberDeclarationSyntax>();
+        public List<MemberDeclarationSyntax>? Candidates { get; private set; } 
 
         public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
         {
@@ -22,6 +22,11 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 if (hasProjectableAttribute)
                 {
+                    if (Candidates == null)
+                    {
+                        Candidates = new();
+                    }
+
                     Candidates.Add(memberDeclarationSyntax);
                 }
             }

@@ -22,7 +22,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return;
             }
 
-            if (receiver.Candidates.Count > 0)
+            if (receiver.Candidates?.Count > 0)
             {
                 var projectables = receiver.Candidates
                     .Select(x => ProjectableInterpreter.GetDescriptor(x, context))
