@@ -16,6 +16,7 @@
     <RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projectables/releases</PackageReleaseNotes>
+    <Description>Project over properties and functions in your linq queries</Description>
   </PropertyGroup>
 
 </Project>
