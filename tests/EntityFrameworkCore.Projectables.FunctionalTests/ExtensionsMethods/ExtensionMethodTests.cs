@@ -39,6 +39,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.ExtensionMethods
         }
 
         [Fact]
+        public Task SelectProjectableExtensionMethod2()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.Foo2());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
         public Task ExtensionMethodAcceptingDbContext()
         {
             using var dbContext = new SampleDbContext<Entity>();
