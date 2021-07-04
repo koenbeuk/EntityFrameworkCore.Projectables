@@ -9,7 +9,11 @@ namespace EntityFrameworkCore.Projectables.Extensions
 {
     public static class QueryableExtensions
     {
+        [Obsolete("Use ExpandProjectables instead")]
         public static IQueryable<TModel> ExpandQuaryables<TModel>(this IQueryable<TModel> query)
-            => query.Provider.CreateQuery<TModel>(query.Expression.ExpandQuaryables());
+            => ExpandProjectables(query);
+
+        public static IQueryable<TModel> ExpandProjectables<TModel>(this IQueryable<TModel> query)
+            => query.Provider.CreateQuery<TModel>(query.Expression.ExpandProjectables());
     }
 }

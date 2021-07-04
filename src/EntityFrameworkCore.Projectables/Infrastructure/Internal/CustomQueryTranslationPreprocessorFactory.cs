@@ -35,6 +35,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
         }
 
         public override Expression Process(Expression query)
-            => _decoratedPreprocessor.Process(query.ExpandQuaryables());
+            => _decoratedPreprocessor.Process(query.ExpandProjectables());
     }
 }

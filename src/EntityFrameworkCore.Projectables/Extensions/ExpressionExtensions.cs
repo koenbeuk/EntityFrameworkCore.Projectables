@@ -12,7 +12,11 @@ namespace EntityFrameworkCore.Projectables.Extensions
     {
         static ProjectableExpressionReplacer _projectableExpressionReplacer = new ProjectableExpressionReplacer(new ProjectionExpressionResolver());
 
+        [Obsolete("Use ExpandProjectables instead")]
         public static Expression ExpandQuaryables(this Expression expression)
+            => ExpandProjectables(expression);
+
+        public static Expression ExpandProjectables(this Expression expression)
             => _projectableExpressionReplacer.Visit(expression);
     }
 }
