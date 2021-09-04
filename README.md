@@ -83,7 +83,7 @@ Essentially there are 2 components: We have a source generator that is able to w
 ### FAQ
 
 #### Are there currently any known limitations?
-There is currently no support for overloaded methods. Each method name needs to be unique within a given type. This is something that will be fixed before a proper v1 release.
+There is currently no support for overloaded methods. Each method name needs to be unique within a given type.
 
 #### Is this specific to a database provider?
 No; The runtime component injects itself within the EFCore query compilation pipeline and thus has no impact on the database provider used. Of course you're still limited to whatever your database provider can do.
