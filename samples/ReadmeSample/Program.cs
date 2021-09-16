@@ -43,7 +43,6 @@ namespace ReadmeSample
 
             Console.WriteLine($"Jons latest order had a grant total of {result.GrandTotal}");
             Console.WriteLine($"The following query was used to fetch the results:");
-            Console.WriteLine(query.ToQueryString());
         }
     }
 }

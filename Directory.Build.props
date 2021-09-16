@@ -19,4 +19,30 @@
     <Description>Project over properties and functions in your linq queries</Description>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)' == 'DebugV1' Or '$(Configuration)' == 'ReleaseV1' ">
+    <EFProjectablesVersion>1</EFProjectablesVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(EFProjectablesVersion)' == '' ">
+    <EFProjectablesVersion>2</EFProjectablesVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" $(EFProjectablesVersion) == 1 ">
+    <DefineConstants>EFPROJECTABLES1</DefineConstants>
+    <TargetFrameworkVersion>netstandard2.0</TargetFrameworkVersion>
+    <MicrosoftExtensionsVersion>3.1.0</MicrosoftExtensionsVersion>
+    <EFCoreVersion>3.1.0</EFCoreVersion>
+    <!-- We're testing against EF Core 5 as its compatible with 3.1.0 and contains additional features -->
+    <TestEFCoreVersion>5.0.10</TestEFCoreVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" $(EFProjectablesVersion) == 2 ">
+    <DefineConstants>EFPROJECTABLES2</DefineConstants>
+    <TargetFrameworkVersion>net6.0</TargetFrameworkVersion>
+    <MicrosoftExtensionsVersion>6.0.0-rc.1.21451.13</MicrosoftExtensionsVersion>
+    <EFCoreVersion>6.0.0-rc.1.21452.10</EFCoreVersion>
+    <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
+  </PropertyGroup>
+   
+
 </Project>

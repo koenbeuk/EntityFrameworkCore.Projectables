@@ -79,7 +79,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         [Fact]
         public Task ProjectOverMethodTakingDbContext()
         {
-            using var dbContext = new SampleDbContext<User>();
+            using var dbContext = new SampleDbContext<User>(Infrastructure.CompatibilityMode.Full);
 
             var query = dbContext.Set<User>()
                 .Select(x => x.GetLastOrderFromExternalDbContext(dbContext));
