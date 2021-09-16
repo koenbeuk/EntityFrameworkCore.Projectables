@@ -24,6 +24,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
         dotnet-version: [6.0.x]
+        projectables-version: [1, 2]
 
     steps:
     - uses: actions/checkout@v2
@@ -33,11 +34,11 @@ jobs:
         dotnet-version: ${{ matrix.dotnet-version }}
         include-prerelease: True
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore /p:EFProjectablesVersion=${{ matrix.projectables-version }}
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore /p:EFProjectablesVersion=${{ matrix.projectables-version }}
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test --no-build --verbosity normal /p:EFProjectablesVersion=${{ matrix.projectables-version }}
 
   prerelease:
     needs: build
@@ -45,9 +46,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Pack
+      - name: Pack v1
         run: | 
-          dotnet pack -v normal -c Debug --include-symbols --include-source -p:PackageVersion=1.0.0-pre-$GITHUB_RUN_ID -o nupkg 
+          dotnet pack -v normal -c DebugV1 --include-symbols --include-source -p:PackageVersion=1.0.0-pre-$GITHUB_RUN_ID -o nupkg 
+      - name: Pack v2
+        run: | 
+          dotnet pack -v normal -c Debug --include-symbols --include-source -p:PackageVersion=2.0.0-pre-$GITHUB_RUN_ID -o nupkg 
       - name: Push to GitHub Feed
         run: |
           for f in ./nupkg/*.nupkg
