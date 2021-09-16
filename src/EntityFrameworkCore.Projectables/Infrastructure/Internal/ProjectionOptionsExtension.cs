@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore.Infrastructure;
+﻿using EntityFrameworkCore.Projectables.Infrastructure;
+using EntityFrameworkCore.Projectables.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +12,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
+// The Z in the namespace is not a typo 
+// We need to make sure that this extension is registered last.
+// see: https://github.com/dotnet/efcore/issues/26071
+
+namespace ZEntityFrameworkCore.Projectables.Infrastructure.Internal
 {
     public class ProjectionOptionsExtension : IDbContextOptionsExtension
     {
@@ -96,29 +102,17 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 
         sealed class ExtensionInfo : DbContextOptionsExtensionInfo
         {
-            private int? _serviceProviderHash;
-
             public ExtensionInfo(IDbContextOptionsExtension extension) : base(extension)
             {
             }
 
+            private new ProjectionOptionsExtension Extension
+                => (ProjectionOptionsExtension)base.Extension;
+
+
             public override bool IsDatabaseProvider => false;
             public override string LogFragment => string.Empty;
-            public override long GetServiceProviderHashCode()
-            {
-                if (_serviceProviderHash == null)
-                {
-                    var hashCode = nameof(ProjectionOptionsExtension).GetHashCode();
 
-                    var extension = (ProjectionOptionsExtension)Extension;
-
-                    hashCode ^= extension._compatibilityMode.GetHashCode();
-
-                    _serviceProviderHash = hashCode;
-                }
-
-                return _serviceProviderHash.Value;
-            }
             
             public override void PopulateDebugInfo(IDictionary<string, string> debugInfo)
             {
@@ -127,8 +121,36 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                     throw new ArgumentNullException(nameof(debugInfo));
                 }
 
-                debugInfo["Projectables:CompatibilityMode"] = ((ProjectionOptionsExtension)Extension)._compatibilityMode.ToString();
+                debugInfo["Projectables:CompatibilityMode"] = Extension._compatibilityMode.ToString();
             }
+
+#if EFPROJECTABLES1
+            public override long GetServiceProviderHashCode()
+            {
+                var hashCode = nameof(ProjectionOptionsExtension).GetHashCode();
+
+                var extension = (ProjectionOptionsExtension)Extension;
+
+                hashCode ^= extension._compatibilityMode.GetHashCode();
+
+                return hashCode;
+            }
+#endif            
+
+#if EFPROJECTABLES2
+            public override int GetServiceProviderHashCode()
+            {
+                var hashCode = new HashCode();
+
+                hashCode.Add(Extension._compatibilityMode);
+
+                return hashCode.ToHashCode();
+            }
+
+
+            public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other)
+                => other is ExtensionInfo otherInfo && Extension._compatibilityMode == otherInfo.Extension._compatibilityMode;
+#endif
         }
     }
 }
