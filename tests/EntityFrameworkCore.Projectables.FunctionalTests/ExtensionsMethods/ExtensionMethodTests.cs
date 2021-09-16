@@ -52,7 +52,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.ExtensionMethods
         [Fact]
         public Task ExtensionMethodAcceptingDbContext()
         {
-            using var dbContext = new SampleDbContext<Entity>();
+            using var dbContext = new SampleDbContext<Entity>(Infrastructure.CompatibilityMode.Full);
 
             var sampleQuery = dbContext.Set<Entity>()
                 .Select(x => dbContext.Set<Entity>().Where(y => y.Id > x.Id).FirstOrDefault());

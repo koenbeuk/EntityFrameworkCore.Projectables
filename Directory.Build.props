@@ -7,7 +7,6 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <NoWarn>CS1591</NoWarn>
-    <Configurations>Debug;Release;DebugV1</Configurations>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -34,7 +33,7 @@
     <MicrosoftExtensionsVersion>3.1.0</MicrosoftExtensionsVersion>
     <EFCoreVersion>3.1.0</EFCoreVersion>
     <!-- We're testing against EF Core 5 as its compatible with 3.1.0 and contains additional features -->
-    <TestEFCoreVersion>5.0</TestEFCoreVersion>
+    <TestEFCoreVersion>5.0.10</TestEFCoreVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" $(EFProjectablesVersion) == 2 ">
