@@ -1,0 +1,5 @@
+SELECT CAST(1 AS bit), [e].[Id], [e0].[Id], [e0].[EntityId], [e0].[Name], [e1].[Id], [e1].[EntityId], [e1].[Name]
+FROM [Entity] AS [e]
+LEFT JOIN [Entity] AS [e0] ON [e].[Id] = [e0].[EntityId]
+LEFT JOIN [Entity] AS [e1] ON [e].[Id] = [e1].[EntityId]
+ORDER BY [e].[Id], [e0].[Id]

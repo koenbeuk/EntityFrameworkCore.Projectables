@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -31,7 +32,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return null;
             }
 
-
             var projectableAttributeTypeSymbol = context.Compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
 
             var projectableAttributeClass = memberSymbol.GetAttributes()
@@ -43,7 +43,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return null;
             }
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel);
+            var nullConditionalRewriteSupport = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "NullConditionalRewriteSupport")
+                .Where(x => x.Value.Kind == TypedConstantKind.Enum)
+                .Select(x => x.Value.Value)
+                .Where(x => Enum.IsDefined(typeof(NullConditionalRewriteSupport), x))
+                .Cast<NullConditionalRewriteSupport>()
+                .FirstOrDefault();
+
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel, nullConditionalRewriteSupport);
             var parameterSyntaxRewriter = new ParameterSyntaxRewriter(semanticModel);
             var returnTypeSyntaxRewriter = new ReturnTypeSyntaxRewriter(semanticModel);
 
@@ -128,15 +136,12 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return null;
             }
 
-
-
             descriptor.UsingDirectives =
                 memberDeclarationSyntax.SyntaxTree
                     .GetRoot()
                     .DescendantNodes()
                     .OfType<UsingDirectiveSyntax>()
                     .Select(x => x.ToString());
-
 
             return descriptor;
         }

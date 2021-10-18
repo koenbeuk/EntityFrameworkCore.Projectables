@@ -14,11 +14,76 @@ namespace EntityFrameworkCore.Projectables.Generator
     {
         readonly INamedTypeSymbol _targetTypeSymbol;
         readonly SemanticModel _semanticModel;
+        readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
+        readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
 
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, SemanticModel semanticModel)
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, SemanticModel semanticModel, NullConditionalRewriteSupport nullConditionalRewriteSupport)
         {
             _targetTypeSymbol = targetTypeSymbol;
             _semanticModel = semanticModel;
+            _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
+        }
+
+        public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
+        {
+            var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+
+            _conditionalAccessExpressionsStack.Push(targetExpression);
+
+            return _nullConditionalRewriteSupport switch {
+                NullConditionalRewriteSupport.Ignore => Visit(node.WhenNotNull),
+                NullConditionalRewriteSupport.Rewrite =>
+                    SyntaxFactory.ConditionalExpression(
+                        SyntaxFactory.BinaryExpression(
+                            SyntaxKind.NotEqualsExpression,
+                            targetExpression
+                                .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                            SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+                                .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
+                        )
+                            .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                        SyntaxFactory.ParenthesizedExpression(
+                            (ExpressionSyntax)Visit(node.WhenNotNull)
+                        )
+                            .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
+                            .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+                            .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
+                    ),
+                _ => base.VisitConditionalAccessExpression(node)
+            };
+        }
+
+        public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
+        {
+            if (_conditionalAccessExpressionsStack.Count == 0)
+            {
+                throw new InvalidOperationException("Expected at least one conditional expression on the stack");
+            }
+
+            var targetExpression = _conditionalAccessExpressionsStack.Pop();
+
+            return _nullConditionalRewriteSupport switch {
+                NullConditionalRewriteSupport.Ignore => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
+                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
+                _ => node
+            };
+        }
+
+        public override SyntaxNode? VisitElementBindingExpression(ElementBindingExpressionSyntax node)
+        {
+            if (_conditionalAccessExpressionsStack.Count == 0)
+            {
+                throw new InvalidOperationException("Expected at least one conditional expression on the stack");
+            }
+
+            var targetExpression = _conditionalAccessExpressionsStack.Pop();
+
+            return _nullConditionalRewriteSupport switch {
+                NullConditionalRewriteSupport.Ignore => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
+                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
+                _ => Visit(node)
+            };
         }
 
         public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)

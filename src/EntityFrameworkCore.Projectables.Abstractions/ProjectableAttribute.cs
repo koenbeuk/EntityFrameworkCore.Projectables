@@ -9,5 +9,6 @@ namespace EntityFrameworkCore.Projectables
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
     public sealed class ProjectableAttribute : Attribute
     {
+        public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; }
     }
 }
