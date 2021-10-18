@@ -11,8 +11,8 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.ExtensionMethods
         [Projectable]
         public static int Foo(this Entity entity) => entity.Id + 1;
 
-            [Projectable]
-            public static int Foo2(this Entity entity) => entity.Foo() + 1;
+        [Projectable]
+        public static int Foo2(this Entity entity) => entity.Foo() + 1;
 
         [Projectable]
         public static Entity? LeadingEntity(this Entity entity, DbContext dbContext)

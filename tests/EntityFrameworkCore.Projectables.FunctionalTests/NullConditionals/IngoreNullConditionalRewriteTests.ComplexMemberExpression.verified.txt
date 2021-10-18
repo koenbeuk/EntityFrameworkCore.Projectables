@@ -1,0 +1,2 @@
+SELECT CAST(LEN([e].[Name]) AS int)
+FROM [Entity] AS [e]
