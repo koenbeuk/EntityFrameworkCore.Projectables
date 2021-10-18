@@ -25,7 +25,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 if (typeInfo.Type.TypeKind is not TypeKind.Struct)
                 {
-                    return Visit(node.ElementType);
+                    return Visit(node.ElementType)
+                        .WithLeadingTrivia(node.GetLeadingTrivia())
+                        .WithTrailingTrivia(node.GetTrailingTrivia()); 
                 }
             }
 

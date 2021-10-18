@@ -17,25 +17,48 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            var symbol = _semanticModel.GetDeclaredSymbol(node);
+            var visitedNode = base.VisitIdentifierName(node);
+
+            var symbol = _semanticModel.GetDeclaredSymbol(visitedNode);
 
             if (symbol is not null)
             {
-                node = SyntaxFactory.IdentifierName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                return SyntaxFactory.IdentifierName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
             }
 
-            return base.VisitIdentifierName(node);
+            return visitedNode;
         }
 
         public override SyntaxNode? VisitParameter(ParameterSyntax node)
         {
-            var thisKeywordIndex = node.Modifiers.IndexOf(SyntaxKind.ThisKeyword);
-            if (thisKeywordIndex != -1)
+            var visitedNode = base.VisitParameter(node);
+
+            if (visitedNode is ParameterSyntax visitedParameterSyntax)
             {
-                node = node.WithModifiers(node.Modifiers.RemoveAt(thisKeywordIndex));
+                var thisKeywordIndex = visitedParameterSyntax.Modifiers.IndexOf(SyntaxKind.ThisKeyword);
+                if (thisKeywordIndex != -1)
+                {
+                    return visitedParameterSyntax.WithModifiers(node.Modifiers.RemoveAt(thisKeywordIndex));
+                }
             }
 
-            return base.VisitParameter(node);
+            return visitedNode;
+        }
+
+        public override SyntaxNode? VisitNullableType(NullableTypeSyntax node)
+        {
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type is not null)
+            {
+                if (typeInfo.Type.TypeKind is not TypeKind.Struct)
+                {
+                    return Visit(node.ElementType)
+                        .WithLeadingTrivia(node.GetLeadingTrivia())
+                        .WithTrailingTrivia(node.GetTrailingTrivia());
+                }
+            }
+
+            return base.VisitNullableType(node);
         }
     }
 }

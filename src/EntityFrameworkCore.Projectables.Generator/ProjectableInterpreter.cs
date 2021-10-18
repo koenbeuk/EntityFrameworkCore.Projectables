@@ -100,13 +100,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                var returnTypeSymbol = semanticModel.GetSymbolInfo(returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType)).Symbol;
-                if (returnTypeSymbol is null)
-                {
-                    return null;
-                }
+                var returnType = returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
+   
 
-                descriptor.ReturnTypeName = returnTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
                 foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {

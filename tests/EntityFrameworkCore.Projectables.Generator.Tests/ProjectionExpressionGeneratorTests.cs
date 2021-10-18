@@ -488,6 +488,88 @@ namespace Foo {
         }
 
         [Fact]
+        public Task GenericNullableReferenceTypesAreBeingEliminated()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+#nullable enable
+
+namespace Foo {
+    static class C {
+        [Projectable]
+        public static List<object?> NextFoo(this List<object?> input, List<int?> nullablePrimitiveArgument) => input;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task NullableReferenceTypeCastOperatorGetsEliminated()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+#nullable enable
+
+namespace Foo {
+    static class C {
+        [Projectable]
+        public static string? NullableReferenceType(object? input) => (string?)input;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task NullableValueCastOperatorsPersist()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+#nullable enable
+
+namespace Foo {
+    static class C {
+        [Projectable]        
+        public static int? NullableValueType(object? input) => (int?)input;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+
+        [Fact]
         public void NullableMemberBinding_WithoutSupport_IsBeingReported()
         {
             var compilation = CreateCompilation(@"

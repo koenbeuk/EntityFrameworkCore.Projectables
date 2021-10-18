@@ -126,13 +126,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 if (symbolInfo.Symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
                 {
-                    if (SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
-                    {
-                        //return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                        //    methodSymbol.ReducedFrom.Sym
-                        //);
-                        //throw new Exception("foo");
-                    }
+
                 }
                 else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
                 {
@@ -177,6 +171,22 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             return base.VisitQualifiedName(node);
+        }
+
+        public override SyntaxNode? VisitNullableType(NullableTypeSyntax node)
+        {
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type is not null)
+            {
+                if (typeInfo.Type.TypeKind is not TypeKind.Struct)
+                {
+                    return Visit(node.ElementType)
+                        .WithLeadingTrivia(node.GetLeadingTrivia())
+                        .WithTrailingTrivia(node.GetTrailingTrivia());
+                }
+            }
+
+            return base.VisitNullableType(node);
         }
     }
 }
