@@ -34,6 +34,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.NullConditionals
             return Verifier.Verify(query.ToQueryString());
         }
 
+#if EFPROJECTABLES2
         [Fact]
         public Task RelationalExpression()
         {
@@ -44,5 +45,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.NullConditionals
 
             return Verifier.Verify(query.ToQueryString());
         }
+#endif
     }
 }
