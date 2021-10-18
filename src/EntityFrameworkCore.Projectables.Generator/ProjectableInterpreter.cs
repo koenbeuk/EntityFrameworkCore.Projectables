@@ -51,7 +51,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .Cast<NullConditionalRewriteSupport>()
                 .FirstOrDefault();
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel, nullConditionalRewriteSupport);
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel, nullConditionalRewriteSupport, context);
             var parameterSyntaxRewriter = new ParameterSyntaxRewriter(semanticModel);
             var returnTypeSyntaxRewriter = new ReturnTypeSyntaxRewriter(semanticModel);
 

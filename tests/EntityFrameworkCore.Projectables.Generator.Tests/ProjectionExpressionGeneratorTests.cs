@@ -488,6 +488,27 @@ namespace Foo {
         }
 
         [Fact]
+        public void NullableMemberBinding_WithoutSupport_IsBeingReported()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    static class C {
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.None)]
+        public static int? GetLength(this string input) => input?.Length;
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0002", diagnostic.Id);
+        }
+
+        [Fact]
         public Task NullableMemberBinding_WithIgnoreSupport_IsBeingRewritten()
         {
             var compilation = CreateCompilation(@"

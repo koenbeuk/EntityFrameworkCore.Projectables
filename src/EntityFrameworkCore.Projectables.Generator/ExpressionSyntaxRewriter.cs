@@ -15,13 +15,15 @@ namespace EntityFrameworkCore.Projectables.Generator
         readonly INamedTypeSymbol _targetTypeSymbol;
         readonly SemanticModel _semanticModel;
         readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
+        readonly GeneratorExecutionContext _context;
         readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
 
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, SemanticModel semanticModel, NullConditionalRewriteSupport nullConditionalRewriteSupport)
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, SemanticModel semanticModel, NullConditionalRewriteSupport nullConditionalRewriteSupport, GeneratorExecutionContext context)
         {
             _targetTypeSymbol = targetTypeSymbol;
             _semanticModel = semanticModel;
             _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
+            _context = context;
         }
 
         public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
@@ -29,6 +31,12 @@ namespace EntityFrameworkCore.Projectables.Generator
             var targetExpression = (ExpressionSyntax)Visit(node.Expression);
 
             _conditionalAccessExpressionsStack.Push(targetExpression);
+
+            if (_nullConditionalRewriteSupport == NullConditionalRewriteSupport.None)
+            {
+                var diagnostic = Diagnostic.Create(Diagnostics.NullConditionalRewriteUnsupported, node.GetLocation(), node);
+                _context.ReportDiagnostic(diagnostic);
+            }
 
             return _nullConditionalRewriteSupport switch {
                 NullConditionalRewriteSupport.Ignore => Visit(node.WhenNotNull),
