@@ -9,7 +9,7 @@ namespace EntityFrameworkCore.Projectables.Generated
 {
     public static class Foo_EntityExtensions_GetFirstName
     {
-        public static System.Linq.Expressions.Expression<System.Func<Entity, string>> Expression => 
-            (Entity entity) => entity.FullName != null ? (entity.FullName.Substring(entity.FullName != null ? (entity.FullName.IndexOf(' ') ) : null?? 0)) : null;
+        public static System.Linq.Expressions.Expression<System.Func<global::Foo.EntityExtensions.Entity, string>> Expression => 
+            (global::Foo.EntityExtensions.Entity entity) => entity.FullName != null ? (entity.FullName.Substring(entity.FullName != null ? (entity.FullName.IndexOf(' ') ) : null?? 0)) : null;
     }
 }

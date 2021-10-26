@@ -6,11 +6,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace EntityFrameworkCore.Projectables.Generator
 {
-    public class ParameterSyntaxRewriter : CSharpSyntaxRewriter
+    public class DeclarationSyntaxRewriter : CSharpSyntaxRewriter
     {
         readonly SemanticModel _semanticModel;
 
-        public ParameterSyntaxRewriter(SemanticModel semanticModel)
+        public DeclarationSyntaxRewriter(SemanticModel semanticModel)
         {
             _semanticModel = semanticModel;
         }
@@ -19,11 +19,12 @@ namespace EntityFrameworkCore.Projectables.Generator
         {
             var visitedNode = base.VisitIdentifierName(node);
 
-            var symbol = _semanticModel.GetDeclaredSymbol(visitedNode);
+            var symbolInfo = _semanticModel.GetSymbolInfo(visitedNode);
 
-            if (symbol is not null)
+            if (symbolInfo.Symbol is not null)
             {
-                return SyntaxFactory.IdentifierName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                return SyntaxFactory.IdentifierName(symbolInfo.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .WithTriviaFrom(node);
             }
 
             return visitedNode;
@@ -53,8 +54,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (typeInfo.Type.TypeKind is not TypeKind.Struct)
                 {
                     return Visit(node.ElementType)
-                        .WithLeadingTrivia(node.GetLeadingTrivia())
-                        .WithTrailingTrivia(node.GetTrailingTrivia());
+                        .WithTriviaFrom(node);
                 }
             }
 

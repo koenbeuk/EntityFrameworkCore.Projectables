@@ -52,8 +52,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .FirstOrDefault();
 
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel, nullConditionalRewriteSupport, context);
-            var parameterSyntaxRewriter = new ParameterSyntaxRewriter(semanticModel);
-            var returnTypeSyntaxRewriter = new ReturnTypeSyntaxRewriter(semanticModel);
+            var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {
                 ClassName = memberSymbol.ContainingType.Name,
@@ -100,11 +99,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                var returnType = returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
+                var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
 
                 descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
-                foreach (var additionalParameter in ((ParameterListSyntax)parameterSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
+                foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
                 }
@@ -118,7 +117,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                var returnType = returnTypeSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
+                var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
                 descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);

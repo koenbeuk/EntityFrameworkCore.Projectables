@@ -8,7 +8,7 @@ namespace EntityFrameworkCore.Projectables.Generated
 {
     public static class Foo_C_Foo
     {
-        public static System.Linq.Expressions.Expression<System.Func<D, int>> Expression => 
-            (D d) => 1;
+        public static System.Linq.Expressions.Expression<System.Func<global::Foo.D, int>> Expression => 
+            (global::Foo.D d) => 1;
     }
 }
