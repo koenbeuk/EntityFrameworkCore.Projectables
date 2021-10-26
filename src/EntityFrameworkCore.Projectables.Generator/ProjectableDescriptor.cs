@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -27,6 +28,10 @@ namespace EntityFrameworkCore.Projectables.Generator
         public string ReturnTypeName { get; set; }
 
         public ParameterListSyntax ParametersList { get; set; }
+
+        public TypeParameterListSyntax TypeParameterList { get; set; }
+        
+        public IEnumerable<TypeParameterConstraintClauseSyntax> ConstraintClauses { get; set; }
 
         public SyntaxNode Body { get; set; }
     }
