@@ -9,7 +9,10 @@ namespace EntityFrameworkCore.Projectables.Generated
 {
     public static class Foo_EntityExtensions_GetFirstRelatedIgnoreNulls
     {
-        public static System.Linq.Expressions.Expression<System.Func<global::Foo.EntityExtensions.Entity, global::Foo.EntityExtensions.Entity>> Expression => 
-            (global::Foo.EntityExtensions.Entity entity) => entity.RelatedEntities[0];
+        public static System.Linq.Expressions.Expression<System.Func<Entity, Entity>> Expression()
+        {
+            return (Entity entity) => 
+                entity.RelatedEntities[0];
+        }
     }
 }

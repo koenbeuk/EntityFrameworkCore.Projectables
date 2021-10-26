@@ -72,10 +72,25 @@ namespace EntityFrameworkCore.Projectables.Generated
 {{
     public static class {generatedClassName}
     {{
-        public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression => 
-            {projectable.ParametersList} => {projectable.Body};
+        public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression{(projectable.TypeParameterList.Parameters.Any() ? projectable.TypeParameterList.ToString() : string.Empty)}()");
+
+                    if (projectable.ConstraintClauses is not null)
+                    {
+                        foreach (var constraintClause in projectable.ConstraintClauses)
+                        {
+                            resultBuilder.Append($@"
+            {constraintClause}");
+                        }
+                    }
+
+                    resultBuilder.Append($@"
+        {{
+            return {projectable.ParametersList} => 
+                {projectable.Body};
+        }}
     }}
 }}");
+
 
                     context.AddSource($"{generatedClassName}_Generated", SourceText.From(resultBuilder.ToString(), Encoding.UTF8));
                 }

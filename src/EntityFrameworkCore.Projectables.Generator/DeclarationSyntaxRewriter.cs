@@ -15,21 +15,6 @@ namespace EntityFrameworkCore.Projectables.Generator
             _semanticModel = semanticModel;
         }
 
-        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
-        {
-            var visitedNode = base.VisitIdentifierName(node);
-
-            var symbolInfo = _semanticModel.GetSymbolInfo(visitedNode);
-
-            if (symbolInfo.Symbol is not null)
-            {
-                return SyntaxFactory.IdentifierName(symbolInfo.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .WithTriviaFrom(node);
-            }
-
-            return visitedNode;
-        }
-
         public override SyntaxNode? VisitParameter(ParameterSyntax node)
         {
             var visitedNode = base.VisitParameter(node);

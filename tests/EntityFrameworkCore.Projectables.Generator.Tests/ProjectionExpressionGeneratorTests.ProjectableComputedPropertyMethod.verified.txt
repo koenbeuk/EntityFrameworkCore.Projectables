@@ -7,7 +7,10 @@ namespace EntityFrameworkCore.Projectables.Generated
 {
     public static class Foo_C_Foo
     {
-        public static System.Linq.Expressions.Expression<System.Func<global::Foo.C, int>> Expression => 
-            (global::Foo.C @this) => @this.Bar();
+        public static System.Linq.Expressions.Expression<System.Func<global::Foo.C, int>> Expression()
+        {
+            return (global::Foo.C @this) => 
+                @this.Bar();
+        }
     }
 }
