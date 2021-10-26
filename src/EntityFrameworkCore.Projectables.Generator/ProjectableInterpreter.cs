@@ -101,7 +101,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
 
                 var returnType = returnTypeSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
-   
 
                 descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
@@ -119,13 +118,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                var returnTypeSymbol = semanticModel.GetSymbolInfo(returnTypeSyntaxRewriter.Visit(propertyDeclarationSyntax.Type)).Symbol;
-                if (returnTypeSymbol is null)
-                {
-                    return null;
-                }
+                var returnType = returnTypeSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
-                descriptor.ReturnTypeName = returnTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
             }
             else
