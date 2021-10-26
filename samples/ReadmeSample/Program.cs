@@ -42,7 +42,7 @@ namespace ReadmeSample
             var result = query.First();
 
             Console.WriteLine($"Jons latest order had a grant total of {result.GrandTotal}");
-            Console.WriteLine($"The following query was used to fetch the results:");
+            Console.WriteLine($"The following query was used to fetch the results: {query.ToQueryString()}");
         }
     }
 }
