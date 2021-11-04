@@ -105,6 +105,32 @@ public static int Squared(this int i) => i * i;
 ```
 Any call to squared given any int will perfertly translate to SQL.
 
+#### How do I deal with nullable properties
+Expressions and Lamdas are different and not equal. Expressions can only express a subset of valid CSharp statements that are allowed in lambda's and arrow functions. One obvious limitation is the null-conditional operator. Consider the following example:
+```csharp
+[Projectable]
+public static string? GetFullAddress(this User? user) => user?.Location?.AddressLine1 + " " + user?.Location.AddressLine2;
+```
+This is a perfectly valid arrow function but it can't be translated directly to an expression tree. This Project will generate an error by default and suggest 2 solutions: Either you rewrite the function to excplitly check for nullables or you let the generator do that for you!
+
+Starting from the official release of V2, we can now hint the generator in how to translate this arrow function to an expression tree. We can say:
+```csharp
+[Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+``` 
+which will simply generate an expression tree that ignores the null-conditional operator. This generates: 
+```csharp
+user.Location.AddressLine1 + " " + user.Location.AddressLine2
+```
+This is perfect for a database like SQL Server where nullability is implicit and if any of the arguments were to be null, the resulting value will be null. If you are dealing with CosmosDB (which may result to client-side evaluation) or want to be explicit about things. You can configure your projectable as such: 
+```csharp
+[Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+```
+This will rewrite your expression to explicitly check for nullables. In the former example, this will be rewritten to: 
+```csharp 
+(user != null ? user.Location != nulll ? user.Location?.AddressLine 1 + (user != null ? user.Location != null ? user.Location.AddressLine2 : null) : null)
+```
+Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQLServer
+
 #### How does this relate to [Expressionify](https://github.com/ClaveConsulting/Expressionify)?
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existance so shame on me. Currently Expressionify targets a more focusses scope of what this project is doing and thereby it seems to be more limiting in its capabilities. Check them out though!
 
