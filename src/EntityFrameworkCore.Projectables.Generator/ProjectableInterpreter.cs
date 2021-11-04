@@ -59,7 +59,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
                 NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType),
-                ParametersList = SyntaxFactory.ParameterList()
+                ParametersList = SyntaxFactory.ParameterList(),
+                TypeParameterList = SyntaxFactory.TypeParameterList()
             };
 
             if (!memberDeclarationSyntax.Modifiers.Any(SyntaxKind.StaticKeyword))
@@ -78,7 +79,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                 );
             }
 
-            if (memberSymbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
+            var methodSymbol = memberSymbol as IMethodSymbol;
+
+            if (methodSymbol is { IsExtensionMethod: true })
             {
                 var targetTypeSymbol = methodSymbol.Parameters.First().Type;
                 descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
@@ -106,6 +109,20 @@ namespace EntityFrameworkCore.Projectables.Generator
                 foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
+                }
+
+                if (methodDeclarationSyntax.TypeParameterList is not null)
+                {
+                    foreach (var additionalTypeParameter in ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.TypeParameterList)).Parameters)
+                    {
+                        descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
+                    }
+                }
+
+                if (methodDeclarationSyntax.ConstraintClauses.Any())
+                {
+                    descriptor.ConstraintClauses = methodDeclarationSyntax.ConstraintClauses
+                        .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x));
                 }
             }
             else if (memberDeclarationSyntax is PropertyDeclarationSyntax propertyDeclarationSyntax)

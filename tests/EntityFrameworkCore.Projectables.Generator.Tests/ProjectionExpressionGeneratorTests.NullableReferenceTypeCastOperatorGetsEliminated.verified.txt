@@ -9,7 +9,10 @@ namespace EntityFrameworkCore.Projectables.Generated
 {
     public static class Foo_C_NullableReferenceType
     {
-        public static System.Linq.Expressions.Expression<System.Func<object, string>> Expression => 
-            (object input) => (string)input;
+        public static System.Linq.Expressions.Expression<System.Func<object, string>> Expression()
+        {
+            return (object input) => 
+                (string)input;
+        }
     }
 }

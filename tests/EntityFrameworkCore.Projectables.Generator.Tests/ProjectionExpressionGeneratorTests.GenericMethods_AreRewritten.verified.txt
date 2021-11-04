@@ -1,0 +1,19 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+using Foo;
+
+namespace EntityFrameworkCore.Projectables.Generated
+#nullable disable
+{
+    public static class Foo_EntityExtensions_EnforceString
+    {
+        public static System.Linq.Expressions.Expression<System.Func<T, string>> Expression<T>()
+            where T : unmanaged
+        {
+            return (T value) => 
+                value.ToString();
+        }
+    }
+}
