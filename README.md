@@ -129,7 +129,7 @@ This will rewrite your expression to explicitly check for nullables. In the form
 ```csharp 
 (user != null ? user.Location != nulll ? user.Location?.AddressLine 1 + (user != null ? user.Location != null ? user.Location.AddressLine2 : null) : null)
 ```
-Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQLServer
+Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQL Server
 
 #### How does this relate to [Expressionify](https://github.com/ClaveConsulting/Expressionify)?
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existance so shame on me. Currently Expressionify targets a more focusses scope of what this project is doing and thereby it seems to be more limiting in its capabilities. Check them out though!
