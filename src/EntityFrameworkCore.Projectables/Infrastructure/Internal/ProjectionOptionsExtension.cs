@@ -12,11 +12,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-// The Z in the namespace is not a typo 
-// We need to make sure that this extension is registered last.
-// see: https://github.com/dotnet/efcore/issues/26071
-
-namespace ZEntityFrameworkCore.Projectables.Infrastructure.Internal
+namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 {
     public class ProjectionOptionsExtension : IDbContextOptionsExtension
     {
