@@ -1,6 +1,5 @@
 ﻿using EntityFrameworkCore.Projectables.Infrastructure;
 using EntityFrameworkCore.Projectables.Infrastructure.Internal;
-using EntityFrameworkCore.Projectables.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System;
