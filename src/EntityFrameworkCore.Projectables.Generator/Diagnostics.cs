@@ -19,8 +19,8 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public static readonly DiagnosticDescriptor NullConditionalRewriteUnsupported = new(
             id: "EFP0002",
-            title: "Method or property is not configured to support null-conditional expressions.",
-            messageFormat: "'{0}' has a null-conditional expression exposed but is not configured to rewrite this. Consider configuring a strategy using the NullConditionalRewriteSupport property on the Projectable attribute",
+            title: "Method or property is not configured to support null-conditional expressions",
+            messageFormat: "'{0}' has a null-conditional expression exposed but is not configured to rewrite this (Consider configuring a strategy using the NullConditionalRewriteSupport property on the Projectable attribute)",
             category: "Design",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
