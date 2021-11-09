@@ -35,7 +35,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             var projectableAttributeTypeSymbol = context.Compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
 
             var projectableAttributeClass = memberSymbol.GetAttributes()
-                .Where(x => x.AttributeClass.Name == "ProjectableAttribute")
+                .Where(x => x.AttributeClass?.Name == "ProjectableAttribute")
                 .FirstOrDefault();
 
             if (projectableAttributeClass is null || !SymbolEqualityComparer.Default.Equals(projectableAttributeClass.AttributeClass, projectableAttributeTypeSymbol))

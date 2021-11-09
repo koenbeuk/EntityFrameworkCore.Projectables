@@ -135,7 +135,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         node
                     );
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType && node.Parent.Kind() is not SyntaxKind.QualifiedName)
+                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {
                     var typeInfo = _semanticModel.GetTypeInfo(node);
 

@@ -26,17 +26,26 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var projectables = receiver.Candidates
                     .Select(x => ProjectableInterpreter.GetDescriptor(x, context))
-                    .Where(x => x is not null);
+                    .Where(x => x is not null)
+                    .Select(x => x!);
 
                 var resultBuilder = new StringBuilder();
 
                 foreach (var projectable in projectables)
                 {
+                    if (projectable.MemberName is null)
+                    {
+                        throw new InvalidOperationException("Expected a memberName here");
+                    }
+
                     resultBuilder.Clear();
 
-                    foreach (var usingDirective in projectable.UsingDirectives.Distinct())
+                    if (projectable.UsingDirectives is not null)
                     {
-                        resultBuilder.AppendLine(usingDirective);
+                        foreach (var usingDirective in projectable.UsingDirectives.Distinct())
+                        {
+                            resultBuilder.AppendLine(usingDirective);
+                        }
                     }
 
                     if (projectable.TargetClassNamespace is not null)
@@ -60,9 +69,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                     }
 
                     var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(projectable.ClassNamespace, projectable.NestedInClassNames, projectable.MemberName);
+
                     var lambdaTypeArguments = SyntaxFactory.TypeArgumentList(
                         SyntaxFactory.SeparatedList(
-                            projectable.ParametersList.Parameters.Select(p => p.Type)
+                            projectable.ParametersList?.Parameters.Where(p => p.Type is not null).Select(p => p.Type!)
                         )
                     );
 
@@ -72,7 +82,7 @@ namespace EntityFrameworkCore.Projectables.Generated
 {{
     public static class {generatedClassName}
     {{
-        public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression{(projectable.TypeParameterList.Parameters.Any() ? projectable.TypeParameterList.ToString() : string.Empty)}()");
+        public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression{(projectable.TypeParameterList?.Parameters.Any() == true ? projectable.TypeParameterList.ToString() : string.Empty)}()");
 
                     if (projectable.ConstraintClauses is not null)
                     {

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <NoWarn>$(NoWarn);nullable;NU5128</NoWarn>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -14,5 +14,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(MicrosoftCodeAnalysisVersion)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Internal\" />
   </ItemGroup>
 </Project>

@@ -10,14 +10,14 @@ namespace EntityFrameworkCore.Projectables.Services
     {
         public const string Namespace = "EntityFrameworkCore.Projectables.Generated";
 
-        public static string GenerateName(string? namespaceName, IEnumerable<string> nestedInClassNames, string memberName)
+        public static string GenerateName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
         {
             var stringBuilder = new StringBuilder();
 
             return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName);
         }
 
-        public static string GenerateFullName(string? namespaceName, IEnumerable<string> nestedInClassNames, string memberName)
+        public static string GenerateFullName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
         {
             var stringBuilder = new StringBuilder(Namespace);
             stringBuilder.Append('.');
@@ -25,14 +25,17 @@ namespace EntityFrameworkCore.Projectables.Services
             return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName);
         }
 
-        static string GenerateNameImpl(StringBuilder stringBuilder, string? namespaceName, IEnumerable<string> nestedInClassNames, string memberName)
+        static string GenerateNameImpl(StringBuilder stringBuilder, string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
         {
             stringBuilder.Append(namespaceName?.Replace('.', '_'));
             stringBuilder.Append('_');
-            foreach (var className in nestedInClassNames)
+            if (nestedInClassNames is not null)
             {
-                stringBuilder.Append(className);
-                stringBuilder.Append('_');
+                foreach (var className in nestedInClassNames)
+                {
+                    stringBuilder.Append(className);
+                    stringBuilder.Append('_');
+                }
             }
             stringBuilder.Append(memberName);
 
