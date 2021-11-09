@@ -28,6 +28,10 @@
     <EFProjectablesVersion>2</EFProjectablesVersion>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <MicrosoftCodeAnalysisVersion>3.11.0</MicrosoftCodeAnalysisVersion>
+  </PropertyGroup>
+
   <PropertyGroup Condition=" $(EFProjectablesVersion) == 1 ">
     <DefineConstants>EFPROJECTABLES1</DefineConstants>
     <TargetFrameworkVersion>netstandard2.0</TargetFrameworkVersion>
@@ -40,8 +44,8 @@
   <PropertyGroup Condition=" $(EFProjectablesVersion) == 2 ">
     <DefineConstants>EFPROJECTABLES2</DefineConstants>
     <TargetFrameworkVersion>net6.0</TargetFrameworkVersion>
-    <MicrosoftExtensionsVersion>6.0.0-rc.1.21451.13</MicrosoftExtensionsVersion>
-    <EFCoreVersion>6.0.0-rc.1.21452.10</EFCoreVersion>
+    <MicrosoftExtensionsVersion>6.0.0</MicrosoftExtensionsVersion>
+    <EFCoreVersion>6.0.0</EFCoreVersion>
     <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
   </PropertyGroup>
    
