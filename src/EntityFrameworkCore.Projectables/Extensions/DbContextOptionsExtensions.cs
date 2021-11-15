@@ -13,10 +13,16 @@ namespace Microsoft.EntityFrameworkCore
 {
     public static class DbContextOptionsExtensions
     {
+        /// <summary>
+        /// Use projectables within the queries. Any call to a Projectable property/method will automatically be translated to the underlying expression tree instead
+        /// </summary>
         public static DbContextOptionsBuilder<TContext> UseProjectables<TContext>(this DbContextOptionsBuilder<TContext> optionsBuilder, Action<ProjectableOptionsBuilder>? configure = null)
             where TContext : DbContext
             => (DbContextOptionsBuilder<TContext>)UseProjectables((DbContextOptionsBuilder)optionsBuilder, configure);
 
+        /// <summary>
+        /// Use projectables within the queries. Any call to a Projectable property/method will automatically be translated to the underlying expression tree instead
+        /// </summary>
         public static DbContextOptionsBuilder UseProjectables(this DbContextOptionsBuilder optionsBuilder, Action<ProjectableOptionsBuilder>? configure = null)
         {
             var extension = optionsBuilder.Options.FindExtension<ProjectionOptionsExtension>() ?? new ProjectionOptionsExtension();
