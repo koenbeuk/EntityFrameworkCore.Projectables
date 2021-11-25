@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(TargetFrameworkVersion)</TargetFramework>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,5 +12,10 @@
   <ItemGroup>
     <ProjectReference Include="..\EntityFrameworkCore.Projectables.Abstractions\EntityFrameworkCore.Projectables.Abstractions.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+
 
 </Project>
