@@ -45,5 +45,31 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             return base.VisitNullableType(node);
         }
+
+        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type is not null)
+            {
+                return SyntaxFactory.ParseTypeName(
+                    typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                ).WithTriviaFrom(node);
+            }
+
+            return base.VisitIdentifierName(node);
+        }
+
+        public override SyntaxNode? VisitQualifiedName(QualifiedNameSyntax node)
+        {
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type is not null)
+            {
+                return SyntaxFactory.ParseTypeName(
+                    typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                ).WithTriviaFrom(node);
+            }
+
+            return base.VisitQualifiedName(node);
+        }
     }
 }

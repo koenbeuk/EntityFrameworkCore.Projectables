@@ -867,6 +867,39 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task DeclarationTypeNamesAreGettingFullyQualified()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class EntityExtensions
+    {
+        public record Entity
+        {
+            public int Id { get; set; }
+            public string? FullName { get; set; }
+
+            [Projectable]
+            public static Entity Something(Entity entity)
+                => entity;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

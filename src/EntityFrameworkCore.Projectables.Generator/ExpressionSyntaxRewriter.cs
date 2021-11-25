@@ -130,6 +130,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
                 {
+                    if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
+                    {
+                        var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
+                        if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter })
+                        {
+                            return base.VisitIdentifierName(node);
+                        }
+                    }
+
                     return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                         SyntaxFactory.IdentifierName("@this"),
                         node

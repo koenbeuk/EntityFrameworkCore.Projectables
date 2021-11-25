@@ -1,37 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
 using Microsoft.EntityFrameworkCore;
-using ScenarioTests;
 using VerifyXunit;
 using Xunit;
 
 namespace EntityFrameworkCore.Projectables.FunctionalTests
 {
     [UsesVerify]
-    public class StatelessPropertyTests
+    public class TypeNameQualificationTests
     {
         public record Entity
         {
             public int Id { get; set; }
-            
+
+            public int? ParentId { get; set; }
+
+            public ICollection<Entity> Children { get; } = new List<Entity>();
+
             [Projectable]
-            public int Computed => 0; 
-        }
-
-        [Fact]
-        public Task FilterOnProjectableProperty()
-        {
-            using var dbContext = new SampleDbContext<Entity>();
-
-            var query = dbContext.Set<Entity>().AsQueryable()
-                .Where(x => x.Computed == 1);
-
-            return Verifier.Verify(query.ToQueryString());
+            public Entity? FirstChild =>
+                Children.OrderBy(x => x.Id).FirstOrDefault();
         }
 
         [Fact]
@@ -40,7 +32,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             using var dbContext = new SampleDbContext<Entity>();
 
             var query = dbContext.Set<Entity>()
-                .Select(x => x.Computed);
+                .Select(x => x.FirstChild);
 
             return Verifier.Verify(query.ToQueryString());
         }
