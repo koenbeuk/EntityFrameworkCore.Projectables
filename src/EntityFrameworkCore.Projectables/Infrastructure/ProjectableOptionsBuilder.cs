@@ -18,6 +18,9 @@ namespace EntityFrameworkCore.Projectables.Infrastructure
             _optionsBuilder = optionsBuilder ?? throw new ArgumentNullException(nameof(optionsBuilder));
         }
 
+        /// <summary>
+        /// Change the default CompatibilityMode
+        /// </summary>
         public ProjectableOptionsBuilder CompatibilityMode(CompatibilityMode mode)
             => WithOption(x => x.WithCompatibilityMode(mode));
 

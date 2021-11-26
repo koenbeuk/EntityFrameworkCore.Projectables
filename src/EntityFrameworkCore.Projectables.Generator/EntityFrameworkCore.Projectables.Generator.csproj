@@ -15,8 +15,4 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(MicrosoftCodeAnalysisVersion)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.3" PrivateAssets="all" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Internal\" />
-  </ItemGroup>
 </Project>

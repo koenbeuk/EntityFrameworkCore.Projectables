@@ -16,6 +16,9 @@ namespace EntityFrameworkCore.Projectables.Extensions
         public static Expression ExpandQuaryables(this Expression expression)
             => ExpandProjectables(expression);
 
+        /// <summary>
+        /// Replaces all calls to properties and methods that are marked with the <C>Projectable</C> attribute with their respective expression tree
+        /// </summary>
         public static Expression ExpandProjectables(this Expression expression)
             => _projectableExpressionReplacer.Visit(expression);
     }
