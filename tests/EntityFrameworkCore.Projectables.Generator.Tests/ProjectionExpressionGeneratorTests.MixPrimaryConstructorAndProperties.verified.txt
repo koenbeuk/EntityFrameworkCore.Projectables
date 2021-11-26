@@ -1,0 +1,20 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+using Foo;
+
+namespace EntityFrameworkCore.Projectables.Generated
+#nullable disable
+{
+    public static class Foo_EntityExtensions_Entity_Something
+    {
+        public static System.Linq.Expressions.Expression<System.Func<global::Foo.EntityExtensions.Entity, global::Foo.EntityExtensions.Entity>> Expression()
+        {
+            return (global::Foo.EntityExtensions.Entity entity) => 
+                new Entity(entity.Id) {
+                    FullName = entity.FullName
+                };
+        }
+    }
+}

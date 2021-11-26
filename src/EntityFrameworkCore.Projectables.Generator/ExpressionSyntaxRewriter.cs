@@ -126,23 +126,35 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 if (symbolInfo.Symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
                 {
-
                 }
                 else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
                 {
+                    bool rewrite = true;
+
                     if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
                     {
                         var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
                         if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter })
                         {
-                            return base.VisitIdentifierName(node);
+                            rewrite = false;
                         }
                     }
+                    else if (node.Parent.IsKind(SyntaxKind.SimpleAssignmentExpression))
+                    {
+                        rewrite = false;
+                    }
+                    else if (node.Parent.IsKind(SyntaxKind.InvocationExpression))
+                    {
+                        rewrite = true;
+                    }
 
-                    return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                        SyntaxFactory.IdentifierName("@this"),
-                        node
-                    );
+                    if (rewrite)
+                    {
+                        return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName("@this"),
+                            node
+                        );
+                    }
                 }
                 else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {

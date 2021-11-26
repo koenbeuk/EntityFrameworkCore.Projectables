@@ -77,6 +77,30 @@ namespace Foo {
         }
 
         [Fact]
+        public Task MinimalProjectableComputedProperty()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo => Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task SimpleProjectableComputedProperty()
         {
             var compilation = CreateCompilation(@"
@@ -887,6 +911,41 @@ namespace Foo {
             [Projectable]
             public static Entity Something(Entity entity)
                 => entity;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task MixPrimaryConstructorAndProperties()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class EntityExtensions
+    {
+        public record Entity(int Id)
+        {
+            public int Id { get; set; }
+            public string? FullName { get; set; }
+
+            [Projectable]
+            public static Entity Something(Entity entity)
+                => new Entity(entity.Id) {
+                    FullName = entity.FullName
+                };
         }
     }
 }
