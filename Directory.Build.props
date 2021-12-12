@@ -7,7 +7,6 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <NoWarn>CS1591</NoWarn>
-    <Configurations>Debug;Release;DebugV1;ReleaseV1</Configurations>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -25,7 +24,6 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <DefineConstants>EFPROJECTABLES2</DefineConstants>
     <TargetFrameworkVersion>net6.0</TargetFrameworkVersion>
     <MicrosoftExtensionsVersion>6.0.0</MicrosoftExtensionsVersion>
     <EFCoreVersion>6.0.0</EFCoreVersion>
