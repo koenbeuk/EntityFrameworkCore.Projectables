@@ -31,10 +31,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             [Projectable]
             public double MentalLifeProgression
                 => MentalAge / AverageLifespan;
-
-            [Projectable]
-            public double ReservedAge
-                => base.Age; // base should not affect the generated outcome
         }
 
 
@@ -44,7 +40,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             using var dbContext = new SampleDbContext<Cat>();
 
             var query = dbContext.Set<Cat>()
-                .Select(x => new { x.LifeProgression, x.AverageLifespan });
+                .Select(x => new { x.LifeProgression, x.MentalLifeProgression });
 
             return Verifier.Verify(query.ToQueryString());
         }
