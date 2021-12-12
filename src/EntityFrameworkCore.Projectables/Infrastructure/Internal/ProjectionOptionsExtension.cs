@@ -120,20 +120,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 debugInfo["Projectables:CompatibilityMode"] = Extension._compatibilityMode.ToString();
             }
 
-#if EFPROJECTABLES1
-            public override long GetServiceProviderHashCode()
-            {
-                var hashCode = nameof(ProjectionOptionsExtension).GetHashCode();
-
-                var extension = (ProjectionOptionsExtension)Extension;
-
-                hashCode ^= extension._compatibilityMode.GetHashCode();
-
-                return hashCode;
-            }
-#endif            
-
-#if EFPROJECTABLES2
             public override int GetServiceProviderHashCode()
             {
                 var hashCode = new HashCode();
@@ -146,7 +132,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 
             public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other)
                 => other is ExtensionInfo otherInfo && Extension._compatibilityMode == otherInfo.Extension._compatibilityMode;
-#endif
         }
     }
 }
