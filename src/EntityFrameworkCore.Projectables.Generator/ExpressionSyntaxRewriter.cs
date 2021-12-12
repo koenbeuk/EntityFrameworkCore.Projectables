@@ -98,7 +98,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         {
             var symbolInfo = _semanticModel.GetSymbolInfo(node);
 
-            if (symbolInfo.Symbol is not null && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+            if (symbolInfo.Symbol is not null)
             {
                 var scopedNode = node.ChildNodes().FirstOrDefault();
                 if (scopedNode is ThisExpressionSyntax)
@@ -127,7 +127,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (symbolInfo.Symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
                 {
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field && SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field /*&& SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol)*/)
                 {
                     bool rewrite = true;
 
@@ -135,6 +135,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                     {
                         var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
                         if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter })
+                        {
+                            rewrite = false;
+                        }
+                        if (targetSymbolInfo.Symbol?.ContainingType is not null && !_context.Compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol))
                         {
                             rewrite = false;
                         }

@@ -24,11 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="**\*.verified.txt" />
-    <None Remove="**\*.received.txt" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" />
     <ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables\EntityFrameworkCore.Projectables.csproj" />
   </ItemGroup>
