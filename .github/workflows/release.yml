@@ -33,7 +33,7 @@ jobs:
           arrTag=(${GITHUB_REF//\// })
           VERSION="${arrTag[2]}"
           echo Version: $VERSION
-          CONFIGURATION=$([ "${VERSION:0:2}" == "v1" ] && echo "ReleaseV1" || echo "Release")
+          CONFIGURATION="Release"
           VERSION="${VERSION//v}"
           echo Clean Version: $VERSION
           echo Configuration: $CONFIGURATION
