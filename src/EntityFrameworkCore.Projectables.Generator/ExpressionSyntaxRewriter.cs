@@ -127,7 +127,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (symbolInfo.Symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
                 {
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field /*&& SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol)*/)
+                else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field)
                 {
                     bool rewrite = true;
 
@@ -138,9 +138,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                         {
                             rewrite = false;
                         }
-                        if (targetSymbolInfo.Symbol?.ContainingType is not null && !_context.Compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                        if (targetSymbolInfo.Symbol?.ContainingType is not null)
                         {
-                            rewrite = false;
+                            if (!_context.Compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol) ||
+                                !SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                            {
+                                rewrite = false;
+                            }
                         }
                     }
                     else if (node.Parent.IsKind(SyntaxKind.SimpleAssignmentExpression))
