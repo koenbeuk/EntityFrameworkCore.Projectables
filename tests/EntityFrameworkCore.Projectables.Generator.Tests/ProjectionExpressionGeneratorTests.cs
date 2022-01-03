@@ -988,6 +988,37 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task RelationalProperty()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foos {
+    public class Foo {
+        public int Id { get; set; }
+    }
+
+    public class Bar {
+        public Foo Foo { get; set; }
+
+        [Projectable]
+        public int FooId => Foo.Id;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
