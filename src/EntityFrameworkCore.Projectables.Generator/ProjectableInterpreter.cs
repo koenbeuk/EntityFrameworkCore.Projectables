@@ -22,17 +22,17 @@ namespace EntityFrameworkCore.Projectables.Generator
             yield return namedTypeSymbol.Name;
         }
 
-        public static ProjectableDescriptor? GetDescriptor(MemberDeclarationSyntax memberDeclarationSyntax, GeneratorExecutionContext context)
+        public static ProjectableDescriptor? GetDescriptor(Compilation compilation, MemberDeclarationSyntax member, SourceProductionContext context)
         {
-            var semanticModel = context.Compilation.GetSemanticModel(memberDeclarationSyntax.SyntaxTree);
-            var memberSymbol = semanticModel.GetDeclaredSymbol(memberDeclarationSyntax);
+            var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
+            var memberSymbol = semanticModel.GetDeclaredSymbol(member);
 
             if (memberSymbol is null)
             {
                 return null;
             }
 
-            var projectableAttributeTypeSymbol = context.Compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
+            var projectableAttributeTypeSymbol = compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
 
             var projectableAttributeClass = memberSymbol.GetAttributes()
                 .Where(x => x.AttributeClass?.Name == "ProjectableAttribute")
@@ -51,7 +51,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .Cast<NullConditionalRewriteSupport>()
                 .FirstOrDefault();
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, semanticModel, nullConditionalRewriteSupport, context);
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, compilation, semanticModel, context);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {
@@ -63,7 +63,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 TypeParameterList = SyntaxFactory.TypeParameterList()
             };
 
-            if (!memberDeclarationSyntax.Modifiers.Any(SyntaxKind.StaticKeyword))
+            if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
             {
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
@@ -93,7 +93,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
 
-            if (memberDeclarationSyntax is MethodDeclarationSyntax methodDeclarationSyntax)
+            if (member is MethodDeclarationSyntax methodDeclarationSyntax)
             {
                 if (methodDeclarationSyntax.ExpressionBody is null)
                 {
@@ -125,7 +125,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x));
                 }
             }
-            else if (memberDeclarationSyntax is PropertyDeclarationSyntax propertyDeclarationSyntax)
+            else if (member is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
                 if (propertyDeclarationSyntax.ExpressionBody is null)
                 {
@@ -145,7 +145,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             descriptor.UsingDirectives =
-                memberDeclarationSyntax.SyntaxTree
+                member.SyntaxTree
                     .GetRoot()
                     .DescendantNodes()
                     .OfType<UsingDirectiveSyntax>()
