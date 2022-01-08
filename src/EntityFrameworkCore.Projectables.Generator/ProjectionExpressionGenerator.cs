@@ -19,9 +19,6 @@ namespace EntityFrameworkCore.Projectables.Generator
     {
         private const string ProjectablesAttributeName = "EntityFrameworkCore.Projectables.ProjectableAttribute";
 
-        public void Initialize(GeneratorInitializationContext context) =>
-            context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
-
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             // Do a simple filter for members
