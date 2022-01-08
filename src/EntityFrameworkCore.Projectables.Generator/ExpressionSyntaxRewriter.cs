@@ -15,14 +15,16 @@ namespace EntityFrameworkCore.Projectables.Generator
         readonly INamedTypeSymbol _targetTypeSymbol;
         readonly SemanticModel _semanticModel;
         readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
-        readonly GeneratorExecutionContext _context;
+        readonly Compilation _compilation;
+        readonly SourceProductionContext _context;
         readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
 
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, SemanticModel semanticModel, NullConditionalRewriteSupport nullConditionalRewriteSupport, GeneratorExecutionContext context)
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, Compilation compilation, SemanticModel semanticModel, SourceProductionContext context)
         {
             _targetTypeSymbol = targetTypeSymbol;
-            _semanticModel = semanticModel;
             _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
+            _semanticModel = semanticModel;
+            _compilation = compilation;
             _context = context;
         }
 
@@ -138,7 +140,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         {
                             rewrite = false;
                         }
-                        if (targetSymbolInfo.Symbol?.ContainingType is not null && !_context.Compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                        if (targetSymbolInfo.Symbol?.ContainingType is not null && !_compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol))
                         {
                             rewrite = false;
                         }

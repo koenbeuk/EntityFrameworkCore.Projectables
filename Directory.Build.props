@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <MicrosoftCodeAnalysisVersion>3.11.0</MicrosoftCodeAnalysisVersion>
+    <MicrosoftCodeAnalysisVersion>4.0.1</MicrosoftCodeAnalysisVersion>
   </PropertyGroup>
 
   <PropertyGroup>
