@@ -136,7 +136,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
                     {
                         var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
-                        if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter })
+                        if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter or SymbolKind.NamedType })
                         {
                             rewrite = false;
                         }

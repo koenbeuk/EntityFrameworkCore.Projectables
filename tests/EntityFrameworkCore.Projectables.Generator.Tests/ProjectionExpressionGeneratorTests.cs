@@ -1019,6 +1019,32 @@ namespace Foos {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task EnumAccessor()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+public enum SomeFlag
+{
+    Foo
+}
+
+public static class SomeExtensions
+{
+    [Projectable]
+    public static bool Test(this SomeFlag f) => f == SomeFlag.Foo;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
