@@ -1045,6 +1045,39 @@ public static class SomeExtensions
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task Cast()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Projectables.Repro;
+
+public class SuperEntity : SomeEntity
+{
+    public string Superpower { get; set; }
+}
+
+public class SomeEntity
+{
+    public int Id { get; set; }
+}
+
+public static class SomeExtensions
+{
+    [Projectable]
+    public static string AsSomeResult(this SomeEntity e) => ((SuperEntity)e).Superpower;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
