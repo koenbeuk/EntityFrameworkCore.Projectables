@@ -136,11 +136,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                     if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
                     {
                         var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
-                        if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter or SymbolKind.NamedType })
+                        if (targetSymbolInfo.Symbol is null)
                         {
                             rewrite = false;
                         }
-                        if (targetSymbolInfo.Symbol?.ContainingType is not null)
+                        else if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter or SymbolKind.NamedType })
+                        {
+                            rewrite = false;
+                        }
+                        else if (targetSymbolInfo.Symbol?.ContainingType is not null)
                         {
                             if (!_compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol) ||
                                 !SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
