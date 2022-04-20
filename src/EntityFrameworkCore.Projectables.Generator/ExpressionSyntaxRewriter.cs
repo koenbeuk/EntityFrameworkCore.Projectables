@@ -122,15 +122,17 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            var symbolInfo = _semanticModel.GetSymbolInfo(node);
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
 
-            if (symbolInfo.Symbol is not null)
+            if (symbol is not null)
             {
-                if (symbolInfo.Symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
+                if (symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
                 {
+                    // Ignore extension methods
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field)
+                else if (symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field)
                 {
+                    // We may need to rewrite this expression such that it refers to our @this argument
                     bool rewrite = true;
 
                     if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
@@ -147,7 +149,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         else if (targetSymbolInfo.Symbol?.ContainingType is not null)
                         {
                             if (!_compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol) ||
-                                !SymbolEqualityComparer.Default.Equals(symbolInfo.Symbol.ContainingType, _targetTypeSymbol))
+                                !SymbolEqualityComparer.Default.Equals(symbol.ContainingType, _targetTypeSymbol))
                             {
                                 rewrite = false;
                             }
@@ -164,13 +166,18 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                     if (rewrite)
                     {
+                        var expressionSyntax = symbol.IsStatic
+                            ? SyntaxFactory.ParseTypeName(_targetTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                            : SyntaxFactory.IdentifierName("@this");
+
                         return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.IdentifierName("@this"),
+                            expressionSyntax,
                             node
                         );
                     }
+                    
                 }
-                else if (symbolInfo.Symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
+                else if (symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {
                     var typeInfo = _semanticModel.GetTypeInfo(node);
 
