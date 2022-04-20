@@ -989,6 +989,155 @@ namespace Foo {
         }
 
         [Fact]
+        public Task StaticMembers()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public class Foo {
+        public static int Bar { get; set; }
+
+        public int Id { get; set; }
+  
+        [Projectable]
+        public int IdWithBar() => Id + Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task StaticMembers2()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class Constants {
+        public static readonly int Bar  = 1;
+    }
+
+    public class Foo {
+        public int Id { get; set; }
+  
+        [Projectable]
+        public int IdWithBar() => Id + Constants.Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ConstMember()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public class Foo {
+        public const int Bar = 1;
+
+        public int Id { get; set; }
+  
+        [Projectable]
+        public int IdWithBar() => Id + Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ConstMember2()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class Constants {
+        public const int Bar  = 1;
+    }
+
+    public class Foo {
+        public int Id { get; set; }
+  
+        [Projectable]
+        public int IdWithBar() => Id + Constants.Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ConstMember3()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public class Foo {
+        public const int Bar = 1;
+
+        public int Id { get; set; }
+  
+        [Projectable]
+        public int IdWithBar() => Id + Foo.Bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task RelationalProperty()
         {
             var compilation = CreateCompilation(@"
