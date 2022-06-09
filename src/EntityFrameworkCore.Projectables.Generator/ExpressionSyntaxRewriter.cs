@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -96,88 +97,79 @@ namespace EntityFrameworkCore.Projectables.Generator
             };
         }
 
-        public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+        public override SyntaxNode? VisitThisExpression(ThisExpressionSyntax node)
         {
-            var symbolInfo = _semanticModel.GetSymbolInfo(node);
+            // Swap out the use of this to @this
+            return SyntaxFactory.IdentifierName("@this");
+        }
 
-            if (symbolInfo.Symbol is not null)
-            {
-                var scopedNode = node.ChildNodes().FirstOrDefault();
-                if (scopedNode is ThisExpressionSyntax)
-                {
-                    var nextNode = node.ChildNodes().Skip(1).FirstOrDefault() as SimpleNameSyntax;
-
-                    if (nextNode is not null)
-                    {
-                        return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.IdentifierName("@this"),
-                                nextNode
-                            );
-                    }
-                }
-            }
-
-            return base.VisitMemberAccessExpression(node);
+        public override SyntaxNode? VisitBaseExpression(BaseExpressionSyntax node)
+        {
+            // Swap out the use of this to @this
+            return SyntaxFactory.IdentifierName("@this");
         }
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
             var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
-
             if (symbol is not null)
             {
-                if (symbol is IMethodSymbol methodSymbol && methodSymbol.IsExtensionMethod)
+                var operation = node switch { 
+                    { Parent: { } parent } when parent.IsKind(SyntaxKind.InvocationExpression) => _semanticModel.GetOperation(node.Parent),
+                    _ => _semanticModel.GetOperation(node!)
+                };
+
+                if (operation is IMemberReferenceOperation memberReferenceOperation)
                 {
-                    // Ignore extension methods
+                    var memberAccessCanBeQualified = node switch { 
+                        { Parent: { Parent: {  } parent } } when parent.IsKind(SyntaxKind.ObjectInitializerExpression) => false,
+                        _ => true
+                    };
+
+                    if (memberAccessCanBeQualified)
+                    {
+                        // if this operation is targeting an instance member on our targetType implicitly
+                        if (memberReferenceOperation.Instance is { IsImplicit: true } && SymbolEqualityComparer.Default.Equals(memberReferenceOperation.Instance.Type, _targetTypeSymbol))
+                        {
+                            return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("@this"),
+                                node.WithoutLeadingTrivia()
+                            ).WithLeadingTrivia(node.GetLeadingTrivia());
+                        }
+                
+                        // if this operation is targeting a static member on our targetType implicitly
+                        if (memberReferenceOperation.Instance is null && SymbolEqualityComparer.Default.Equals(memberReferenceOperation.Member.ContainingType, _targetTypeSymbol))
+                        {
+                            return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.ParseTypeName(_targetTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                node.WithoutLeadingTrivia()
+                            ).WithLeadingTrivia(node.GetLeadingTrivia());
+                        }
+                    }
                 }
-                else if (symbol.Kind is SymbolKind.Property or SymbolKind.Method or SymbolKind.Field)
+                else if (operation is IInvocationOperation invocationOperation)
                 {
-                    // We may need to rewrite this expression such that it refers to our @this argument
-                    bool rewrite = true;
-
-                    if (node.Parent is MemberAccessExpressionSyntax parentMemberAccessNode)
+                    // if this operation is targeting an instance method on our targetType implicitly
+                    if (invocationOperation.Instance is { IsImplicit: true } && SymbolEqualityComparer.Default.Equals(invocationOperation.Instance.Type, _targetTypeSymbol))
                     {
-                        var targetSymbolInfo = _semanticModel.GetSymbolInfo(parentMemberAccessNode.Expression);
-                        if (targetSymbolInfo.Symbol is null)
-                        {
-                            rewrite = false;
-                        }
-                        else if (targetSymbolInfo.Symbol is { Kind: SymbolKind.Parameter or SymbolKind.NamedType })
-                        {
-                            rewrite = false;
-                        }
-                        else if (targetSymbolInfo.Symbol?.ContainingType is not null)
-                        {
-                            if (!_compilation.HasImplicitConversion(targetSymbolInfo.Symbol.ContainingType, _targetTypeSymbol) ||
-                                !SymbolEqualityComparer.Default.Equals(symbol.ContainingType, _targetTypeSymbol))
-                            {
-                                rewrite = false;
-                            }
-                        }
-                    }
-                    else if (node.Parent.IsKind(SyntaxKind.SimpleAssignmentExpression))
-                    {
-                        rewrite = false;
-                    }
-                    else if (node.Parent.IsKind(SyntaxKind.InvocationExpression))
-                    {
-                        rewrite = true;
-                    }
-
-                    if (rewrite)
-                    {
-                        var expressionSyntax = symbol.IsStatic
-                            ? SyntaxFactory.ParseTypeName(_targetTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                            : SyntaxFactory.IdentifierName("@this");
-
                         return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                            expressionSyntax,
-                            node
-                        );
+                            SyntaxFactory.IdentifierName("@this"),
+                            node.WithoutLeadingTrivia()
+                        ).WithLeadingTrivia(node.GetLeadingTrivia());
                     }
-                    
+
+                    // if this operation is targeting a static method on our targetType implicitly
+                    if (invocationOperation.Instance is null && SymbolEqualityComparer.Default.Equals(invocationOperation.TargetMethod.ContainingType, _targetTypeSymbol))
+                    {
+                        return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.ParseTypeName(_targetTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                            node.WithoutLeadingTrivia()
+                        ).WithLeadingTrivia(node.GetLeadingTrivia());
+                    }
                 }
-                else if (symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
+
+                // if this node refers to a named type which is not yet fully qualified, we want to fully qualify it
+                if (symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {
                     var typeInfo = _semanticModel.GetTypeInfo(node);
 
@@ -185,11 +177,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                     {
                         return SyntaxFactory.ParseTypeName(
                             typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                        );
+                        ).WithLeadingTrivia(node.GetLeadingTrivia());
                     }
                 }
             }
-         
+
             return base.VisitIdentifierName(node);
         }
 
