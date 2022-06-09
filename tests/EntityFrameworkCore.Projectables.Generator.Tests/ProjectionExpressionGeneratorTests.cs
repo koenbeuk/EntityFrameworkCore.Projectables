@@ -1227,6 +1227,180 @@ public static class SomeExtensions
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task NavigationProperties()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+using System.Collections.Generic;
+
+namespace Projectables.Repro;
+
+public class SomeEntity
+{
+    public int Id { get; set; }
+
+    public SomeEntity Parent { get; set; }
+
+    public ICollection<SomeEntity> Children { get; set; }
+
+    [Projectable]
+    public ICollection<SomeEntity> RootChildren =>
+        Parent != null ? Parent.RootChildren : Children;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task FooOrBar()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+using System.Collections.Generic;
+
+namespace Projectables.Repro;
+
+public class SomeEntity
+{
+    public int Id { get; set; }
+
+    public string Foo { get; set; }
+
+    public string Bar { get; set; }
+
+    [Projectable]
+    public string FooOrBar =>
+        Foo != null ? Foo : Bar;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BaseMemberExplicitReference()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Projectables.Repro;
+
+class Base 
+{
+    public string Foo { get; set; }
+}
+
+class Derived : Base
+{
+    [Projectable]
+    public string Bar => base.Foo;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BaseMemberImplicitReference()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Projectables.Repro;
+
+class Base 
+{
+    public string Foo { get; set; }
+}
+
+class Derived : Base
+{
+    [Projectable]
+    public string Bar => Foo;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BaseMethodExplicitReference()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Projectables.Repro;
+
+class Base 
+{
+    public string Foo() => """";
+}
+
+class Derived : Base
+{
+    [Projectable]
+    public string Bar => base.Foo();
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BaseMethorImplicitReference()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Projectables.Repro;
+
+class Base 
+{
+    public string Foo() => """";
+}
+
+class Derived : Base
+{
+    [Projectable]
+    public string Bar => Foo();
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
