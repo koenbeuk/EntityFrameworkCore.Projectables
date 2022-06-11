@@ -17,5 +17,11 @@ namespace EntityFrameworkCore.Projectables
         /// Get or set how null-conditional operators are handeled
         /// </summary>
         public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; set; }
+
+        /// <summary>
+        /// Get or set from which member to get the expression,
+        /// or null to get it from the current member.
+        /// </summary>
+        public string? UseMemberBody { get; set; }
     }
 }

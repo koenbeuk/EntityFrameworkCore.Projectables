@@ -22,27 +22,55 @@ namespace EntityFrameworkCore.Projectables.Services
                 _ => null
             };
 
-            var expressionFactoryMethod = reflectedType.Assembly
-                .GetTypes()
-                .Where(x => x.FullName == generatedContainingTypeName)
-                .SelectMany(x => x.GetMethods())
-                .FirstOrDefault();
+            var expressionFactoryMethod = reflectedType.Assembly.GetType(generatedContainingTypeName)
+                ?.GetMethods()
+                ?.FirstOrDefault();
 
-            if (expressionFactoryMethod is null)
+            if (expressionFactoryMethod is not null)
             {
-                throw new InvalidOperationException("Unable to resolve generated expression") {
-                    Data = {
-                        ["GeneratedContainingTypeName"] = generatedContainingTypeName
+                if (genericArguments is { Length: > 0 })
+                {
+                    expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(genericArguments);
+                }
+
+                return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
+            }
+
+            var useMemberBody = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()?.UseMemberBody;
+
+            if (useMemberBody is not null)
+            {
+                var exprProperty = reflectedType.GetProperty(useMemberBody, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                var lambda = exprProperty?.GetValue(null) as LambdaExpression;
+
+                if (lambda is not null)
+                {
+                    if (projectableMemberInfo is PropertyInfo property &&
+                        lambda.Parameters.Count == 1 && 
+                        lambda.Parameters[0].Type == reflectedType && lambda.ReturnType == property.PropertyType)
+                    {
+                        return lambda;
                     }
-                };
+                    else if (projectableMemberInfo is MethodInfo method &&
+                        lambda.Parameters.Count == method.GetParameters().Length + 1 &&
+                        lambda.Parameters.Last().Type == reflectedType &&
+                        !lambda.Parameters.Zip(method.GetParameters(), (a, b) => a.Type != b.ParameterType).Any())
+                    {
+                        return lambda;
+                    }
+                }
             }
 
-            if (genericArguments is { Length: > 0 } )
-            {
-                expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(genericArguments);
-            }
+            var fullName = string.Join(".", Enumerable.Empty<string>()
+                .Concat(new[] { reflectedType.Namespace })
+                .Concat(reflectedType.GetNestedTypePath().Select(x => x.Name))
+                .Concat(new[] { projectableMemberInfo.Name }));
 
-            return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
+            throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.") {
+                Data = {
+                    ["GeneratedContainingTypeName"] = generatedContainingTypeName
+                }
+            };
         }
     }
 }
