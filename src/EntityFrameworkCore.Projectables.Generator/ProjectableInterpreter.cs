@@ -51,6 +51,70 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .Cast<NullConditionalRewriteSupport>()
                 .FirstOrDefault();
 
+            var useMemberBody = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "UseMemberBody")
+                .Select(x => x.Value.Value)
+                .OfType<string?>()
+                .FirstOrDefault();
+
+            var memberBody = member;
+
+            if (useMemberBody is not null)
+            {
+                var comparer = SymbolEqualityComparer.Default;
+
+                memberBody = memberSymbol.ContainingType.GetMembers(useMemberBody)
+                    .Where(x =>
+                    {
+                        if (memberSymbol is IMethodSymbol symbolMethod &&
+                            x is IMethodSymbol xMethod &&
+                            comparer.Equals(symbolMethod.ReturnType, xMethod.ReturnType) &&
+                            symbolMethod.TypeArguments.Length == xMethod.TypeArguments.Length &&
+                            !symbolMethod.TypeArguments.Zip(xMethod.TypeArguments, (a, b) => !comparer.Equals(a, b)).Any())
+                        {
+                            return true;
+                        }
+                        else if (memberSymbol is IPropertySymbol symbolProperty &&
+                            x is IPropertySymbol xProperty &&
+                            comparer.Equals(symbolProperty.Type, xProperty.Type))
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    })
+                    .SelectMany(x => x.DeclaringSyntaxReferences)
+                    .Select(x => x.GetSyntax())
+                    .OfType<MemberDeclarationSyntax>()
+                    .FirstOrDefault(x =>
+                    {
+                        if (x == null ||
+                            x.SyntaxTree != member.SyntaxTree ||
+                            x.Modifiers.Any(SyntaxKind.StaticKeyword) != member.Modifiers.Any(SyntaxKind.StaticKeyword))
+                        {
+                            return false;
+                        }
+                        else if (x is MethodDeclarationSyntax xMethod &&
+                            xMethod.ExpressionBody is not null)
+                        {
+                            return true;
+                        }
+                        else if (x is PropertyDeclarationSyntax xProperty &&
+                            xProperty.ExpressionBody is not null)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    });
+
+                if (memberBody is null) return null;
+            }
+
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, compilation, semanticModel, context);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
@@ -93,7 +157,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
 
-            if (member is MethodDeclarationSyntax methodDeclarationSyntax)
+            if (memberBody is MethodDeclarationSyntax methodDeclarationSyntax)
             {
                 if (methodDeclarationSyntax.ExpressionBody is null)
                 {
@@ -125,7 +189,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x));
                 }
             }
-            else if (member is PropertyDeclarationSyntax propertyDeclarationSyntax)
+            else if (memberBody is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
                 if (propertyDeclarationSyntax.ExpressionBody is null)
                 {
