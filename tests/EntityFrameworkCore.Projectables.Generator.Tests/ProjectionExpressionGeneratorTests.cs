@@ -344,6 +344,32 @@ namespace Foo {
         }
 
         [Fact]
+        public Task IsOperator()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class A {
+        [Projectable] 
+        public bool IsB => this is B;
+    }
+    
+    class B : A {
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task ProjectableExtensionMethod()
         {
             var compilation = CreateCompilation(@"
