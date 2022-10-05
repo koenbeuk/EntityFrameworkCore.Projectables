@@ -31,7 +31,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         private SyntaxNode? VisitThisBaseExpression(CSharpSyntaxNode node)
         {
-            // Swap out the use of this to @this and base to @base and keep leading and trailing trivias
+            // Swap out the use of this and base to @this and keep leading and trailing trivias
             return SyntaxFactory.IdentifierName("@this")
                 .WithLeadingTrivia(node.GetLeadingTrivia())
                 .WithTrailingTrivia(node.GetTrailingTrivia());
