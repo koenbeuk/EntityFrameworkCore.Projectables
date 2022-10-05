@@ -29,6 +29,14 @@ namespace EntityFrameworkCore.Projectables.Generator
             _context = context;
         }
 
+        private SyntaxNode? VisitThisBaseExpression(CSharpSyntaxNode node)
+        {
+            // Swap out the use of this to @this and base to @base and keep leading and trailing trivias
+            return SyntaxFactory.IdentifierName("@this")
+                .WithLeadingTrivia(node.GetLeadingTrivia())
+                .WithTrailingTrivia(node.GetTrailingTrivia());
+        }
+
         public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
         {
             var targetExpression = (ExpressionSyntax)Visit(node.Expression);
@@ -100,13 +108,13 @@ namespace EntityFrameworkCore.Projectables.Generator
         public override SyntaxNode? VisitThisExpression(ThisExpressionSyntax node)
         {
             // Swap out the use of this to @this
-            return SyntaxFactory.IdentifierName("@this");
+            return VisitThisBaseExpression(node);
         }
 
         public override SyntaxNode? VisitBaseExpression(BaseExpressionSyntax node)
         {
             // Swap out the use of this to @this
-            return SyntaxFactory.IdentifierName("@this");
+            return VisitThisBaseExpression(node);
         }
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
