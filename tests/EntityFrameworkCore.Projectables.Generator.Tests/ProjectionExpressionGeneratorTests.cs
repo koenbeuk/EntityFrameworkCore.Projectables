@@ -344,7 +344,7 @@ namespace Foo {
         }
 
         [Fact]
-        public Task InOperator()
+        public Task IsOperator()
         {
             var compilation = CreateCompilation(@"
 using System;
