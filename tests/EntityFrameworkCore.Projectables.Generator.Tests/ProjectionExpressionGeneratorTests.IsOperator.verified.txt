@@ -7,6 +7,7 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 #nullable disable
 {
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class Foo_A_IsB
     {
         public static System.Linq.Expressions.Expression<System.Func<global::Foo.A, bool>> Expression()

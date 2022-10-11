@@ -8,6 +8,7 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 #nullable disable
 {
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class Foo_C_NullableValueType
     {
         public static System.Linq.Expressions.Expression<System.Func<object, int?>> Expression()

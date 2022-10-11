@@ -4,6 +4,7 @@ using EntityFrameworkCore.Projectables;
 namespace EntityFrameworkCore.Projectables.Generated
 #nullable disable
 {
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class _SomeExtensions_Test
     {
         public static System.Linq.Expressions.Expression<System.Func<global::SomeFlag, bool>> Expression()
