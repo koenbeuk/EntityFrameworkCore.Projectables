@@ -21,10 +21,17 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             if (visitedNode is ParameterSyntax visitedParameterSyntax)
             {
+                // Strip the this keyword of any parameter
                 var thisKeywordIndex = visitedParameterSyntax.Modifiers.IndexOf(SyntaxKind.ThisKeyword);
                 if (thisKeywordIndex != -1)
                 {
-                    return visitedParameterSyntax.WithModifiers(node.Modifiers.RemoveAt(thisKeywordIndex));
+                    visitedNode = visitedParameterSyntax.WithModifiers(node.Modifiers.RemoveAt(thisKeywordIndex));
+                }
+
+                // Remove default values from parameters as this is not accepted in an expression tree
+                if (visitedParameterSyntax.Default is not null)
+                {
+                    visitedNode = ((ParameterSyntax)visitedNode).WithDefault(null);
                 }
             }
 
