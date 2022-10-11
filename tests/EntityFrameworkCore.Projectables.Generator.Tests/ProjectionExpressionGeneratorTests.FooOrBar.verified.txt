@@ -6,6 +6,7 @@ using Projectables.Repro;
 namespace EntityFrameworkCore.Projectables.Generated
 #nullable disable
 {
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class Projectables_Repro_SomeEntity_FooOrBar
     {
         public static System.Linq.Expressions.Expression<System.Func<global::Projectables.Repro.SomeEntity, string>> Expression()

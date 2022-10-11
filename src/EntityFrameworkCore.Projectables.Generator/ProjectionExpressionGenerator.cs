@@ -135,6 +135,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 namespace EntityFrameworkCore.Projectables.Generated
 #nullable disable
 {{
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class {generatedClassName}
     {{
         public static System.Linq.Expressions.Expression<System.Func<{lambdaTypeArguments.Arguments}, {projectable.ReturnTypeName}>> Expression{(projectable.TypeParameterList?.Parameters.Any() == true ? projectable.TypeParameterList.ToString() : string.Empty)}()");
