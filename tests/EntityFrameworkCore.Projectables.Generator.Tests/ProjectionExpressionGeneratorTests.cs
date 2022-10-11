@@ -1447,6 +1447,26 @@ class Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ParamsModifiedGetsRemoved()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+class Foo {
+    [Projectable]
+    public int First(params int[] all) => all[0];
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
