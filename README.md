@@ -131,6 +131,34 @@ This will rewrite your expression to explicitly check for nullables. In the form
 ```
 Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQL Server
 
+#### Can I use projectables in any part of my query?
+Certainly, consider the following example: 
+```csharp
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+
+    [Projectable]
+    public string FullName => FirstName + " " + LastName;
+}
+
+var query = dbContext.Users
+    .Where(x => x.FullName.Contains("Jon"))
+    .GroupBy(x => x.FullName)
+    .OrderBy(x => x.Key)
+    .Select(x => x.Key);
+```
+Which generates the following SQL (SQLite syntax)
+```sql
+SELECT (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
+FROM "Users" AS "u"
+WHERE ('Jon' = '') OR (instr((COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", ''), 'Jon') > 0)
+GROUP BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
+ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
+```
+
 #### How does this relate to [Expressionify](https://github.com/ClaveConsulting/Expressionify)?
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existence so shame on me. Currently Expressionify targets a more focusses scope of what this project is doing and thereby it seems to be more limiting in its capabilities. Check them out though!
 
