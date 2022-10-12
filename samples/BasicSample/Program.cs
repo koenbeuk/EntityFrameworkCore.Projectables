@@ -24,7 +24,7 @@ namespace BasicSample
 
         [Projectable]
         public string FullName
-            => $"{FirstName} {LastName}";
+            => FirstName + " " + LastName;
 
         [Projectable]
         public double TotalSpent => Orders.Sum(x => x.PriceSum);
