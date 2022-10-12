@@ -9,21 +9,11 @@ namespace EntityFrameworkCore.Projectables.Services
 {
     public sealed class ExpressionArgumentReplacer : ExpressionVisitor
     {
-        readonly IEnumerable<(ParameterExpression parameter, Expression argument)>? _parameterArgumentMapping;
-
-        public ExpressionArgumentReplacer(IEnumerable<(ParameterExpression, Expression)>? parameterArgumentMapping = null)
-        {
-            _parameterArgumentMapping = parameterArgumentMapping;
-        }
+        public Dictionary<ParameterExpression, Expression> ParameterArgumentMapping { get; } = new();
 
         protected override Expression VisitParameter(ParameterExpression node)
         {
-            var mappedArgument = _parameterArgumentMapping?
-                .Where(x => x.parameter == node)
-                .Select(x => x.argument)
-                .FirstOrDefault();
-
-            if (mappedArgument is not null)
+            if (ParameterArgumentMapping.TryGetValue(node, out var mappedArgument))
             {
                 return mappedArgument;
             }
