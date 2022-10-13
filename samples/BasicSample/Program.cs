@@ -92,11 +92,11 @@ namespace BasicSample
             dbConnection.Open();
 
             using var serviceProvider = new ServiceCollection()
-                .AddDbContext<ApplicationDbContext>(options => {
+                .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
                         .UseProjectables()
-                        .UseLoggerFactory(LoggerFactory.Create(builder => builder.AddConsole()));
+                        .UseInternalServiceProvider(provider);
                 })
                 .BuildServiceProvider();
 

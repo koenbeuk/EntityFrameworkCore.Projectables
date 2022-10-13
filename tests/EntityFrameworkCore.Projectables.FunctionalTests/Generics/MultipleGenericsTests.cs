@@ -28,7 +28,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.Generics
             return Verifier.Verify(query.ToQueryString());
         }
 
-
         [Fact]
         public void MultipleInvocations()
         {

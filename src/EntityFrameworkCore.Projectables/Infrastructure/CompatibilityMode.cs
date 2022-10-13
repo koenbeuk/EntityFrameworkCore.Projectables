@@ -10,12 +10,11 @@ namespace EntityFrameworkCore.Projectables.Infrastructure
     {
         /// <summary>
         /// Projectables are expanded on each individual query invocation.
-        /// This mode can be used when you wan't to pass scoped services to your Projectable methods
         /// </summary>
         Full,
         /// <summary>
         /// Projectables are expanded in the query preprocessor and afterwards cached.
-        /// This is the default compatibility mode.
+        /// This yields some performance benefits over native EF with the downside of being incompatible with dynamic parameters.
         /// </summary>
         Limited
     }

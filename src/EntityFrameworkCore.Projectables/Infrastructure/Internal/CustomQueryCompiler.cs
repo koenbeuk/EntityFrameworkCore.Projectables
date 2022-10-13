@@ -13,12 +13,12 @@ using Microsoft.EntityFrameworkCore.Query.Internal;
 namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "EF1001:Internal EF Core API usage.", Justification = "Needed")]
-    public sealed class CustomQueryProvider : IQueryCompiler
+    public sealed class CustomQueryCompiler : IQueryCompiler
     {
         readonly IQueryCompiler _decoratedQueryCompiler;
         readonly ProjectableExpressionReplacer _projectableExpressionReplacer;
 
-        public CustomQueryProvider(IQueryCompiler decoratedQueryCompiler)
+        public CustomQueryCompiler(IQueryCompiler decoratedQueryCompiler)
         {
             _decoratedQueryCompiler = decoratedQueryCompiler;
             _projectableExpressionReplacer = new ProjectableExpressionReplacer(new ProjectionExpressionResolver());

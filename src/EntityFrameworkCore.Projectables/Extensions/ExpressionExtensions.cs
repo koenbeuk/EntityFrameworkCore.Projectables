@@ -10,8 +10,6 @@ namespace EntityFrameworkCore.Projectables.Extensions
 {
     public static class ExpressionExtensions
     {
-        static ProjectableExpressionReplacer _projectableExpressionReplacer = new ProjectableExpressionReplacer(new ProjectionExpressionResolver());
-
         [Obsolete("Use ExpandProjectables instead")]
         public static Expression ExpandQuaryables(this Expression expression)
             => ExpandProjectables(expression);
@@ -20,6 +18,6 @@ namespace EntityFrameworkCore.Projectables.Extensions
         /// Replaces all calls to properties and methods that are marked with the <C>Projectable</C> attribute with their respective expression tree
         /// </summary>
         public static Expression ExpandProjectables(this Expression expression)
-            => _projectableExpressionReplacer.Visit(expression);
+            => new ProjectableExpressionReplacer(new ProjectionExpressionResolver()).Visit(expression);
     }
 }

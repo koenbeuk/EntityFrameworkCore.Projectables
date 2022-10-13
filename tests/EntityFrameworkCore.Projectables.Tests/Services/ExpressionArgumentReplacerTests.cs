@@ -16,7 +16,11 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
         {
             var parameter = Expression.Parameter(typeof(int));
             var argument = Expression.Constant(1);
-            var subject = new ExpressionArgumentReplacer(new[] { (parameter, (Expression)argument) });
+            var subject = new ExpressionArgumentReplacer() {
+                ParameterArgumentMapping = {
+                    { parameter, argument }
+                }
+            };
 
             var result = subject.Visit(parameter);
 
