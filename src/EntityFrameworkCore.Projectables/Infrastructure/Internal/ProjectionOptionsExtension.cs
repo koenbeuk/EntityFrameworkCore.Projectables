@@ -57,7 +57,7 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                     throw new InvalidOperationException("No QueryProvider is configured yet. Please make sure to configure a database provider first"); ;
                 }
 
-                var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryProvider), new[] { targetDescriptor.ServiceType });
+                var decoratorObjectFactory = ActivatorUtilities.CreateFactory(typeof(CustomQueryCompiler), new[] { targetDescriptor.ServiceType });
 
                 services.Replace(ServiceDescriptor.Describe(
                     targetDescriptor.ServiceType,

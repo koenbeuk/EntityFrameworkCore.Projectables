@@ -22,7 +22,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.Helpers
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer("Server=(localdb)\v11.0;Integrated Security=true"); // Fake connection string as we're actually never connecting
+            optionsBuilder.UseSqlServer("Server=(localdb)\\v11.0;Integrated Security=true"); // Fake connection string as we're actually never connecting
             optionsBuilder.UseProjectables(options => {
                 options.CompatibilityMode(_compatibilityMode); // Needed by our ComplexModelTests
             });
