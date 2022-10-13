@@ -92,7 +92,6 @@ namespace BasicSample
             dbConnection.Open();
 
             using var serviceProvider = new ServiceCollection()
-                .AddEntityFrameworkSqlServer()
                 .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
