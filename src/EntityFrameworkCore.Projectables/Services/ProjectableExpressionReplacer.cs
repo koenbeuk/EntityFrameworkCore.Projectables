@@ -47,10 +47,13 @@ namespace EntityFrameworkCore.Projectables.Services
                     var mappedArgumentExpression = (parameterIndex, node.Object) switch {
                         (0, not null) => node.Object,    
                         (_, not null) => node.Arguments[parameterIndex - 1],
-                        (_, null) => node.Arguments[parameterIndex]
+                        (_, null) => node.Arguments.Count > parameterIndex ? node.Arguments[parameterIndex] : null
                     };
 
-                    _expressionArgumentReplacer.ParameterArgumentMapping.Add(parameterExpession, mappedArgumentExpression);
+                    if (mappedArgumentExpression is not null)
+                    {
+                        _expressionArgumentReplacer.ParameterArgumentMapping.Add(parameterExpession, mappedArgumentExpression);
+                    }
                 }
                     
                 var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
