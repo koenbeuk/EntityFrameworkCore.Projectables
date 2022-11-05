@@ -158,7 +158,7 @@ namespace EntityFrameworkCore.Projectables.Generated
 }}");
 
 
-                context.AddSource($"{generatedClassName}_Generated", SourceText.From(resultBuilder.ToString(), Encoding.UTF8));
+                context.AddSource($"{generatedClassName}.g.cs", SourceText.From(resultBuilder.ToString(), Encoding.UTF8));
             }
         }
 
