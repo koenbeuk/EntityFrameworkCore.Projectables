@@ -1514,6 +1514,34 @@ class Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task RequiredNamespace()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace One {
+    static class IntExtensions {
+        public static int AddOne(this int i) => i + 1;    
+    }
+}
+
+namespace One.Two {
+    class Bar {
+        [Projectable]
+        public int Method() => 1.AddOne();
+    }   
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

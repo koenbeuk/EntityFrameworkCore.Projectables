@@ -16,16 +16,14 @@ namespace EntityFrameworkCore.Projectables.Generator
         readonly INamedTypeSymbol _targetTypeSymbol;
         readonly SemanticModel _semanticModel;
         readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
-        readonly Compilation _compilation;
         readonly SourceProductionContext _context;
         readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
-
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, Compilation compilation, SemanticModel semanticModel, SourceProductionContext context)
+        
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, SemanticModel semanticModel, SourceProductionContext context)
         {
             _targetTypeSymbol = targetTypeSymbol;
             _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
             _semanticModel = semanticModel;
-            _compilation = compilation;
             _context = context;
         }
 
@@ -35,6 +33,33 @@ namespace EntityFrameworkCore.Projectables.Generator
             return SyntaxFactory.IdentifierName("@this")
                 .WithLeadingTrivia(node.GetLeadingTrivia())
                 .WithTrailingTrivia(node.GetTrailingTrivia());
+        }
+
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            // Fully qualify extension method calls
+            if (node.Expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax)
+            {
+                var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+                if (symbol is IMethodSymbol { IsExtensionMethod: true } methodSymbol)
+                {
+                    return SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.ParseName(methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat)),
+                            memberAccessExpressionSyntax.Name
+                        ),
+                        node.ArgumentList.WithArguments(
+                            ((ArgumentListSyntax)VisitArgumentList(node.ArgumentList)!).Arguments.Insert(0, SyntaxFactory.Argument(
+                                    (ExpressionSyntax)Visit(memberAccessExpressionSyntax.Expression)
+                                )
+                            )
+                        )
+                    );
+                }
+            }
+
+            return base.VisitInvocationExpression(node);
         }
 
         public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
