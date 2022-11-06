@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<object, object>> Expression()
         {
             return (object i) => 
-                i.Foo1();
+                global::Foo.C.Foo1(i);
         }
     }
 }

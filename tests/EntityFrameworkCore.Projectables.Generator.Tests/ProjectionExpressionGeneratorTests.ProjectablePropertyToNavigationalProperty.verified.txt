@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<global::Foo.C, global::Foo.D>> Expression()
         {
             return (global::Foo.C @this) => 
-                @this.Dees.First();
+                global::System.Linq.Enumerable.First(@this.Dees);
         }
     }
 }

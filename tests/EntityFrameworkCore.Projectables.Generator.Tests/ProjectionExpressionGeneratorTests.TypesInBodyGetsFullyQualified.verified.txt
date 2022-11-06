@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<global::Foo.C, int>> Expression()
         {
             return (global::Foo.C @this) => 
-                @this.Dees.OfType<global::Foo.D>().Count();
+                global::System.Linq.Enumerable.Count(global::System.Linq.Enumerable.OfType<D>(@this.Dees));
         }
     }
 }
