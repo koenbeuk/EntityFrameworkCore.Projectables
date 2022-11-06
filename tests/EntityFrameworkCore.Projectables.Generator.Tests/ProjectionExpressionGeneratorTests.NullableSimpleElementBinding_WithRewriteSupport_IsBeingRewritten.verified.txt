@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<string, char?>> Expression()
         {
             return (string input) => 
-                input != null ? (input[0]) : null;
+                input != null ? (input[0]) : (char?)null;
         }
     }
 }

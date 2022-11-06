@@ -1514,6 +1514,30 @@ class Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task NullConditionalNullCoalesceTypeConversion()
+        {
+            // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
+
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+class Foo {
+    public int? FancyNumber { get; set; }
+
+    [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+    public static int SomeNumber(Foo fancyClass) => fancyClass?.FancyNumber ?? 3;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

@@ -49,28 +49,40 @@ namespace EntityFrameworkCore.Projectables.Generator
                 _context.ReportDiagnostic(diagnostic);
             }
 
-            return _nullConditionalRewriteSupport switch {
-                NullConditionalRewriteSupport.Ignore => Visit(node.WhenNotNull),
-                NullConditionalRewriteSupport.Rewrite =>
-                    SyntaxFactory.ConditionalExpression(
+            else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Ignore)
+            {
+                // Ignore the conditional accesss and simply visit the WhenNotNull expression
+                return Visit(node.WhenNotNull);
+            }
+
+            else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Rewrite)
+            {
+                var whenNotNullSymbol = _semanticModel.GetSymbolInfo(node.WhenNotNull).Symbol as IPropertySymbol;
+                var typeInfo = _semanticModel.GetTypeInfo(node);
+
+                // Do not translate until we can resolve the target type
+                if (typeInfo.ConvertedType is not null)
+                {
+                    // Translate null-conditional into a conditional expression
+                    return SyntaxFactory.ConditionalExpression(
                         SyntaxFactory.BinaryExpression(
                             SyntaxKind.NotEqualsExpression,
-                            targetExpression
-                                .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                            targetExpression.WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                            SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression).WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
+                       ).WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                       SyntaxFactory.ParenthesizedExpression(
+                           (ExpressionSyntax)Visit(node.WhenNotNull)
+                       ).WithLeadingTrivia(SyntaxFactory.Whitespace(" ")).WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
+                        SyntaxFactory.CastExpression(
+                            SyntaxFactory.ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
                             SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
-                                .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
-                        )
-                            .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
-                        SyntaxFactory.ParenthesizedExpression(
-                            (ExpressionSyntax)Visit(node.WhenNotNull)
-                        )
-                            .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
-                            .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
-                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
-                            .WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
-                    ),
-                _ => base.VisitConditionalAccessExpression(node)
-            };
+                        ).WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
+                    ).WithLeadingTrivia(node.GetLeadingTrivia()).WithTrailingTrivia(node.GetTrailingTrivia());
+                }
+            }
+
+            return base.VisitConditionalAccessExpression(node);
+
         }
 
         public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
@@ -122,15 +134,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
             if (symbol is not null)
             {
-                var operation = node switch { 
-                    { Parent: { } parent } when parent.IsKind(SyntaxKind.InvocationExpression) => _semanticModel.GetOperation(node.Parent),
+                var operation = node switch { { Parent: { } parent } when parent.IsKind(SyntaxKind.InvocationExpression) => _semanticModel.GetOperation(node.Parent),
                     _ => _semanticModel.GetOperation(node!)
                 };
 
                 if (operation is IMemberReferenceOperation memberReferenceOperation)
                 {
-                    var memberAccessCanBeQualified = node switch { 
-                        { Parent: { Parent: {  } parent } } when parent.IsKind(SyntaxKind.ObjectInitializerExpression) => false,
+                    var memberAccessCanBeQualified = node switch { { Parent: { Parent: { } parent } } when parent.IsKind(SyntaxKind.ObjectInitializerExpression) => false,
                         _ => true
                     };
 
@@ -144,7 +154,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                                 node.WithoutLeadingTrivia()
                             ).WithLeadingTrivia(node.GetLeadingTrivia());
                         }
-                
+
                         // if this operation is targeting a static member on our targetType implicitly
                         if (memberReferenceOperation.Instance is null && SymbolEqualityComparer.Default.Equals(memberReferenceOperation.Member.ContainingType, _targetTypeSymbol))
                         {
