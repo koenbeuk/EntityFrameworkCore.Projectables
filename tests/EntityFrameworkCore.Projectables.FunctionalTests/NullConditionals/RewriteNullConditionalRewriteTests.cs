@@ -18,7 +18,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.NullConditionals
             using var dbContext = new SampleDbContext<Entity>();
 
             var query = dbContext.Set<Entity>()
-                .Select(x => x.GetNameLengthRewriteNulls());
+                .Select(x => x.GetNameRewriteNulls());
 
             return Verifier.Verify(query.ToQueryString());
         }
