@@ -14,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<global::Foo.EntityExtensions.Entity, string>> Expression()
         {
             return (global::Foo.EntityExtensions.Entity entity) => 
-                entity.FullName != null ? (entity.FullName.Substring(entity.FullName != null ? (entity.FullName.IndexOf(' ') ) : null?? 0)) : null;
+                entity.FullName != null ? (entity.FullName.Substring(entity.FullName != null ? (entity.FullName.IndexOf(' ') ) : (int?)null ?? 0)) : (string)null;
         }
     }
 }

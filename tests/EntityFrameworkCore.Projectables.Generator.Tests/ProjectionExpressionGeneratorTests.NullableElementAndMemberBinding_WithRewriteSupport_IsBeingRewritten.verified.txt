@@ -14,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         public static System.Linq.Expressions.Expression<System.Func<global::Foo.EntityExtensions.Entity, global::Foo.EntityExtensions.Entity>> Expression()
         {
             return (global::Foo.EntityExtensions.Entity entity) => 
-                entity != null ? (entity.RelatedEntities != null ? (entity.RelatedEntities[0]) : null) : null;
+                entity != null ? (entity.RelatedEntities != null ? (entity.RelatedEntities[0]) : (global::Foo.EntityExtensions.Entity)null) : (global::Foo.EntityExtensions.Entity)null;
         }
     }
 }

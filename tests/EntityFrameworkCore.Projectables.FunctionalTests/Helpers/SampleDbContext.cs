@@ -15,7 +15,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.Helpers
     {
         readonly CompatibilityMode _compatibilityMode;
 
-        public SampleDbContext(CompatibilityMode compatibilityMode = CompatibilityMode.Limited)
+        public SampleDbContext(CompatibilityMode compatibilityMode = CompatibilityMode.Full)
         {
             _compatibilityMode = compatibilityMode;
         }
