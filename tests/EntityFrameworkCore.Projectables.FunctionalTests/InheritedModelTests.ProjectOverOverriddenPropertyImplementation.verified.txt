@@ -1,2 +1,2 @@
-SELECT 1 + 1
+SELECT 2
 FROM [Concrete] AS [c]
