@@ -14,15 +14,15 @@ namespace EntityFrameworkCore.Projectables.Services
     {
         public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
         {
-            var reflectedType = projectableMemberInfo.ReflectedType ?? throw new InvalidOperationException("Expected a valid type here");
-            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(reflectedType.Namespace, reflectedType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
+            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
 
             var genericArguments = projectableMemberInfo switch {
                 MethodInfo methodInfo => methodInfo.GetGenericArguments(),
                 _ => null
             };
 
-            var expressionFactoryMethod = reflectedType.Assembly.GetType(generatedContainingTypeName)
+            var expressionFactoryMethod = declaringType.Assembly.GetType(generatedContainingTypeName)
                 ?.GetMethods()
                 ?.FirstOrDefault();
 
@@ -40,20 +40,20 @@ namespace EntityFrameworkCore.Projectables.Services
 
             if (useMemberBody is not null)
             {
-                var exprProperty = reflectedType.GetProperty(useMemberBody, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                var exprProperty = declaringType.GetProperty(useMemberBody, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                 var lambda = exprProperty?.GetValue(null) as LambdaExpression;
 
                 if (lambda is not null)
                 {
                     if (projectableMemberInfo is PropertyInfo property &&
                         lambda.Parameters.Count == 1 && 
-                        lambda.Parameters[0].Type == reflectedType && lambda.ReturnType == property.PropertyType)
+                        lambda.Parameters[0].Type == declaringType && lambda.ReturnType == property.PropertyType)
                     {
                         return lambda;
                     }
                     else if (projectableMemberInfo is MethodInfo method &&
                         lambda.Parameters.Count == method.GetParameters().Length + 1 &&
-                        lambda.Parameters.Last().Type == reflectedType &&
+                        lambda.Parameters.Last().Type == declaringType &&
                         !lambda.Parameters.Zip(method.GetParameters(), (a, b) => a.Type != b.ParameterType).Any())
                     {
                         return lambda;
@@ -62,8 +62,8 @@ namespace EntityFrameworkCore.Projectables.Services
             }
 
             var fullName = string.Join(".", Enumerable.Empty<string>()
-                .Concat(new[] { reflectedType.Namespace })
-                .Concat(reflectedType.GetNestedTypePath().Select(x => x.Name))
+                .Concat(new[] { declaringType.Namespace })
+                .Concat(declaringType.GetNestedTypePath().Select(x => x.Name))
                 .Concat(new[] { projectableMemberInfo.Name }));
 
             throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.") {
