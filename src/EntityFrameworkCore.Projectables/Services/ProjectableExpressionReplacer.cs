@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using EntityFrameworkCore.Projectables.Extensions;
 
 namespace EntityFrameworkCore.Projectables.Services
 {
@@ -39,7 +41,10 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            if (TryGetReflectedExpression(node.Method, out var reflectedExpression))
+            // Get the overriding methodInfo based on te type of the received of this expression
+            var methodInfo = node.Object?.Type.GetOverridingMethod(node.Method) ?? node.Method;
+
+            if (TryGetReflectedExpression(methodInfo, out var reflectedExpression))
             {
                 for (var parameterIndex = 0; parameterIndex < reflectedExpression.Parameters.Count; parameterIndex++)
                 {
@@ -69,7 +74,12 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMember(MemberExpression node)
         {
-            if (TryGetReflectedExpression(node.Member, out var reflectedExpression))
+            var nodeMember = node.Expression switch {
+                { Type: {  } } => node.Expression.Type.GetMember(node.Member.Name, node.Member.MemberType, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)[0],
+                _ => node.Member
+            };
+
+            if (TryGetReflectedExpression(nodeMember, out var reflectedExpression))
             {
                 if (node.Expression is not null)
                 {
