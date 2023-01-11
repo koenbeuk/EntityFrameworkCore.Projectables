@@ -77,6 +77,8 @@ namespace EntityFrameworkCore.Projectables.Services
             var nodeExpression = node.Expression switch {
                 UnaryExpression { NodeType: ExpressionType.Convert, Type: { IsInterface: true } type, Operand: { } operand }
                     when type.IsAssignableFrom(operand.Type)
+                    // This is an interface member. Operand contains the concrete (or at least more concrete) expression,
+                    // from which we can try to find the concrete member.
                     => operand,
                 _ => node.Expression
             };
