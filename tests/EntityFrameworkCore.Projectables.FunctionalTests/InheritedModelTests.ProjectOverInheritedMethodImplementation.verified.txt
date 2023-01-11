@@ -1,2 +1,2 @@
 SELECT 2
-FROM [Concrete] AS [c]
+FROM [MoreConcrete] AS [m]
