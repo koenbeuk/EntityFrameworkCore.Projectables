@@ -25,12 +25,12 @@ namespace EntityFrameworkCore.Projectables.Extensions
             yield return type;
         }
 
-        public static MethodInfo GetOverridingMethod(this Type derivedType, MethodInfo methodInfo)
+        private static bool CanHaveOverridingMethod(this Type derivedType, MethodInfo methodInfo)
         {
             // We only need to search for virtual instance methods who are not declared on the derivedType
             if (derivedType == methodInfo.DeclaringType || methodInfo.IsStatic || !methodInfo.IsVirtual)
             {
-                return methodInfo;
+                return false;
             }
 
             if (!derivedType.IsAssignableTo(methodInfo.DeclaringType))
@@ -38,76 +38,115 @@ namespace EntityFrameworkCore.Projectables.Extensions
                 throw new ArgumentException("MethodInfo needs to be declared on the type hierarchy", nameof(methodInfo));
             }
 
-            var derivedMethods = derivedType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance); 
-
-            foreach (var derivedMethodInfo in derivedMethods)
-            {
-                if (HasCompatibleSignature(methodInfo, derivedMethodInfo))
-                {
-                    return derivedMethodInfo;
-                }
-            }
-
-            // No derived methods were found. Return the original methodInfo
-            return methodInfo;
-
-            static bool HasCompatibleSignature(MethodInfo methodInfo, MethodInfo derivedMethodInfo)
-            {
-                if (methodInfo.Name != derivedMethodInfo.Name)
-                {
-                    return false;
-                }
-
-                var methodParameters = methodInfo.GetParameters();
-
-                var derivedMethodParameters = derivedMethodInfo.GetParameters();
-                if (methodParameters.Length != derivedMethodParameters.Length)
-                {
-                    return false;
-                }
-
-                // Match all parameters
-                for (var parameterIndex = 0; parameterIndex < methodParameters.Length; parameterIndex++)
-                {
-                    var parameter = methodParameters[parameterIndex];
-                    var derivedParameter = derivedMethodParameters[parameterIndex];
-
-                    if (parameter.ParameterType.IsGenericParameter)
-                    {
-                        if (!derivedParameter.ParameterType.IsGenericParameter)
-                        {
-                            return false;
-                        }
-                    }
-                    else
-                    {
-                        if (parameter.ParameterType != derivedParameter.ParameterType)
-                        {
-                            return false;
-                        }
-                    }
-                }
-
-                // Match the number of generic type arguments
-                if (methodInfo.IsGenericMethodDefinition)
-                {
-                    var methodGenericParameters = methodInfo.GetGenericArguments();
-
-                    if (!derivedMethodInfo.IsGenericMethodDefinition)
-                    {
-                        return false;
-                    }
-
-                    var derivedGenericArguments = derivedMethodInfo.GetGenericArguments();
-
-                    if (methodGenericParameters.Length != derivedGenericArguments.Length)
-                    {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
+            return true;
         }
+
+        private static int? GetOverridingMethodIndex(this MethodInfo methodInfo, MethodInfo[]? allDerivedMethods)
+        {
+            if (allDerivedMethods is { Length: > 0 })
+            {
+                var baseDefinition = methodInfo.GetBaseDefinition();
+                for (var i = 0; i < allDerivedMethods.Length; i++)
+                {
+                    var derivedMethodInfo = allDerivedMethods[i];
+                    if (derivedMethodInfo.GetBaseDefinition() == baseDefinition)
+                    {
+                        return i;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public static MethodInfo GetOverridingMethod(this Type derivedType, MethodInfo methodInfo)
+        {
+            if (!derivedType.CanHaveOverridingMethod(methodInfo))
+            {
+                return methodInfo;
+            }
+            
+            var derivedMethods = derivedType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            return methodInfo.GetOverridingMethodIndex(derivedMethods) is { } i
+                ? derivedMethods[i]
+                // No derived methods were found. Return the original methodInfo
+                : methodInfo;
+        }
+
+        public static PropertyInfo GetOverridingProperty(this Type derivedType, PropertyInfo propertyInfo)
+        {
+            var accessor = propertyInfo.GetAccessors()[0];
+
+            if (!derivedType.CanHaveOverridingMethod(accessor))
+            {
+                return propertyInfo;
+            }
+            
+            var derivedProperties = derivedType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var derivedPropertyMethods = derivedProperties
+                                        .Select((Func<PropertyInfo, MethodInfo?>)
+                                             (propertyInfo.GetMethod == accessor ? p => p.GetMethod : p => p.SetMethod))
+                                        .OfType<MethodInfo>().ToArray();
+
+            return accessor.GetOverridingMethodIndex(derivedPropertyMethods) is { } i
+                ? derivedProperties[i]
+                // No derived methods were found. Return the original methodInfo
+                : propertyInfo;
+        }
+
+        public static MethodInfo GetImplementingMethod(this Type derivedType, MethodInfo methodInfo)
+        {
+            var interfaceType = methodInfo.DeclaringType;
+            // We only need to search for interface methods
+            if (interfaceType?.IsInterface != true || derivedType.IsInterface || methodInfo.IsStatic || !methodInfo.IsVirtual)
+            {
+                return methodInfo;
+            }
+
+            if (!derivedType.IsAssignableTo(interfaceType))
+            {
+                throw new ArgumentException("MethodInfo needs to be declared on the type hierarchy", nameof(methodInfo));
+            }
+
+            var interfaceMap = derivedType.GetInterfaceMap(interfaceType);
+            for (var i = 0; i < interfaceMap.InterfaceMethods.Length; i++)
+            {
+                if (interfaceMap.InterfaceMethods[i] == methodInfo)
+                {
+                    return interfaceMap.TargetMethods[i];
+                }
+            }
+
+            throw new ApplicationException(
+                $"The interface map for {derivedType} doesn't contain the implemented method for {methodInfo}!");
+        }
+
+        public static PropertyInfo GetImplementingProperty(this Type derivedType, PropertyInfo propertyInfo)
+        {
+            var accessor = propertyInfo.GetAccessors()[0];
+
+            var implementingAccessor = derivedType.GetImplementingMethod(accessor);
+            if (implementingAccessor == accessor)
+            {
+                return propertyInfo;
+            }
+
+            var derivedProperties = derivedType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            return derivedProperties.First(propertyInfo.GetMethod == accessor
+                ? p => p.GetMethod == implementingAccessor
+                : p => p.SetMethod == implementingAccessor);
+        }
+
+        public static MethodInfo GetConcreteMethod(this Type derivedType, MethodInfo methodInfo)
+            => methodInfo.DeclaringType?.IsInterface == true
+                ? derivedType.GetImplementingMethod(methodInfo)
+                : derivedType.GetOverridingMethod(methodInfo);
+
+        public static PropertyInfo GetConcreteProperty(this Type derivedType, PropertyInfo propertyInfo)
+            => propertyInfo.DeclaringType?.IsInterface == true
+                ? derivedType.GetImplementingProperty(propertyInfo)
+                : derivedType.GetOverridingProperty(propertyInfo);
     }
 }

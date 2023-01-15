@@ -42,7 +42,7 @@ namespace EntityFrameworkCore.Projectables.Services
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
             // Get the overriding methodInfo based on te type of the received of this expression
-            var methodInfo = node.Object?.Type.GetOverridingMethod(node.Method) ?? node.Method;
+            var methodInfo = node.Object?.Type.GetConcreteMethod(node.Method) ?? node.Method;
 
             if (TryGetReflectedExpression(methodInfo, out var reflectedExpression))
             {
@@ -74,16 +74,25 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMember(MemberExpression node)
         {
-            var nodeMember = node.Expression switch {
-                { Type: {  } } => node.Expression.Type.GetMember(node.Member.Name, node.Member.MemberType, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)[0],
+            var nodeExpression = node.Expression switch {
+                UnaryExpression { NodeType: ExpressionType.Convert, Type: { IsInterface: true } type, Operand: { } operand }
+                    when type.IsAssignableFrom(operand.Type)
+                    // This is an interface member. Operand contains the concrete (or at least more concrete) expression,
+                    // from which we can try to find the concrete member.
+                    => operand,
+                _ => node.Expression
+            };
+            var nodeMember = node.Member switch {
+                PropertyInfo property when nodeExpression is not null
+                    => nodeExpression.Type.GetConcreteProperty(property),
                 _ => node.Member
             };
 
             if (TryGetReflectedExpression(nodeMember, out var reflectedExpression))
             {
-                if (node.Expression is not null)
+                if (nodeExpression is not null)
                 {
-                    _expressionArgumentReplacer.ParameterArgumentMapping.Add(reflectedExpression.Parameters[0], node.Expression);
+                    _expressionArgumentReplacer.ParameterArgumentMapping.Add(reflectedExpression.Parameters[0], nodeExpression);
                     var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
                     _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
 
