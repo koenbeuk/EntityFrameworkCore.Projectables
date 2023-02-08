@@ -18,10 +18,12 @@ namespace EntityFrameworkCore.Projectables.Services
             var projectableAttribute = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
                 ?? throw new InvalidOperationException("Expected member to have a Projectable attribute. None found");
 
-            var expression = projectableAttribute switch { 
-                { UseMemberBody: not null } => GetExpressionFromMemberBody(projectableMemberInfo, projectableAttribute.UseMemberBody), 
-                _ => GetExpressionFromGeneratedType(projectableMemberInfo)
-            };
+            var expression = GetExpressionFromGeneratedType(projectableMemberInfo);
+
+            if (expression is null && projectableAttribute.UseMemberBody is not null)
+            {
+                expression = GetExpressionFromMemberBody(projectableMemberInfo, projectableAttribute.UseMemberBody);
+            }
 
             if (expression is null)
             {
