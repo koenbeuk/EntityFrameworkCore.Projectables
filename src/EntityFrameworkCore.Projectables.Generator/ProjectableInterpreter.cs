@@ -123,23 +123,52 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
                 NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType),
-                ParametersList = SyntaxFactory.ParameterList(),
-                TypeParameterList = SyntaxFactory.TypeParameterList()
+                ParametersList = SyntaxFactory.ParameterList()
             };
+
+            if (memberSymbol.ContainingType is INamedTypeSymbol { IsGenericType: true } containingNamedType)
+            {
+                descriptor.ClassTypeParameterList = SyntaxFactory.TypeParameterList();
+
+                foreach (var additionalClassTypeParameter in containingNamedType.TypeParameters)
+                {
+                    descriptor.ClassTypeParameterList = descriptor.ClassTypeParameterList.AddParameters(
+                        SyntaxFactory.TypeParameter(additionalClassTypeParameter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    );
+
+                    if (!additionalClassTypeParameter.ConstraintTypes.IsDefaultOrEmpty)
+                    {
+                        descriptor.ClassConstraintClauses ??= SyntaxFactory.List<TypeParameterConstraintClauseSyntax>();
+
+                        descriptor.ClassConstraintClauses = descriptor.ClassConstraintClauses.Value.Add(
+                            SyntaxFactory.TypeParameterConstraintClause(
+                                SyntaxFactory.IdentifierName(additionalClassTypeParameter.Name),
+                                SyntaxFactory.SeparatedList<TypeParameterConstraintSyntax>(
+                                    additionalClassTypeParameter
+                                        .ConstraintTypes
+                                        .Select(c => SyntaxFactory.TypeConstraint(
+                                            SyntaxFactory.IdentifierName(c.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                                        ))
+                                )
+                            )
+                        );
+                    }
+
+                    // todo: add additional type constraints
+                }
+            }
 
             if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
             {
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
-                            SyntaxFactory.Identifier("@this")
-                        ).WithType(
-                            SyntaxFactory.ParseTypeName(
-                                memberSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                            )
-                            .WithTrailingTrivia(
-                                SyntaxFactory.SyntaxTrivia(SyntaxKind.WhitespaceTrivia, " ")
-                            )
+                        SyntaxFactory.Identifier("@this")
+                    )
+                    .WithType(
+                        SyntaxFactory.ParseTypeName(
+                            memberSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         )
+                    )
                 );
             }
 
@@ -169,7 +198,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.Body = expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
+                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
                 foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
@@ -177,6 +206,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 if (methodDeclarationSyntax.TypeParameterList is not null)
                 {
+                    descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
                     foreach (var additionalTypeParameter in ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.TypeParameterList)).Parameters)
                     {
                         descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
@@ -185,8 +215,11 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 if (methodDeclarationSyntax.ConstraintClauses.Any())
                 {
-                    descriptor.ConstraintClauses = methodDeclarationSyntax.ConstraintClauses
-                        .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x));
+                    descriptor.ConstraintClauses = SyntaxFactory.List(
+                        methodDeclarationSyntax
+                            .ConstraintClauses
+                            .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x))
+                        );
                 }
             }
             else if (memberBody is PropertyDeclarationSyntax propertyDeclarationSyntax)
@@ -201,19 +234,12 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.Body = expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
+                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
             }
             else
             {
                 return null;
             }
-
-            descriptor.UsingDirectives =
-                member.SyntaxTree
-                    .GetRoot()
-                    .DescendantNodes()
-                    .OfType<UsingDirectiveSyntax>()
-                    .Select(x => x.ToString());
 
             return descriptor;
         }

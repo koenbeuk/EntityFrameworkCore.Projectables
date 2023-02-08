@@ -3,11 +3,12 @@
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class _SomeExtensions_Test
+    static class _EntityBase_GetId<TId>
+        where TId : global::System.ICloneable
     {
-        static global::System.Linq.Expressions.Expression<global::System.Func<global::SomeFlag, bool>> Expression()
+        static global::System.Linq.Expressions.Expression<global::System.Func<TId>> Expression()
         {
-            return (global::SomeFlag f) => f == global::SomeFlag.Foo;
+            return () => default;
         }
     }
 }

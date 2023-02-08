@@ -29,15 +29,39 @@ namespace EntityFrameworkCore.Projectables.Services
         {
             stringBuilder.Append(namespaceName?.Replace('.', '_'));
             stringBuilder.Append('_');
+            var arity = 0;
+            
             if (nestedInClassNames is not null)
             {
+
                 foreach (var className in nestedInClassNames)
                 {
-                    stringBuilder.Append(className);
+                    var arityCharacterIndex = className.IndexOf('`');
+                    if (arityCharacterIndex is -1)
+                    {
+                        stringBuilder.Append(className);
+                    }
+                    else
+                    {
+#if NETSTANDARD2_0
+                        arity += int.Parse(className.Substring(arityCharacterIndex + 1));
+#else
+                        arity += int.Parse(className.AsSpan().Slice(arityCharacterIndex + 1));
+#endif
+                        stringBuilder.Append(className, 0, arityCharacterIndex);
+                    }
+
                     stringBuilder.Append('_');
                 }
+
             }
             stringBuilder.Append(memberName);
+
+            if (arity > 0)
+            {
+                stringBuilder.Append('`');
+                stringBuilder.Append(arity);
+            }
 
             return stringBuilder.ToString();
         }
