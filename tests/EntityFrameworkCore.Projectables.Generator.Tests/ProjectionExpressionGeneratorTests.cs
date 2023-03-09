@@ -1615,7 +1615,6 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
-
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
