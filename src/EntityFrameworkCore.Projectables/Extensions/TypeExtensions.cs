@@ -89,7 +89,7 @@ namespace EntityFrameworkCore.Projectables.Extensions
 
         public static PropertyInfo GetOverridingProperty(this Type derivedType, PropertyInfo propertyInfo)
         {
-            var accessor = propertyInfo.GetAccessors()[0];
+            var accessor = propertyInfo.GetAccessors(true)[0];
 
             if (!derivedType.CanHaveOverridingMethod(accessor))
             {
