@@ -153,7 +153,23 @@ namespace EntityFrameworkCore.Projectables.Generator
 
 #nullable disable
 
-                var compilationUnit = CompilationUnit()
+                var compilationUnit = CompilationUnit();
+
+                foreach (var usingDirective in projectable.UsingDirectives)
+                {
+                    compilationUnit = compilationUnit.AddUsings(usingDirective);
+                }
+
+                if (projectable.ClassNamespace is not null)
+                {
+                    compilationUnit = compilationUnit.AddUsings(
+                        UsingDirective(
+                            ParseName(projectable.ClassNamespace)
+                        )
+                    );
+                }
+
+                compilationUnit = compilationUnit
                     .AddMembers(
                         NamespaceDeclaration(
                             ParseName("EntityFrameworkCore.Projectables.Generated")

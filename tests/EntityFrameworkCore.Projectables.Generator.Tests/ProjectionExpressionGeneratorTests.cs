@@ -1615,6 +1615,63 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task Issue65()
+        {
+            // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
+
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+public static class ContentExtensions
+{
+    public static string Inner(this string s) => s;
+
+    [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+    public static string Outer(this string s) => s?.Inner();
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task Issue652()
+        {
+            // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
+
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo;
+
+public static class ContentExtensions
+{
+    [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+    public static string Outer(this string s) => s?.Inner();
+}
+
+public static class ContentExtensions2
+{
+    public static string Inner(this string s) => s;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

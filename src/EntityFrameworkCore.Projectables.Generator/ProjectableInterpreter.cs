@@ -119,6 +119,8 @@ namespace EntityFrameworkCore.Projectables.Generator
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {
+
+                UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
                 ClassName = memberSymbol.ContainingType.Name,
                 ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
