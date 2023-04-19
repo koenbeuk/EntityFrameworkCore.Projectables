@@ -11,6 +11,8 @@ namespace EntityFrameworkCore.Projectables.Generator
 {
     public class ProjectableDescriptor
     {
+        public IEnumerable<UsingDirectiveSyntax>? UsingDirectives { get; set; }
+
         public string? ClassNamespace { get; set; }
 
         public IEnumerable<string>? NestedInClassNames { get; set; }
