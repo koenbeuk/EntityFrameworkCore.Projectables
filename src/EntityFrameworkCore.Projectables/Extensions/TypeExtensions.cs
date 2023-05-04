@@ -41,23 +41,8 @@ namespace EntityFrameworkCore.Projectables.Extensions
             return true;
         }
 
-        private static int? GetOverridingMethodIndex(this MethodInfo methodInfo, MethodInfo[]? allDerivedMethods)
-        {
-            if (allDerivedMethods is { Length: > 0 })
-            {
-                var baseDefinition = methodInfo.GetBaseDefinition();
-                for (var i = 0; i < allDerivedMethods.Length; i++)
-                {
-                    var derivedMethodInfo = allDerivedMethods[i];
-                    if (derivedMethodInfo.GetBaseDefinition() == baseDefinition)
-                    {
-                        return i;
-                    }
-                }
-            }
-
-            return null;
-        }
+        private static bool IsOverridingMethodOf(this MethodInfo methodInfo, MethodInfo baseDefinition)
+            => methodInfo.GetBaseDefinition() == baseDefinition;
 
         public static MethodInfo GetOverridingMethod(this Type derivedType, MethodInfo methodInfo)
         {
@@ -68,31 +53,38 @@ namespace EntityFrameworkCore.Projectables.Extensions
             
             var derivedMethods = derivedType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
-            return methodInfo.GetOverridingMethodIndex(derivedMethods) is { } i
-                ? derivedMethods[i]
-                // No derived methods were found. Return the original methodInfo
-                : methodInfo;
+            MethodInfo? overridingMethod = null;
+            if (derivedMethods is { Length: > 0 })
+            {
+                var baseDefinition = methodInfo.GetBaseDefinition();
+                overridingMethod = derivedMethods.FirstOrDefault(derivedMethodInfo
+                    => derivedMethodInfo.IsOverridingMethodOf(baseDefinition));
+            }
+
+            return overridingMethod ?? methodInfo; // If no derived methods were found, return the original methodInfo
         }
 
         public static PropertyInfo GetOverridingProperty(this Type derivedType, PropertyInfo propertyInfo)
         {
-            var accessor = propertyInfo.GetAccessors()[0];
-
-            if (!derivedType.CanHaveOverridingMethod(accessor))
+            var accessor = propertyInfo.GetAccessors(true).FirstOrDefault(derivedType.CanHaveOverridingMethod);
+            if (accessor is null)
             {
                 return propertyInfo;
             }
+
+            var isGetAccessor = propertyInfo.GetMethod == accessor;
             
             var derivedProperties = derivedType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            var derivedPropertyMethods = derivedProperties
-                                        .Select((Func<PropertyInfo, MethodInfo?>)
-                                             (propertyInfo.GetMethod == accessor ? p => p.GetMethod : p => p.SetMethod))
-                                        .OfType<MethodInfo>().ToArray();
 
-            return accessor.GetOverridingMethodIndex(derivedPropertyMethods) is { } i
-                ? derivedProperties[i]
-                // No derived methods were found. Return the original methodInfo
-                : propertyInfo;
+            PropertyInfo? overridingProperty = null;
+            if (derivedProperties is { Length: > 0 })
+            {
+                var baseDefinition = accessor.GetBaseDefinition();
+                overridingProperty = derivedProperties.FirstOrDefault(p
+                    => (isGetAccessor ? p.GetMethod : p.SetMethod)?.IsOverridingMethodOf(baseDefinition) == true);
+            }
+
+            return overridingProperty ?? propertyInfo; // If no derived methods were found, return the original methodInfo
         }
 
         public static MethodInfo GetImplementingMethod(this Type derivedType, MethodInfo methodInfo)
