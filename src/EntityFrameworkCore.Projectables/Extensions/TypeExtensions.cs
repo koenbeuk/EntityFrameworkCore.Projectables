@@ -12,6 +12,19 @@ namespace EntityFrameworkCore.Projectables.Extensions
 {
     public static class TypeExtensions
     {
+        public static string GetSimplifiedTypeName(this Type type)
+        {
+            var name = type.Name;
+
+            var backtickIndex = name.IndexOf("`");
+            if (backtickIndex != -1)
+            {
+                name = name.Substring(0, backtickIndex);
+            }
+
+            return name;
+        }
+
         public static IEnumerable<Type> GetNestedTypePath(this Type type)
         {
             if (type.IsNested && type.DeclaringType is not null)

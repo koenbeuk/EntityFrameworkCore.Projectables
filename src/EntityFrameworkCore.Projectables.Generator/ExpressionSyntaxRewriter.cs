@@ -214,14 +214,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                 // if this node refers to a named type which is not yet fully qualified, we want to fully qualify it
                 if (symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {
-                    var typeInfo = _semanticModel.GetTypeInfo(node);
-
-                    if (typeInfo.Type is not null)
-                    {
-                        return SyntaxFactory.ParseTypeName(
-                            typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                        ).WithLeadingTrivia(node.GetLeadingTrivia());
-                    }
+                    return SyntaxFactory.ParseTypeName(
+                        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                    ).WithLeadingTrivia(node.GetLeadingTrivia());
                 }
             }
 

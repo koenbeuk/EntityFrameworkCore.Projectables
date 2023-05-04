@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 {
     public class ProjectableDescriptor
     {
-        public IEnumerable<string>? UsingDirectives { get; set; }
+        public IEnumerable<UsingDirectiveSyntax>? UsingDirectives { get; set; }
 
         public string? ClassNamespace { get; set; }
 
@@ -23,6 +23,10 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public string? ClassName { get; set; }
 
+        public TypeParameterListSyntax? ClassTypeParameterList { get; set; }
+
+        public SyntaxList<TypeParameterConstraintClauseSyntax>? ClassConstraintClauses { get; set; }
+
         public string? MemberName { get; set; }
 
         public string? ReturnTypeName { get; set; }
@@ -31,8 +35,8 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public TypeParameterListSyntax? TypeParameterList { get; set; }
         
-        public IEnumerable<TypeParameterConstraintClauseSyntax>? ConstraintClauses { get; set; }
+        public SyntaxList<TypeParameterConstraintClauseSyntax>? ConstraintClauses { get; set; }
 
-        public SyntaxNode? Body { get; set; }
+        public ExpressionSyntax? ExpressionBody { get; set; }
     }
 }

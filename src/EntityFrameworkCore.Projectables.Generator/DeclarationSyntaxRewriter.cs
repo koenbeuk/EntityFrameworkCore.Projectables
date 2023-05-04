@@ -28,7 +28,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     visitedNode = visitedParameterSyntax.WithModifiers(node.Modifiers.RemoveAt(thisKeywordIndex));
                 }
 
-                // Strip the parans keyword of any parameter
+                // Strip the params keyword of any parameter
                 var paramsKeywordIndex = ((ParameterSyntax)visitedNode).Modifiers.IndexOf(SyntaxKind.ParamsKeyword);
                 if (paramsKeywordIndex != -1)
                 {
@@ -71,6 +71,19 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             return base.VisitIdentifierName(node);
+        }
+
+        public override SyntaxNode? VisitGenericName(GenericNameSyntax node)
+        {
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (typeInfo.Type is not null)
+            {
+                return SyntaxFactory.ParseTypeName(
+                    typeInfo.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                ).WithTriviaFrom(node);
+            }
+
+            return base.VisitGenericName(node);
         }
 
         public override SyntaxNode? VisitQualifiedName(QualifiedNameSyntax node)

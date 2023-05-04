@@ -1,5 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -536,6 +539,7 @@ namespace Foo {
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
+
 
         [Fact]
         public Task GenericNullableReferenceTypesAreBeingEliminated()
@@ -1555,6 +1559,51 @@ class Foo {
 
     [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
     public static int SomeNumber(Foo fancyClass) => fancyClass?.FancyNumber ?? 3;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task GenericTypes()
+        {
+            // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
+
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+class EntiyBase<TId> {
+    [Projectable]
+    public static TId GetId() => default;
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task GenericTypesWithConstraints()
+        {
+            // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
+
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+class EntityBase<TId> where TId : ICloneable, new() {
+    [Projectable]
+    public static TId GetId() => default;
 }
 ");
 

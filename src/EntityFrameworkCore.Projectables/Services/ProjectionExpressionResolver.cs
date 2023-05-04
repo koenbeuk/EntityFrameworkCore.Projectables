@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using EntityFrameworkCore.Projectables.Extensions;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 
 namespace EntityFrameworkCore.Projectables.Services
 {
@@ -14,39 +15,39 @@ namespace EntityFrameworkCore.Projectables.Services
     {
         public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
         {
-            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
-            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
+            var projectableAttribute = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
+                ?? throw new InvalidOperationException("Expected member to have a Projectable attribute. None found");
 
-            var genericArguments = projectableMemberInfo switch {
-                MethodInfo methodInfo => methodInfo.GetGenericArguments(),
-                _ => null
-            };
+            var expression = GetExpressionFromGeneratedType(projectableMemberInfo);
 
-            var expressionFactoryMethod = declaringType.Assembly.GetType(generatedContainingTypeName)
-                ?.GetMethods()
-                ?.FirstOrDefault();
-
-            if (expressionFactoryMethod is not null)
+            if (expression is null && projectableAttribute.UseMemberBody is not null)
             {
-                if (genericArguments is { Length: > 0 })
-                {
-                    expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(genericArguments);
-                }
-
-                return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
+                expression = GetExpressionFromMemberBody(projectableMemberInfo, projectableAttribute.UseMemberBody);
             }
 
-            var useMemberBody = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()?.UseMemberBody;
-
-            if (useMemberBody is not null)
+            if (expression is null)
             {
-                var exprProperty = declaringType.GetProperty(useMemberBody, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+                var fullName = string.Join(".", Enumerable.Empty<string>()
+                    .Concat(new[] { declaringType.Namespace })
+                    .Concat(declaringType.GetNestedTypePath().Select(x => x.Name))
+                    .Concat(new[] { projectableMemberInfo.Name }));
+
+                throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.");
+            }
+
+            return expression;
+
+            static LambdaExpression? GetExpressionFromMemberBody(MemberInfo projectableMemberInfo, string memberName)
+            {
+                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+                var exprProperty = declaringType.GetProperty(memberName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 var lambda = exprProperty?.GetValue(null) as LambdaExpression;
 
                 if (lambda is not null)
                 {
                     if (projectableMemberInfo is PropertyInfo property &&
-                        lambda.Parameters.Count == 1 && 
+                        lambda.Parameters.Count == 1 &&
                         lambda.Parameters[0].Type == declaringType && lambda.ReturnType == property.PropertyType)
                     {
                         return lambda;
@@ -59,18 +60,44 @@ namespace EntityFrameworkCore.Projectables.Services
                         return lambda;
                     }
                 }
+
+                return null;
             }
 
-            var fullName = string.Join(".", Enumerable.Empty<string>()
-                .Concat(new[] { declaringType.Namespace })
-                .Concat(declaringType.GetNestedTypePath().Select(x => x.Name))
-                .Concat(new[] { projectableMemberInfo.Name }));
+            static LambdaExpression? GetExpressionFromGeneratedType(MemberInfo projectableMemberInfo)
+            {
+                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
 
-            throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.") {
-                Data = {
-                    ["GeneratedContainingTypeName"] = generatedContainingTypeName
+                var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
+
+                if (expressionFactoryType is not null)
+                {
+                    if (expressionFactoryType.IsGenericTypeDefinition)
+                    {
+                        expressionFactoryType = expressionFactoryType.MakeGenericType(declaringType.GenericTypeArguments);
+                    }
+
+                    var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
+
+                    var methodGenericArguments = projectableMemberInfo switch {
+                        MethodInfo methodInfo => methodInfo.GetGenericArguments(),
+                        _ => null
+                    };
+
+                    if (expressionFactoryMethod is not null)
+                    {
+                        if (methodGenericArguments is { Length: > 0 })
+                        {
+                            expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(methodGenericArguments);
+                        }
+
+                        return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
+                    }
                 }
-            };
+
+                return null;
+            }
         }
     }
 }

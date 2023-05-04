@@ -14,6 +14,8 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
         [InlineData("ns", new string[] { "a" }, "m", "ns_a_m")]
         [InlineData("ns", new string[] { "a", "b" }, "m", "ns_a_b_m")]
         [InlineData(null, new string[] { "a" }, "m", "_a_m")]
+        [InlineData("ns", new string[] { "a`1" }, "m", "ns_a_m`1" )]
+        [InlineData("ns", new string[] { "a`1", "b`1" }, "m", "ns_a_b_m`2")]
         public void GenerateName(string? namespaceName, string[] nestedTypeNames, string memberName, string expected)
         {
             var result = ProjectionExpressionClassNameGenerator.GenerateName(namespaceName, nestedTypeNames, memberName);
