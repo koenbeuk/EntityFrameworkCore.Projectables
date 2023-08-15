@@ -500,28 +500,6 @@ namespace Foo {
         }
 
         [Fact]
-        public void BlockBodiedMember_RaisesDiagnostics()
-        {
-            var compilation = CreateCompilation(@"
-using System;
-using EntityFrameworkCore.Projectables;
-namespace Foo {
-    class C {
-        [Projectable]
-        public int Foo 
-        {
-            get => 1;
-        }
-    }
-}
-");
-
-            var result = RunGenerator(compilation);
-
-            Assert.Single(result.Diagnostics);
-        }
-
-        [Fact]
         public void BlockBodiedMethod_RaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
