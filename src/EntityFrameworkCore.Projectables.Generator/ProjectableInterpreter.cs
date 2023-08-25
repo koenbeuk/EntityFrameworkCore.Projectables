@@ -137,26 +137,48 @@ namespace EntityFrameworkCore.Projectables.Generator
                     descriptor.ClassTypeParameterList = descriptor.ClassTypeParameterList.AddParameters(
                         SyntaxFactory.TypeParameter(additionalClassTypeParameter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     );
-
+                    
+                    // See https://github.com/dotnet/roslyn/blob/d7e010bbe5b1d37837417fc5e79ecb2fd9b7b487/src/VisualStudio/CSharp/Impl/ObjectBrowser/DescriptionBuilder.cs#L340
                     if (!additionalClassTypeParameter.ConstraintTypes.IsDefaultOrEmpty)
                     {
                         descriptor.ClassConstraintClauses ??= SyntaxFactory.List<TypeParameterConstraintClauseSyntax>();
 
+                        var parameters = new List<TypeConstraintSyntax>();
+
+                        if (additionalClassTypeParameter.HasReferenceTypeConstraint)
+                        {
+                            parameters.Add(MakeTypeConstraint("class"));
+                        }
+
+                        if (additionalClassTypeParameter.HasValueTypeConstraint)
+                        {
+                            parameters.Add(MakeTypeConstraint("struct"));
+                        }
+
+                        if (additionalClassTypeParameter.HasNotNullConstraint)
+                        {
+                            parameters.Add(MakeTypeConstraint("notnull"));
+                        }
+                        
+                        parameters.AddRange(additionalClassTypeParameter
+                            .ConstraintTypes
+                            .Select(c => 
+                                MakeTypeConstraint(c.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                            )
+                        );
+
+                        if (additionalClassTypeParameter.HasConstructorConstraint)
+                        {
+                            parameters.Add(MakeTypeConstraint("new()"));
+                        }
+
                         descriptor.ClassConstraintClauses = descriptor.ClassConstraintClauses.Value.Add(
                             SyntaxFactory.TypeParameterConstraintClause(
                                 SyntaxFactory.IdentifierName(additionalClassTypeParameter.Name),
-                                SyntaxFactory.SeparatedList<TypeParameterConstraintSyntax>(
-                                    additionalClassTypeParameter
-                                        .ConstraintTypes
-                                        .Select(c => SyntaxFactory.TypeConstraint(
-                                            SyntaxFactory.IdentifierName(c.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                                        ))
-                                )
+                                SyntaxFactory.SeparatedList<TypeParameterConstraintSyntax>(parameters)
                             )
                         );
                     }
-
-                    // todo: add additional type constraints
                 }
             }
 
@@ -245,5 +267,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             return descriptor;
         }
+
+        private static TypeConstraintSyntax MakeTypeConstraint(string constraint) => SyntaxFactory.TypeConstraint(SyntaxFactory.IdentifierName(constraint));
     }
 }
