@@ -95,8 +95,7 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
-                        .UseProjectables()
-                        .UseInternalServiceProvider(provider);
+                        .UseProjectables();
                 })
                 .BuildServiceProvider();
 
