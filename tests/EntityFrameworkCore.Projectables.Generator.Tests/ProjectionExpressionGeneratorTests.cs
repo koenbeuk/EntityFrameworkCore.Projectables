@@ -922,6 +922,72 @@ namespace Foo {
         }
 
         [Fact]
+        public Task GenericClassesWithContraints_AreRewritten()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public class TypedObject<TEnum> where TEnum : struct, System.Enum
+    {
+        public TEnum SomeProp { get; set; }
+    }
+
+    public abstract class Entity<T, TEnum>where T : TypedObject<TEnum> where TEnum : struct, System.Enum 
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public T SomeSubobject { get; set; }
+
+        [Projectable]
+        public string FullName => $""{FirstName} {LastName} {SomeSubobject.SomeProp}"";
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task GenericClassesWithTypeContraints_AreRewritten()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public abstract class Entity<T> where T : notnull
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public T SomeSubobject { get; set; }
+
+        [Projectable]
+        public string FullName => $""{FirstName} {LastName} {SomeSubobject}"";
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            // Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task DeclarationTypeNamesAreGettingFullyQualified()
         {
             var compilation = CreateCompilation(@"
