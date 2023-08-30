@@ -72,6 +72,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var diagnostic = Diagnostic.Create(Diagnostics.NullConditionalRewriteUnsupported, node.GetLocation(), node);
                 _context.ReportDiagnostic(diagnostic);
+
+                // Return the original node, do not attempt further rewrites
+                return node;
             }
 
             else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Ignore)
