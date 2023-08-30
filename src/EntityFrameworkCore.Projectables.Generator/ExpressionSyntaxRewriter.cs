@@ -72,6 +72,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var diagnostic = Diagnostic.Create(Diagnostics.NullConditionalRewriteUnsupported, node.GetLocation(), node);
                 _context.ReportDiagnostic(diagnostic);
+
+                // Return the original node, do not attempt further rewrites
+                return node;
             }
 
             else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Ignore)
@@ -112,34 +115,34 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
         {
-            if (_conditionalAccessExpressionsStack.Count == 0)
+            if (_conditionalAccessExpressionsStack.Count > 0)
             {
-                throw new InvalidOperationException("Expected at least one conditional expression on the stack");
+                var targetExpression = _conditionalAccessExpressionsStack.Pop();
+
+                return _nullConditionalRewriteSupport switch {
+                    NullConditionalRewriteSupport.Ignore => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
+                    NullConditionalRewriteSupport.Rewrite => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
+                    _ => node
+                };
             }
 
-            var targetExpression = _conditionalAccessExpressionsStack.Pop();
-
-            return _nullConditionalRewriteSupport switch {
-                NullConditionalRewriteSupport.Ignore => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
-                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
-                _ => node
-            };
+            return base.VisitMemberBindingExpression(node);
         }
 
         public override SyntaxNode? VisitElementBindingExpression(ElementBindingExpressionSyntax node)
         {
-            if (_conditionalAccessExpressionsStack.Count == 0)
+            if (_conditionalAccessExpressionsStack.Count > 0)
             {
-                throw new InvalidOperationException("Expected at least one conditional expression on the stack");
+                var targetExpression = _conditionalAccessExpressionsStack.Pop();
+
+                return _nullConditionalRewriteSupport switch {
+                    NullConditionalRewriteSupport.Ignore => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
+                    NullConditionalRewriteSupport.Rewrite => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
+                    _ => Visit(node)
+                };
             }
 
-            var targetExpression = _conditionalAccessExpressionsStack.Pop();
-
-            return _nullConditionalRewriteSupport switch {
-                NullConditionalRewriteSupport.Ignore => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
-                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
-                _ => Visit(node)
-            };
+            return base.VisitElementBindingExpression(node);
         }
 
         public override SyntaxNode? VisitThisExpression(ThisExpressionSyntax node)

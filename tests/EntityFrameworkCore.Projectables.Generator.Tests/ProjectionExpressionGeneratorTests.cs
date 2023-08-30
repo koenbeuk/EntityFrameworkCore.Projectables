@@ -645,6 +645,69 @@ namespace Foo {
         }
 
         [Fact]
+        public void NullableMemberBinding_UndefinedSupport_IsBeingReported()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    static class C {
+        [Projectable]
+        public static int? GetLength(this string input) => input?.Length;
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0002", diagnostic.Id);
+        }
+
+
+        [Fact]
+        public void MultiLevelNullableMemberBinding_UndefinedSupport_IsBeingReported()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+        public record Address
+        {
+            public int Id { get; set; }
+            public string? Country { get; set; }
+        }
+
+        public record Party
+        {
+            public int Id { get; set; }
+
+            public Address? Address { get; set; }
+        }
+
+        public record Entity
+        {
+            public int Id { get; set; }
+
+            public Party? Left { get; set; }
+            public Party? Right { get; set; }
+
+            [Projectable]
+            public bool IsSameCountry => Left?.Address?.Country == Right?.Address?.Country;
+        }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.All(result.Diagnostics, diagnostic => {
+                Assert.Equal("EFP0002", diagnostic.Id);
+            });
+        }
+
+        [Fact]
         public Task NullableMemberBinding_WithIgnoreSupport_IsBeingRewritten()
         {
             var compilation = CreateCompilation(@"
