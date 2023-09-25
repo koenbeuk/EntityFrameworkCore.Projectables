@@ -41,6 +41,20 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
+            // Replace MethodGroup arguments with their reflected expressions.
+            // Note that MethodCallExpression.Update returns the original Expression if argument values have not changed.
+            node = node.Update(node.Object, node.Arguments.Select(arg => arg switch {
+                UnaryExpression {
+                    NodeType: ExpressionType.Convert,
+                    Operand: MethodCallExpression {
+                        NodeType: ExpressionType.Call,
+                        Method: { Name: nameof(MethodInfo.CreateDelegate), DeclaringType.Name: nameof(MethodInfo) },
+                        Object: ConstantExpression { Value: MethodInfo methodInfo }
+                    }
+                } => TryGetReflectedExpression(methodInfo, out var expressionArg) ? expressionArg : arg,
+                _ => arg
+            }));
+
             // Get the overriding methodInfo based on te type of the received of this expression
             var methodInfo = node.Object?.Type.GetConcreteMethod(node.Method) ?? node.Method;
 
