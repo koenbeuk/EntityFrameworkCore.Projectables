@@ -13,15 +13,13 @@ namespace EntityFrameworkCore.Projectables.Services
     {
         readonly IProjectionExpressionResolver _resolver;
         readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
-        readonly QueryRootReplacer _queryRootReplacer;
         readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
-        private bool _disableRootRewrite = false;
+        private bool _disableRootRewrite;
         private IEntityType? _entityType;
 
         public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver)
         {
             _resolver = projectionExpressionResolver;
-            _queryRootReplacer = new(_resolver);
         }
 
         bool TryGetReflectedExpression(MemberInfo memberInfo, [NotNullWhen(true)] out LambdaExpression? reflectedExpression)
@@ -41,19 +39,19 @@ namespace EntityFrameworkCore.Projectables.Services
         }
 
         [return: NotNullIfNotNull(nameof(node))]
-        public override Expression? Visit(Expression? node)
+        public Expression? Replace(Expression? node)
         {
-            var ret = base.Visit(node);
+            var ret = Visit(node);
 
             if (_disableRootRewrite)
             {
                 return ret;
             }
 
-            switch (node)
+            switch (ret)
             {
                 // Probably a First() or ToList()
-                case MethodCallExpression { Arguments.Count: > 0 } call when _entityType != null:
+                case MethodCallExpression { Arguments.Count: > 0, Object: null } call when _entityType != null:
                 {
                     var self = _AddProjectableSelect(call.Arguments.First(), _entityType);
                     return call.Update(null, call.Arguments.Skip(1).Prepend(self));
@@ -96,7 +94,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
                 _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
 
-                return Visit(
+                return base.Visit(
                     updatedBody
                 );
             }
@@ -128,13 +126,13 @@ namespace EntityFrameworkCore.Projectables.Services
                     var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
                     _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
 
-                    return Visit(
+                    return base.Visit(
                         updatedBody
                     );
                 }
                 else
                 {
-                    return Visit(
+                    return base.Visit(
                         reflectedExpression.Body
                     );
                 }
@@ -190,7 +188,7 @@ namespace EntityFrameworkCore.Projectables.Services
                         Expression.New(entityType.ClrType),
                         properties.Select(x => Expression.Bind(x, Expression.MakeMemberAccess(xParam, x)))
                             .Concat(projectableProperties
-                                .Select(x => Expression.Bind(x, _ReplaceParam(_resolver.FindGeneratedExpression(x), xParam)))
+                                .Select(x => Expression.Bind(x, _GetAccessor(x, xParam)))
                             )
                     ),
                     xParam
@@ -198,12 +196,13 @@ namespace EntityFrameworkCore.Projectables.Services
             );
         }
 
-        private Expression _ReplaceParam(LambdaExpression lambda, ParameterExpression para)
+        private Expression _GetAccessor(PropertyInfo property, ParameterExpression para)
         {
+            var lambda = _resolver.FindGeneratedExpression(property);
             _expressionArgumentReplacer.ParameterArgumentMapping.Add(lambda.Parameters[0], para);
             var updatedBody = _expressionArgumentReplacer.Visit(lambda.Body);
             _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
-            return updatedBody;
+            return base.Visit(updatedBody);
         }
     }
 }

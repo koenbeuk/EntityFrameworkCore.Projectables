@@ -22,7 +22,6 @@ namespace BasicSample
         private string _FullName => FirstName + " " + LastName;
 
         [Projectable(UseMemberBody = nameof(_TotalSpent))]
-        [NotMapped]
         public double TotalSpent { get; set; }
         private double _TotalSpent => Orders.Sum(x => x.PriceSum);
 
@@ -92,7 +91,7 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
-                        .LogTo(Console.WriteLine)
+                        // .LogTo(Console.WriteLine)
                         .EnableSensitiveDataLogging()
                         .UseProjectables();
                 })
