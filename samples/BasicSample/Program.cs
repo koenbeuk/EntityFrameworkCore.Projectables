@@ -1,16 +1,11 @@
-﻿using EntityFrameworkCore.Projectables;
-using EntityFrameworkCore.Projectables.Extensions;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Diagnostics;
 using System.Linq;
+using EntityFrameworkCore.Projectables;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BasicSample
 {
@@ -22,12 +17,14 @@ namespace BasicSample
 
         public ICollection<Order> Orders { get; set; }
 
-        [Projectable]
-        public string FullName
-            => FirstName + " " + LastName;
+        [Projectable(UseMemberBody = nameof(_FullName))]
+        public string FullName { get; set; }
+        private string _FullName => FirstName + " " + LastName;
 
-        [Projectable]
-        public double TotalSpent => Orders.Sum(x => x.PriceSum);
+        [Projectable(UseMemberBody = nameof(_TotalSpent))]
+        [NotMapped]
+        public double TotalSpent { get; set; }
+        private double _TotalSpent => Orders.Sum(x => x.PriceSum);
 
         [Projectable]
         public Order MostValuableOrder
@@ -86,7 +83,7 @@ namespace BasicSample
 
     class Program
     {
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             using var dbConnection = new SqliteConnection("Filename=:memory:");
             dbConnection.Open();
@@ -95,6 +92,8 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
+                        .LogTo(Console.WriteLine)
+                        .EnableSensitiveDataLogging()
                         .UseProjectables();
                 })
                 .BuildServiceProvider();
@@ -105,9 +104,9 @@ namespace BasicSample
             var product1 = new Product { Name = "Red pen", Price = 1.5 };
             var product2 = new Product { Name = "Blue pen", Price = 2.1 };
 
-            var user = new User { 
-                FirstName = "Jon", 
-                LastName = "Doe", 
+            var user = new User {
+                FirstName = "Jon",
+                LastName = "Doe",
                 Orders = new List<Order> {
                     new Order {
                         Items = new List<OrderItem> {
@@ -130,6 +129,19 @@ namespace BasicSample
             dbContext.SaveChanges();
 
             // What did our user spent in total
+
+            {
+                foreach (var u in dbContext.Users)
+                {
+                    Console.WriteLine($"User name: {u.FullName}");
+                }
+            }
+
+            {
+                var result = dbContext.Users.FirstOrDefault();
+                Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
+            }
+
             {
                 var query = dbContext.Users
                     .Select(x => new {
