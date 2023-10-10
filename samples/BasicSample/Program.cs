@@ -134,10 +134,30 @@ namespace BasicSample
                 {
                     Console.WriteLine($"User name: {u.FullName}");
                 }
+                
+                foreach (var u in dbContext.Users.ToList())
+                {
+                    Console.WriteLine($"User name: {u.FullName}");
+                }
+                
+                foreach (var u in dbContext.Users.OrderBy(x => x.FullName))
+                {
+                    Console.WriteLine($"User name: {u.FullName}");
+                }
+            }   
+            
+            {
+                foreach (var u in dbContext.Users.Where(x => x.TotalSpent >= 1))
+                {
+                    Console.WriteLine($"User name: {u.FullName}");
+                }
             }
 
             {
                 var result = dbContext.Users.FirstOrDefault();
+                Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
+                
+                result = dbContext.Users.FirstOrDefault(x => x.TotalSpent > 1);
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
             }
 
