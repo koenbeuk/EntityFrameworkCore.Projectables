@@ -159,6 +159,9 @@ namespace BasicSample
                 
                 result = dbContext.Users.FirstOrDefault(x => x.TotalSpent > 1);
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
+                
+                var spent = dbContext.Users.Sum(x => x.TotalSpent);
+                Console.WriteLine($"Our users combined spent: {spent}");
             }
 
             {

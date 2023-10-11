@@ -128,8 +128,8 @@ namespace EntityFrameworkCore.Projectables.Services
                     var self = _AddProjectableSelect(call.Arguments.First(), _entityType);
                     return call.Update(null, call.Arguments.Skip(1).Prepend(self));
                 }
-                case QueryRootExpression root:
-                    return _AddProjectableSelect(root, root.EntityType);
+                case QueryRootExpression root when _entityType != null:
+                    return _AddProjectableSelect(root, _entityType);
                 default:
                     return ret;
             }
@@ -214,7 +214,11 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitExtension(Expression node)
         {
+#if NET7_0_OR_GREATER
+            if (node is EntityQueryRootExpression root)
+#else
             if (node is QueryRootExpression root)
+#endif
             {
                 _entityType = root.EntityType;
             }
