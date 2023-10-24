@@ -23,11 +23,15 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFrameworkVersion>net6.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>net7.0;net6.0</TargetFrameworkVersion>
     <MicrosoftExtensionsVersion>6.0.0</MicrosoftExtensionsVersion>
     <EFCoreVersion>6.0.0</EFCoreVersion>
     <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
   </PropertyGroup>
-   
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net7.0'">
+    <EFCoreVersion>7.0.0</EFCoreVersion>
+    <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
+  </PropertyGroup>
 
 </Project>

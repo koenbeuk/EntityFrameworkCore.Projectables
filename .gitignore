@@ -364,3 +364,5 @@ FodyWeavers.xsd
 
 # Received verify test results
 *.received.*
+
+.idea
