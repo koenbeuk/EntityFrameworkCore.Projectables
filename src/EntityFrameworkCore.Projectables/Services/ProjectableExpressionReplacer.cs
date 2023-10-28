@@ -5,6 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using EntityFrameworkCore.Projectables.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
 
@@ -16,6 +17,7 @@ namespace EntityFrameworkCore.Projectables.Services
         readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
         readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
         private bool _disableRootRewrite;
+        private List<string> _includedProjections = new();
         private IEntityType? _entityType;
 
         private readonly MethodInfo _select;
@@ -60,6 +62,7 @@ namespace EntityFrameworkCore.Projectables.Services
         public Expression? Replace(Expression? node)
         {
             _disableRootRewrite = false;
+            _includedProjections.Clear();
             var ret = Visit(node);
 
             if (_disableRootRewrite)
@@ -138,6 +141,28 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
+            if (node.Method.Name == nameof(EntityFrameworkQueryableExtensions.Include))
+            {
+                var include = node.Arguments[1] switch {
+                    ConstantExpression { Value: string str } => str,
+                    LambdaExpression { Body: MemberExpression member } => member.Member.Name,
+                    UnaryExpression { Operand: LambdaExpression { Body: MemberExpression member } } => member.Member.Name,
+                    _ => null
+                };
+                // Only rewrite the include if it includes a projectable property (or if we don't know what's happening).
+                var ret = Visit(node.Arguments[0]);
+                // The visit here is needed because we need the _entityType defined on the query root for the condition below.
+                if (
+                    include != null
+                    && _entityType?.ClrType
+                        ?.GetProperty(include)
+                        ?.GetCustomAttribute<ProjectableAttribute>() != null)
+                {
+                    _includedProjections.Add(include);
+                    return ret;
+                }
+            }
+
             // Replace MethodGroup arguments with their reflected expressions.
             // Note that MethodCallExpression.Update returns the original Expression if argument values have not changed.
             node = node.Update(node.Object, node.Arguments.Select(arg => arg switch {
@@ -212,13 +237,13 @@ namespace EntityFrameworkCore.Projectables.Services
                     var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
                     _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
 
-                    return base.Visit(
+                    return Visit(
                         updatedBody
                     );
                 }
                 else
                 {
-                    return base.Visit(
+                    return Visit(
                         reflectedExpression.Body
                     );
                 }
@@ -243,7 +268,14 @@ namespace EntityFrameworkCore.Projectables.Services
         private Expression _AddProjectableSelect(Expression node, IEntityType entityType)
         {
             var projectableProperties = entityType.ClrType.GetProperties()
-                .Where(x => x.IsDefined(typeof(ProjectableAttribute), false))
+                .Where(x => {
+                    var attr = x.GetCustomAttribute<ProjectableAttribute>();
+                    if (attr == null)
+                        return false;
+                    if (attr.OnlyOnInclude)
+                        return _includedProjections.Contains(x.Name);
+                    return true;
+                })
                 .Where(x => x.CanWrite)
                 .ToList();
 
@@ -291,7 +323,7 @@ namespace EntityFrameworkCore.Projectables.Services
             _expressionArgumentReplacer.ParameterArgumentMapping.Add(lambda.Parameters[0], para);
             var updatedBody = _expressionArgumentReplacer.Visit(lambda.Body);
             _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
-            return base.Visit(updatedBody);
+            return Visit(updatedBody);
         }
     }
 }

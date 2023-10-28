@@ -21,7 +21,7 @@ namespace BasicSample
         public string FullName { get; set; }
         private string _FullName => FirstName + " " + LastName;
 
-        [Projectable(UseMemberBody = nameof(_TotalSpent))]
+        [Projectable(UseMemberBody = nameof(_TotalSpent), OnlyOnInclude = true)]
         public double TotalSpent { get; set; }
         private double _TotalSpent => Orders.Sum(x => x.PriceSum);
 
@@ -154,10 +154,11 @@ namespace BasicSample
             }
 
             {
-                var result = dbContext.Users.FirstOrDefault();
+                Console.WriteLine($"Unloaded total: {dbContext.Users.First().TotalSpent}");
+                var result = dbContext.Users.Include(x => x.TotalSpent).FirstOrDefault();
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
                 
-                result = dbContext.Users.FirstOrDefault(x => x.TotalSpent > 1);
+                result = dbContext.Users.Include(x => x.TotalSpent).FirstOrDefault(x => x.TotalSpent > 1);
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
                 
                 var spent = dbContext.Users.Sum(x => x.TotalSpent);
