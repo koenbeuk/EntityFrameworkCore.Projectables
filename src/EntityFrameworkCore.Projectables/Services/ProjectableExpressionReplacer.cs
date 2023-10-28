@@ -59,6 +59,7 @@ namespace EntityFrameworkCore.Projectables.Services
         [return: NotNullIfNotNull(nameof(node))]
         public Expression? Replace(Expression? node)
         {
+            _disableRootRewrite = false;
             var ret = Visit(node);
 
             if (_disableRootRewrite)
