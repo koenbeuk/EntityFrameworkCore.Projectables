@@ -200,6 +200,18 @@ namespace BasicSample
                 Console.WriteLine($"Our users bought the following products starting with 'Red': {string.Join(", ", result.Ordered)}");
             }
 
+            {
+                var ret = dbContext.Users
+                    .Include(x => x.Orders)
+                    .ThenInclude(x => x.Items)
+                    .ThenInclude(x => x.Product)
+                    .First();
+                Console.WriteLine($"User name: {ret.FullName}, Orders: {string.Join(", ", ret.Orders
+                    .SelectMany(x => x.Items
+                        .Select(y => y.Product.Name)
+                    ))}");
+            }
+
         }
     }
 }
