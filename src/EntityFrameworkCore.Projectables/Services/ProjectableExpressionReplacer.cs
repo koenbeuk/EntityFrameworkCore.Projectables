@@ -258,6 +258,9 @@ namespace EntityFrameworkCore.Projectables.Services
                 .Concat(entityType.GetNavigations()
                     .Where(x => !x.IsShadowProperty())
                     .Select(x => x.GetMemberInfo(false, false)))
+                .Concat(entityType.GetSkipNavigations()
+                    .Where(x => !x.IsShadowProperty())
+                    .Select(x => x.GetMemberInfo(false, false)))
                 // Remove projectable properties from the ef properties. Since properties returned here for auto
                 // properties (like `public string Test {get;set;}`) are generated fields, we also need to take them into account.
                 .Where(x => projectableProperties.All(y => x.Name != y.Name && x.Name != $"<{y.Name}>k__BackingField"));
