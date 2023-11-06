@@ -286,20 +286,19 @@ namespace EntityFrameworkCore.Projectables.Services
 
             var properties = entityType.GetProperties()
                 .Where(x => !x.IsShadowProperty())
-                .Select(x => x.GetMemberInfo(false, false))
+                .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
                 .Concat(entityType.GetNavigations()
                     .Where(x => !x.IsShadowProperty())
-                    .Select(x => x.GetMemberInfo(false, false)))
+                    .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
                 .Concat(entityType.GetSkipNavigations()
                     .Where(x => !x.IsShadowProperty())
-                    .Select(x => x.GetMemberInfo(false, false)))
-                // Remove projectable properties from the ef properties. Since properties returned here for auto
-                // properties (like `public string Test {get;set;}`) are generated fields, we also need to take them into account.
-                .Where(x => projectableProperties.All(y => x.Name != y.Name && x.Name != $"<{y.Name}>k__BackingField"));
+                    .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
+                // Remove projectable properties from the ef properties.
+                .Where(x => projectableProperties.All(y => x.Name != y.Name));
 
             // Replace db.Entities to db.Entities.Select(x => new Entity { Property1 = x.Property1, Rewritted = rewrittedProperty })
             var select = _select.MakeGenericMethod(entityType.ClrType, entityType.ClrType);
-            var xParam = Expression.Parameter(entityType.ClrType);
+            var xParam = Expression.Parameter(entityType.ClrType, "x");
             return Expression.Call(
                 null,
                 select,
