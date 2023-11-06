@@ -18,6 +18,7 @@ namespace EntityFrameworkCore.Projectables.Services
         readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
         private bool _disableRootRewrite;
         private List<string> _includedProjections = new();
+        private List<string> _includedRelations = new();
         private IEntityType? _entityType;
 
         private readonly MethodInfo _select;
@@ -63,6 +64,7 @@ namespace EntityFrameworkCore.Projectables.Services
         {
             _disableRootRewrite = false;
             _includedProjections.Clear();
+            _includedRelations.Clear();
             var ret = Visit(node);
 
             if (_disableRootRewrite)
@@ -160,6 +162,10 @@ namespace EntityFrameworkCore.Projectables.Services
                 {
                     _includedProjections.Add(include);
                     return ret;
+                }
+                else if (include != null)
+                {
+                    _includedRelations.Add(include);
                 }
             }
 
@@ -287,12 +293,15 @@ namespace EntityFrameworkCore.Projectables.Services
             var properties = entityType.GetProperties()
                 .Where(x => !x.IsShadowProperty())
                 .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
-                .Concat(entityType.GetNavigations()
-                    .Where(x => !x.IsShadowProperty())
-                    .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
-                .Concat(entityType.GetSkipNavigations()
-                    .Where(x => !x.IsShadowProperty())
-                    .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
+                .Concat(
+                    entityType.GetNavigations()
+                        .Where(x => !x.IsShadowProperty())
+                        .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
+                        .Concat(entityType.GetSkipNavigations()
+                            .Where(x => !x.IsShadowProperty())
+                            .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
+                        .Where(x => _includedRelations.Contains(x.Name))
+                )
                 // Remove projectable properties from the ef properties.
                 .Where(x => projectableProperties.All(y => x.Name != y.Name));
 
