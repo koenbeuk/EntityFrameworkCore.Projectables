@@ -21,7 +21,7 @@ namespace BasicSample
         public string FullName { get; set; }
         private string _FullName => FirstName + " " + LastName;
 
-        [Projectable(UseMemberBody = nameof(_TotalSpent))]
+        [Projectable(UseMemberBody = nameof(_TotalSpent), OnlyOnInclude = true)]
         public double TotalSpent { get; set; }
         private double _TotalSpent => Orders.Sum(x => x.PriceSum);
 
@@ -32,6 +32,8 @@ namespace BasicSample
         [Projectable]
         public IEnumerable<Product> FindOrderedProducts(string namePrefix)
             => Orders.SelectMany(x => x.Items).Select(x => x.Product).Where(x => x.Name.StartsWith(namePrefix));
+        
+        public ItemImage Image { get; set; }
     }
 
     public class Product
@@ -65,6 +67,11 @@ namespace BasicSample
         public double TotalPrice => Quantity * UnitPrice;
     }
 
+    public class ItemImage
+    {
+        public string Image { get; set; }
+    }
+
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions options) : base(options)
@@ -74,6 +81,13 @@ namespace BasicSample
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<OrderItem>().HasKey(x => new { x.OrderId, x.ProductId });
+            modelBuilder.Entity<User>().OwnsOne<ItemImage>(x => x.Image);
+        }
+        
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
+            optionsBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
         }
 
         public DbSet<User> Users { get; set; }
@@ -91,7 +105,7 @@ namespace BasicSample
                 .AddDbContext<ApplicationDbContext>((provider, options) => {
                     options
                         .UseSqlite(dbConnection)
-                        // .LogTo(Console.WriteLine)
+                        .LogTo(Console.WriteLine)
                         .EnableSensitiveDataLogging()
                         .UseProjectables();
                 })
@@ -106,6 +120,7 @@ namespace BasicSample
             var user = new User {
                 FirstName = "Jon",
                 LastName = "Doe",
+                Image = new ItemImage { Image = "foo" },
                 Orders = new List<Order> {
                     new Order {
                         Items = new List<OrderItem> {
@@ -154,10 +169,11 @@ namespace BasicSample
             }
 
             {
-                var result = dbContext.Users.FirstOrDefault();
+                Console.WriteLine($"Unloaded total: {dbContext.Users.First().TotalSpent}");
+                var result = dbContext.Users.Include(x => x.TotalSpent).FirstOrDefault();
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
                 
-                result = dbContext.Users.FirstOrDefault(x => x.TotalSpent > 1);
+                result = dbContext.Users.Include(x => x.TotalSpent).FirstOrDefault(x => x.TotalSpent > 1);
                 Console.WriteLine($"Our first user {result.FullName} has spent {result.TotalSpent}");
                 
                 var spent = dbContext.Users.Sum(x => x.TotalSpent);
