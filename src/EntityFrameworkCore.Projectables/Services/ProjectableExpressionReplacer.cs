@@ -291,17 +291,15 @@ namespace EntityFrameworkCore.Projectables.Services
             }
 
             var properties = entityType.GetProperties()
-                .Where(x => !x.IsShadowProperty())
-                .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
+                .Cast<IReadOnlyPropertyBase>()
                 .Concat(
                     entityType.GetNavigations()
-                        .Where(x => !x.IsShadowProperty())
-                        .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
-                        .Concat(entityType.GetSkipNavigations()
-                            .Where(x => !x.IsShadowProperty())
-                            .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!))
-                        .Where(x => _includedRelations.Contains(x.Name))
+                        .Cast<IReadOnlyNavigationBase>()
+                        .Concat(entityType.GetSkipNavigations())
+                        .Where(x => _includedRelations.Contains(x.Name) || x.IsEagerLoaded)
                 )
+                .Where(x => !x.IsShadowProperty())
+                .Select(x => x.PropertyInfo as MemberInfo ?? x.FieldInfo!)
                 // Remove projectable properties from the ef properties.
                 .Where(x => projectableProperties.All(y => x.Name != y.Name));
 
