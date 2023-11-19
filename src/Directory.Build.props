@@ -1,28 +1,28 @@
 <Project>
 
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+	<Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <PropertyGroup Label="Build">
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-  </PropertyGroup>
+	<PropertyGroup Label="Build">
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
 
-  <PropertyGroup Label="Signing">
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>../../Key.snk</AssemblyOriginatorKeyFile>
-  </PropertyGroup>
+	<PropertyGroup Label="Signing">
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>../../Key.snk</AssemblyOriginatorKeyFile>
+	</PropertyGroup>
 
-  <PropertyGroup Label="Source Link">
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
-  </PropertyGroup>
+	<PropertyGroup Label="Source Link">
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+	</PropertyGroup>
 
-  <ItemGroup Label="Package References">
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" Version="1.0.0" />
-  </ItemGroup>
+	<ItemGroup Label="Package References">
+		<PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+	</ItemGroup>
 </Project>
