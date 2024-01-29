@@ -34,6 +34,6 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
             => _decoratedQueryCompiler.ExecuteAsync<TResult>(Expand(query), cancellationToken);
 
         Expression Expand(Expression expression)
-            => _projectableExpressionReplacer.Replace(expression);
+            => _projectableExpressionReplacer.Visit(expression);
     }
 }

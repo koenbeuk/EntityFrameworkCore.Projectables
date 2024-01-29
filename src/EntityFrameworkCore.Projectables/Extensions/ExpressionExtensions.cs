@@ -18,6 +18,6 @@ namespace EntityFrameworkCore.Projectables.Extensions
         /// Replaces all calls to properties and methods that are marked with the <C>Projectable</C> attribute with their respective expression tree
         /// </summary>
         public static Expression ExpandProjectables(this Expression expression)
-            => new ProjectableExpressionReplacer(new ProjectionExpressionResolver()).Replace(expression);
+            => new ProjectableExpressionReplacer(new ProjectionExpressionResolver()).Visit(expression);
     }
 }

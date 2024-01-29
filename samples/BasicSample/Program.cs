@@ -19,7 +19,7 @@ namespace BasicSample
 
         [Projectable(UseMemberBody = nameof(_FullName))]
         public string FullName { get; set; }
-        private string _FullName => FirstName + " " + LastName;
+        public string _FullName => FirstName + " " + LastName;
 
         [Projectable(UseMemberBody = nameof(_TotalSpent))]
         public double TotalSpent { get; set; }
