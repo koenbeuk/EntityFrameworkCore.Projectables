@@ -48,7 +48,7 @@ namespace EntityFrameworkCore.Projectables.Services
 
                 reflectedExpression = projectableAttribute is not null
                     ? _resolver.FindGeneratedExpression(memberInfo)
-                    : null;
+                    : (LambdaExpression?)null;
 
                 _projectableMemberCache.Add(memberInfo, reflectedExpression);
             }
