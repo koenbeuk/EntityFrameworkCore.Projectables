@@ -1,19 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<OutputType>Exe</OutputType>
-		<Nullable>disable</Nullable>
-		<IsPackable>false</IsPackable>
-	</PropertyGroup>
+  <PropertyGroup>
+	<OutputType>Exe</OutputType>
+	<Nullable>disable</Nullable>
+	<IsPackable>false</IsPackable>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Console" />
-	</ItemGroup>
+  <ItemGroup>
+	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-		<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables\EntityFrameworkCore.Projectables.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+	<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+	<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables\EntityFrameworkCore.Projectables.csproj" />
+  </ItemGroup>
 
 </Project>

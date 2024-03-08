@@ -1,23 +1,21 @@
 <Project>
+  <PropertyGroup>
+	<TargetFramework>net8.0</TargetFramework>
+	<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	<LangVersion>12.0</LangVersion>
+	<Nullable>enable</Nullable>
+	<EnableNETAnalyzers>true</EnableNETAnalyzers>
+	<NoWarn>CS1591</NoWarn>
+	<ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
 
-	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
-		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-		<LangVersion>12.0</LangVersion>
-		<Nullable>enable</Nullable>
-		<EnableNETAnalyzers>true</EnableNETAnalyzers>
-		<NoWarn>CS1591</NoWarn>
-		<ImplicitUsings>enable</ImplicitUsings>
-	</PropertyGroup>
-
-	<PropertyGroup>
-		<Authors>Koen Bekkenutte</Authors>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<PackageProjectUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables</PackageProjectUrl>
-		<RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables.git</RepositoryUrl>
-		<RepositoryType>git</RepositoryType>
-		<PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projectables/releases</PackageReleaseNotes>
-		<Description>Project over properties and functions in your linq queries</Description>
-	</PropertyGroup>
-
+  <PropertyGroup>
+	<Authors>Koen Bekkenutte</Authors>
+	<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	<PackageProjectUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables</PackageProjectUrl>
+	<RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables.git</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+	<PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projectables/releases</PackageReleaseNotes>
+	<Description>Project over properties and functions in your linq queries</Description>
+  </PropertyGroup>
 </Project>
