@@ -1748,7 +1748,7 @@ class EntityBase<TId> where TId : ICloneable, new() {
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
         {
-            var references = Basic.Reference.Assemblies.NetStandard20.All.ToList();
+            var references = Basic.Reference.Assemblies.Net80.References.All.ToList();
             references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
 
             var compilation = CSharpCompilation.Create("compilation",

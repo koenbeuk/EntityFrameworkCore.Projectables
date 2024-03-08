@@ -1,37 +1,21 @@
 <Project>
-
   <PropertyGroup>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <LangVersion>11.0</LangVersion>
-    <Nullable>enable</Nullable>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <NoWarn>CS1591</NoWarn>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <Authors>Koen Bekkenutte</Authors>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projectables/releases</PackageReleaseNotes>
-    <Description>Project over properties and functions in your linq queries</Description>
+	<TargetFramework>net8.0</TargetFramework>
+	<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	<LangVersion>12.0</LangVersion>
+	<Nullable>enable</Nullable>
+	<EnableNETAnalyzers>true</EnableNETAnalyzers>
+	<NoWarn>CS1591</NoWarn>
+	<ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <PropertyGroup>
-    <MicrosoftCodeAnalysisVersion>4.0.1</MicrosoftCodeAnalysisVersion>
+	<Authors>Koen Bekkenutte</Authors>
+	<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	<PackageProjectUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables</PackageProjectUrl>
+	<RepositoryUrl>https://github.com/koenbeuk/EntityFrameworkCore.Projectables.git</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+	<PackageReleaseNotes>https://github.com/koenbeuk/EntityFrameworkCore.Projectables/releases</PackageReleaseNotes>
+	<Description>Project over properties and functions in your linq queries</Description>
   </PropertyGroup>
-
-  <PropertyGroup>
-    <TargetFrameworkVersion>net7.0;net6.0</TargetFrameworkVersion>
-    <MicrosoftExtensionsVersion>6.0.0</MicrosoftExtensionsVersion>
-    <EFCoreVersion>6.0.0</EFCoreVersion>
-    <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net7.0'">
-    <EFCoreVersion>7.0.0</EFCoreVersion>
-    <TestEFCoreVersion>$(EFCoreVersion)</TestEFCoreVersion>
-  </PropertyGroup>
-
 </Project>

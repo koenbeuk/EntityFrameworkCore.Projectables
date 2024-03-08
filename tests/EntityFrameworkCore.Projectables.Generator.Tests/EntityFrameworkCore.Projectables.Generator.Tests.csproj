@@ -1,31 +1,29 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <IsPackable>false</IsPackable>
+	<IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Basic.Reference.Assemblies.NetStandard20" Version="1.2.4" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="$(MicrosoftCodeAnalysisVersion)" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(MicrosoftCodeAnalysisVersion)" />
-    <PackageReference Include="Microsoft.Extensions.DependencyModel" Version="$(MicrosoftExtensionsVersion)" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />
-    <PackageReference Include="Verify.Xunit" Version="11.5.0" />
-    <PackageReference Include="xunit" Version="2.4.1" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="coverlet.collector" Version="1.3.0">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+	<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" />
+	<ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables\EntityFrameworkCore.Projectables.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" />
-    <ProjectReference Include="..\..\src\EntityFrameworkCore.Projectables\EntityFrameworkCore.Projectables.csproj" />
+	<PackageReference Include="Basic.Reference.Assemblies.Net80" />
+	<PackageReference Include="coverlet.collector">
+	  <PrivateAssets>all</PrivateAssets>
+	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	</PackageReference>
+	<PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+	<PackageReference Include="Microsoft.NET.Test.Sdk" />
+	<PackageReference Include="Verify.Xunit" />
+	<PackageReference Include="xunit" />
+	<PackageReference Include="xunit.runner.visualstudio">
+	  <PrivateAssets>all</PrivateAssets>
+	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	</PackageReference>
   </ItemGroup>
 
 </Project>
