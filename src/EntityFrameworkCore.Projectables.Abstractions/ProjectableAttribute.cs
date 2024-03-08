@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EntityFrameworkCore.Projectables
 {
@@ -23,5 +19,12 @@ namespace EntityFrameworkCore.Projectables
         /// or null to get it from the current member.
         /// </summary>
         public string? UseMemberBody { get; set; }
+
+        /// <summary>
+        /// <c>true</c> will allow you to request for this property by
+        /// explicitly calling .Include(x => x.Property) on the query,
+        /// <c>false</c> will always consider this query to be included.
+        /// </summary>
+        public bool OnlyOnInclude { get; set; }
     }
 }
