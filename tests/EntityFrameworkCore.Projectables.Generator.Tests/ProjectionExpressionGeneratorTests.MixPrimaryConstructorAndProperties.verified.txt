@@ -14,7 +14,9 @@ namespace EntityFrameworkCore.Projectables.Generated
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.EntityExtensions.Entity, global::Foo.EntityExtensions.Entity>> Expression()
         {
             return (global::Foo.EntityExtensions.Entity entity) => new global::Foo.EntityExtensions.Entity(entity.Id)
-            {FullName = entity.FullName};
+            {
+                FullName = entity.FullName
+            };
         }
     }
 }

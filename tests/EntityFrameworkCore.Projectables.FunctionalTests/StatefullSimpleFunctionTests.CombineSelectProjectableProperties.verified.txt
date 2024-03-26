@@ -1,2 +1,2 @@
-SELECT [e].[Id] + ([e].[Id] * 2)
+SELECT [e].[Id] + [e].[Id] * 2
 FROM [Entity] AS [e]
