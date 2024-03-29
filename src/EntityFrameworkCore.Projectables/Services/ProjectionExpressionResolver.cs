@@ -47,13 +47,22 @@ namespace EntityFrameworkCore.Projectables.Services
 
                 if (lambda is not null)
                 {
-                    if (projectableMemberInfo is PropertyInfo property && (lambda.Parameters.Count == (1 + memberParameters?.Length ?? 0))
-                                                                       && (lambda.Parameters[0].Type == declaringType || lambda.Parameters[0].Type == declaringType.BaseType)
+                    
+                    if (projectableMemberInfo is PropertyInfo property && (lambda.Parameters.Count ==
+                                                                           (1 + (memberParameters?.Length ?? 0)))
+                                                                       && (lambda.Parameters[0].Type == declaringType ||
+                                                                           lambda.Parameters[0].Type ==
+                                                                           declaringType.BaseType)
                                                                        && lambda.ReturnType == property.PropertyType
                                                                        && (memberParameters?.Any() != true
                                                                            || lambda.Parameters.Skip(1)
-                                                                               .Select((Parameter, Index) => new { Parameter, Index })
-                                                                               .All(p => p.Parameter.Type == memberParameters[p.Index].GetType())))
+                                                                               .Select((Parameter, Index) =>
+                                                                                   new { Parameter, Index })
+                                                                               .All(p => p.Parameter.Type ==
+                                                                                   memberParameters[p.Index]
+                                                                                       .GetType())))
+
+
                     {
                         return lambda;
                     }
