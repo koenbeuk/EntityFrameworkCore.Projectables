@@ -209,19 +209,30 @@ namespace EntityFrameworkCore.Projectables.Services
                 if (nodeExpression is not null)
                 {
                     _expressionArgumentReplacer.ParameterArgumentMapping.Add(reflectedExpression.Parameters[0], nodeExpression);
+                    if (reflectedExpression.Parameters.Count > 1)
+                    {
+                        var projectableAttribute = nodeMember.GetCustomAttribute<ProjectableAttribute>(false)!;
+                        foreach (var prm in reflectedExpression.Parameters.Skip(1).Select((Parameter, Index) => new { Parameter, Index }))
+                        {
+                            var value = projectableAttribute!.MemberBodyParameterValues![prm.Index];
+                            _expressionArgumentReplacer.ParameterArgumentMapping.Add(prm.Parameter, Expression.Constant(value));
+                        }
+                    }
+
                     var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
                     _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
 
-                    return base.Visit(
+                    return Visit(
                         updatedBody
                     );
                 }
                 else
                 {
-                    return base.Visit(
+                    return Visit(
                         reflectedExpression.Body
                     );
                 }
+
             }
 
             return base.VisitMember(node);

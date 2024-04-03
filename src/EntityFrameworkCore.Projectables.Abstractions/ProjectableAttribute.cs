@@ -19,6 +19,7 @@ namespace EntityFrameworkCore.Projectables
         {
             UseMemberBody = useMemberBody;
             MemberBodyParameterValues = new[] { memberBodyParameterValue };
+           
         }
         public ProjectableAttribute(string useMemberBody, string memberBodyParameterValue) : this(useMemberBody, (object)memberBodyParameterValue) { }
 

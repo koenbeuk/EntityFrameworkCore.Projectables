@@ -19,12 +19,10 @@ namespace EntityFrameworkCore.Projectables.Services
             {
                 expression = GetExpressionFromGeneratedType(projectableMemberInfo, true, projectableAttribute.UseMemberBody);
             }
-
             if (expression is null && projectableAttribute.UseMemberBody is not null)
             {
                 expression = GetExpressionFromMemberBody(projectableMemberInfo, projectableAttribute.UseMemberBody, projectableAttribute.MemberBodyParameterValues);
             }
-
             if (expression is null)
             {
                 var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
@@ -41,13 +39,14 @@ namespace EntityFrameworkCore.Projectables.Services
             static LambdaExpression? GetExpressionFromMemberBody(MemberInfo projectableMemberInfo, string memberName, object[]? memberParameters)
             {
                 var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+
                 var exprProperty = declaringType.GetProperty(memberName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                                    ?? declaringType.BaseType?.GetProperty(memberName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 var lambda = exprProperty?.GetValue(null) as LambdaExpression;
 
                 if (lambda is not null)
                 {
-                    
+
                     if (projectableMemberInfo is PropertyInfo property && (lambda.Parameters.Count ==
                                                                            (1 + (memberParameters?.Length ?? 0)))
                                                                        && (lambda.Parameters[0].Type == declaringType ||
@@ -74,7 +73,6 @@ namespace EntityFrameworkCore.Projectables.Services
                         return lambda;
                     }
                 }
-
                 return null;
             }
 
@@ -82,7 +80,6 @@ namespace EntityFrameworkCore.Projectables.Services
             {
                 var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
                 var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
-
                 var expressionFactoryType = !useLocalType
                                             ? declaringType.Assembly.GetType(generatedContainingTypeName)
                                             : declaringType;
@@ -111,7 +108,6 @@ namespace EntityFrameworkCore.Projectables.Services
                         return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
                     }
                 }
-
                 return null;
             }
         }
