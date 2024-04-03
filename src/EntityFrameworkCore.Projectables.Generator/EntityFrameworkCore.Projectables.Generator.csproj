@@ -1,18 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0</TargetFrameworks>
-    <NoWarn>$(NoWarn);NU5128</NoWarn>
-    <IsPackable>false</IsPackable>
+	<TargetFramework>netstandard2.0</TargetFramework>
+	<NoWarn>$(NoWarn);NU5128</NoWarn>
+	<IsPackable>false</IsPackable>
+	<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\EntityFrameworkCore.Projectables.Abstractions\NullConditionalRewriteSupport.cs" Link="NullConditionalRewriteSupport.cs" />
-    <Compile Include="..\EntityFrameworkCore.Projectables\Services\ProjectionExpressionClassNameGenerator.cs" Link="ProjectionExpressionClassNameGenerator.cs" />
+	<Compile Include="..\EntityFrameworkCore.Projectables.Abstractions\NullConditionalRewriteSupport.cs" Link="NullConditionalRewriteSupport.cs" />
+	<Compile Include="..\EntityFrameworkCore.Projectables\Services\ProjectionExpressionClassNameGenerator.cs" Link="ProjectionExpressionClassNameGenerator.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(MicrosoftCodeAnalysisVersion)" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.3" PrivateAssets="all" />
+	<PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+	<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
   </ItemGroup>
 </Project>

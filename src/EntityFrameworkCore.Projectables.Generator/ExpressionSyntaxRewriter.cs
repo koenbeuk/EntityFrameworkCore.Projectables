@@ -34,6 +34,21 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .WithLeadingTrivia(node.GetLeadingTrivia())
                 .WithTrailingTrivia(node.GetTrailingTrivia());
         }
+        
+        public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+        {
+            var expressionSyntax = (ExpressionSyntax?)Visit(node.Expression) ?? throw new ArgumentNullException("expression");
+        
+            var syntaxNode = Visit(node.Name);
+        
+            // Prevents invalid cast when visiting a QualifiedNameSyntax
+            if (syntaxNode is QualifiedNameSyntax qst)
+            {
+                syntaxNode = qst.Right;
+            }
+            
+            return node.Update(expressionSyntax, VisitToken(node.OperatorToken), (SimpleNameSyntax)syntaxNode);
+        }
 
         public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
         {

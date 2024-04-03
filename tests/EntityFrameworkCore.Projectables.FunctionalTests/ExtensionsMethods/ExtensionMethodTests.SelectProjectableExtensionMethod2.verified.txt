@@ -1,2 +1,2 @@
-SELECT ([e].[Id] + 1) + 1
+SELECT [e].[Id] + 1 + 1
 FROM [Entity] AS [e]

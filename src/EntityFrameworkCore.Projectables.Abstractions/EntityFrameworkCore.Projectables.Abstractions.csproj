@@ -1,26 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <RootNamespace>EntityFrameworkCore.Projectables</RootNamespace>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+	<RootNamespace>EntityFrameworkCore.Projectables</RootNamespace>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" Pack="false">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <OutputItemType>Content</OutputItemType>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </ProjectReference>
-  </ItemGroup>
-  
-  <ItemGroup>
-    <!-- Package the generator in the analyzer directory of the nuget package -->
-    <None Include="$(OutputPath)\EntityFrameworkCore.Projectables.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+	<ProjectReference Include="..\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj" Pack="false">
+	  <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+	  <OutputItemType>Content</OutputItemType>
+	  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+	<!-- Package the generator in the analyzer directory of the nuget package -->
+	<None Include="$(OutputPath)\EntityFrameworkCore.Projectables.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

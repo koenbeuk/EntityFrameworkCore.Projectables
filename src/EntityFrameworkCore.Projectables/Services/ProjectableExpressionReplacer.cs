@@ -240,14 +240,11 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitExtension(Expression node)
         {
-#if NET7_0_OR_GREATER
             if (node is EntityQueryRootExpression root)
-#else
-            if (node is QueryRootExpression root)
-#endif
             {
                 _entityType = root.EntityType;
             }
+
             return base.VisitExtension(node);
         }
 
