@@ -51,7 +51,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 = context.CompilationProvider.Combine(memberDeclarations.Collect());
 
             // Generate the source using the compilation and enums
-            context.RegisterSourceOutput(compilationAndEnums,
+            context.RegisterImplementationSourceOutput(compilationAndEnums,
                 static (spc, source) => Execute(source.Item1, source.Item2, spc));
         }
 
