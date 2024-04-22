@@ -212,10 +212,10 @@ namespace EntityFrameworkCore.Projectables.Services
                     if (reflectedExpression.Parameters.Count > 1)
                     {
                         var projectableAttribute = nodeMember.GetCustomAttribute<ProjectableAttribute>(false)!;
-                        foreach (var prm in reflectedExpression.Parameters.Skip(1).Select((Parameter, Index) => new { Parameter, Index }))
+                        foreach (var parameterWithIndex in reflectedExpression.Parameters.Skip(1).Select((Parameter, Index) => new { Parameter, Index }))
                         {
-                            var value = projectableAttribute!.MemberBodyParameterValues![prm.Index];
-                            _expressionArgumentReplacer.ParameterArgumentMapping.Add(prm.Parameter, Expression.Constant(value));
+                            var value = projectableAttribute!.UseMemberBodyArguments![parameterWithIndex.Index];
+                            _expressionArgumentReplacer.ParameterArgumentMapping.Add(parameterWithIndex.Parameter, Expression.Constant(value));
                         }
                     }
 

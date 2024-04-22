@@ -13,16 +13,10 @@ namespace EntityFrameworkCore.Projectables
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
     public sealed class ProjectableAttribute : Attribute
     {
-        public ProjectableAttribute() { }
-
-        public ProjectableAttribute(string useMemberBody, object memberBodyParameterValue)
+        public ProjectableAttribute()
         {
-            UseMemberBody = useMemberBody;
-            MemberBodyParameterValues = new[] { memberBodyParameterValue };
-           
-        }
-        public ProjectableAttribute(string useMemberBody, string memberBodyParameterValue) : this(useMemberBody, (object)memberBodyParameterValue) { }
 
+        }
         /// <summary>
         /// Get or set how null-conditional operators are handeled
         /// </summary>
@@ -37,6 +31,6 @@ namespace EntityFrameworkCore.Projectables
         /// <summary>
         /// Parameters values for UseMemberBody.
         /// </summary>
-        public object[]? MemberBodyParameterValues { get; set; }
+        public object[]? UseMemberBodyArguments { get; set; }
     }
 }

@@ -18,7 +18,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             public int Id { get; set; }
             public List<OrderItem> OrderItem { get; set; } = new List<OrderItem>();
 
-            [Projectable(nameof(GetOrderItemNameExpression), 1)]
+            [Projectable(UseMemberBody = nameof(GetOrderItemNameExpression), UseMemberBodyArguments = new object[]{ 1 } )]
             public string FirstOrderPropName => GetOrderItemName(1);
 
 
