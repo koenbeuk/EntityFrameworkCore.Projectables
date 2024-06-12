@@ -34,7 +34,7 @@ jobs:
           VERSION="${arrTag[2]}"
           echo Version: $VERSION
           CONFIGURATION="Release"
-          VERSION="${VERSION//v}"
+          VERSION="${VERSION#v}"
           echo Clean Version: $VERSION
           echo Configuration: $CONFIGURATION
           dotnet pack -v normal -c $CONFIGURATION --include-symbols --include-source -p:PackageVersion=$VERSION -o nupkg
