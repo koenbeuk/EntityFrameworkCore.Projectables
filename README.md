@@ -1,4 +1,4 @@
-# EntitiyFrameworkCore.Projectables
+# EntityFrameworkCore.Projectables
 Flexible projection magic for EF Core
 
 [![NuGet version (EntityFrameworkCore.Projectables)](https://img.shields.io/nuget/v/EntityFrameworkCore.Projectables.Abstractions.svg?style=flat-square)](https://www.nuget.org/packages/EntityFrameworkCore.Projectables.Abstractions/)
