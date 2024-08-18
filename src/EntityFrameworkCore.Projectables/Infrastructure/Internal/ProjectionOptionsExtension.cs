@@ -1,6 +1,8 @@
 ﻿using EntityFrameworkCore.Projectables.Infrastructure;
 using EntityFrameworkCore.Projectables.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +38,9 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "EF1001:Internal EF Core API usage.", Justification = "Needed")]
         public void ApplyServices(IServiceCollection services)
         {
+            // Register a convention that will ignore properties marked with the ProjectableAttribute
+            services.AddScoped<IConventionSetPlugin, ProjectablePropertiesNotMappedConventionPlugin>();
+
             static object CreateTargetInstance(IServiceProvider services, ServiceDescriptor descriptor)
             {
                 if (descriptor.ImplementationInstance is not null)
