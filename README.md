@@ -127,7 +127,7 @@ This is perfect for a database like SQL Server where nullability is implicit and
 ```
 This will rewrite your expression to explicitly check for nullables. In the former example, this will be rewritten to: 
 ```csharp 
-(user != null ? user.Location != null ? user.Location?.AddressLine 1 + (user != null ? user.Location != null ? user.Location.AddressLine2 : null) : null)
+(user != null ? user.Location != null ? user.Location?.AddressLine1 + (user != null ? user.Location != null ? user.Location.AddressLine2 : null) : null)
 ```
 Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQL Server
 
