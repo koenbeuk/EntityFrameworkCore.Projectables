@@ -803,6 +803,31 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task BooleanSimpleTernary_WithRewriteSupport_IsBeingRewritten()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    static class C {
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+        public static bool Test(this object? x) => x?.Equals(4) == false;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+
 
         [Fact]
         public Task NullableElementBinding_WithIgnoreSupport_IsBeingRewritten()
