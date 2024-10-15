@@ -1700,6 +1700,33 @@ class Foo {
         }
 
         [Fact]
+        public Task SwitchExpression()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+class Foo {
+    public int? FancyNumber { get; set; }
+
+    [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+    public int SomeNumber(int input) => input switch {
+            1 => 2,
+            3 => 4,
+            4 when FancyNumber == 12 => 48,
+            _ => 1000,
+        };
+    }
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task GenericTypes()
         {
             // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
