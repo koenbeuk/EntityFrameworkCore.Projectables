@@ -9,7 +9,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo, int>> Expression()
         {
-            return (global::Foo fancyClass) => fancyClass != null ? (fancyClass.FancyNumber) : ( int ? )null ?? 3;
+            return (global::Foo fancyClass) => (fancyClass != null ? (fancyClass.FancyNumber) : ( int ? )null) ?? 3;
         }
     }
 }

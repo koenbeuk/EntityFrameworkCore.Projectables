@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.EntityExtensions.Entity, string>> Expression()
         {
-            return (global::Foo.EntityExtensions.Entity entity) => entity.FullName != null ? (entity.FullName.Substring(entity.FullName != null ? (entity.FullName.IndexOf(' ')) : ( int ? )null ?? 0)) : ( string )null;
+            return (global::Foo.EntityExtensions.Entity entity) => (entity.FullName != null ? (entity.FullName.Substring((entity.FullName != null ? (entity.FullName.IndexOf(' ')) : ( int ? )null) ?? 0)) : ( string )null);
         }
     }
 }
