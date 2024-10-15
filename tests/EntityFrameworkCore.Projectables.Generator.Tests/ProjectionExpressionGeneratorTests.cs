@@ -778,6 +778,66 @@ namespace Foo {
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
+        
+        [Fact]
+        public Task StringInterpolationWithStaticCall_IsBeingRewritten()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    static class MyExtensions {
+        public static string ToDateString(this DateTime date) => date.ToString(""dd/MM/yyyy"");
+    }
+
+    class C {
+        public DateTime? ValidationDate { get; set; }
+
+        [Projectable]
+        public string Status => ValidationDate != null ? $""Validation date : ({ValidationDate.Value.ToDateString()})"" : """";
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+        
+        [Fact]
+        public Task StringInterpolationWithParenthesis_NoParenthesisAdded()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    static class MyExtensions {
+        public static string ToDateString(this DateTime date) => date.ToString(""dd/MM/yyyy"");
+    }
+
+    class C {
+        public DateTime? ValidationDate { get; set; }
+
+        [Projectable]
+        public string Status => ValidationDate != null ? $""Validation date : ({(ValidationDate.Value.ToDateString())})"" : """";
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
 
         [Fact]
         public Task NullableSimpleElementBinding_WithRewriteSupport_IsBeingRewritten()
