@@ -14,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.Entity<T, TEnum>, string>> Expression()
         {
-            return (global::Foo.Entity<T, TEnum> @this) => $"{@this.FirstName} {@this.LastName} {@this.SomeSubobject.SomeProp}";
+            return (global::Foo.Entity<T, TEnum> @this) => $"{(@this.FirstName)} {(@this.LastName)} {(@this.SomeSubobject.SomeProp)}";
         }
     }
 }

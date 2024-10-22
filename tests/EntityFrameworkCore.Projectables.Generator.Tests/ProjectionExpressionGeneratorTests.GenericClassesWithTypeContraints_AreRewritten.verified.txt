@@ -13,7 +13,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.Entity<T>, string>> Expression()
         {
-            return (global::Foo.Entity<T> @this) => $"{@this.FirstName} {@this.LastName} {@this.SomeSubobject}";
+            return (global::Foo.Entity<T> @this) => $"{(@this.FirstName)} {(@this.LastName)} {(@this.SomeSubobject)}";
         }
     }
 }

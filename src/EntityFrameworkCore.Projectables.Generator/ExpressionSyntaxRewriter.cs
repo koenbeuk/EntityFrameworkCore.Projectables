@@ -77,6 +77,23 @@ namespace EntityFrameworkCore.Projectables.Generator
             return base.VisitInvocationExpression(node);
         }
 
+        public override SyntaxNode? VisitInterpolation(InterpolationSyntax node)
+        {
+            // Visit the expression first
+            var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+            
+            // Check if the expression already has parentheses
+            if (targetExpression is ParenthesizedExpressionSyntax)
+            {
+                return node.WithExpression(targetExpression);
+            }
+            
+            // Create a new expression wrapped in parentheses
+            var newExpression = SyntaxFactory.ParenthesizedExpression(targetExpression);
+            
+            return node.WithExpression(newExpression);
+        }
+
         public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
         {
             var targetExpression = (ExpressionSyntax)Visit(node.Expression);
