@@ -145,6 +145,57 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         }
 
+        public override SyntaxNode? VisitSwitchExpression(SwitchExpressionSyntax node)
+        {
+            // Reverse arms order to start from the default value
+            var arms = node.Arms.Reverse();
+
+            ExpressionSyntax? currentExpression = null;
+
+            foreach (var arm in arms)
+            {
+                var armExpression = (ExpressionSyntax)Visit(arm.Expression);
+                
+                // Handle fallback value
+                if (currentExpression == null)
+                {
+                    currentExpression = arm.Pattern is DiscardPatternSyntax 
+                        ? armExpression
+                        : SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+
+                    continue;
+                }
+                
+                // Handle each arm, only if it's a constant expression
+                if (arm.Pattern is ConstantPatternSyntax constant)
+                {
+                    ExpressionSyntax expression = SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, (ExpressionSyntax)Visit(node.GoverningExpression), constant.Expression);
+                    
+                    // Add the when clause as a AND expression
+                    if (arm.WhenClause != null)
+                    {
+                        expression = SyntaxFactory.BinaryExpression(
+                            SyntaxKind.LogicalAndExpression, 
+                            expression,
+                            (ExpressionSyntax)Visit(arm.WhenClause.Condition)
+                        );
+                    }
+                    
+                    currentExpression = SyntaxFactory.ConditionalExpression(
+                        expression,
+                        armExpression,
+                        currentExpression
+                    );
+
+                    continue;
+                }
+
+                throw new InvalidOperationException("Switch expressions rewriting is only supported with constant values");
+            }
+            
+            return currentExpression;
+        }
+
         public override SyntaxNode? VisitMemberBindingExpression(MemberBindingExpressionSyntax node)
         {
             if (_conditionalAccessExpressionsStack.Count > 0)
