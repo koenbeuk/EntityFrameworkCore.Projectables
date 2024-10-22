@@ -100,14 +100,14 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Rewrite)
             {
-                var whenNotNullSymbol = _semanticModel.GetSymbolInfo(node.WhenNotNull).Symbol as IPropertySymbol;
                 var typeInfo = _semanticModel.GetTypeInfo(node);
 
                 // Do not translate until we can resolve the target type
                 if (typeInfo.ConvertedType is not null)
                 {
-                    // Translate null-conditional into a conditional expression
-                    return SyntaxFactory.ConditionalExpression(
+                    // Translate null-conditional into a conditional expression, wrapped inside parenthesis
+                    return SyntaxFactory.ParenthesizedExpression(
+                        SyntaxFactory.ConditionalExpression(
                         SyntaxFactory.BinaryExpression(
                             SyntaxKind.NotEqualsExpression,
                             targetExpression.WithTrailingTrivia(SyntaxFactory.Whitespace(" ")),
@@ -120,7 +120,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                             SyntaxFactory.ParseName(typeInfo.ConvertedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
                             SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
                         ).WithLeadingTrivia(SyntaxFactory.Whitespace(" "))
-                    ).WithLeadingTrivia(node.GetLeadingTrivia()).WithTrailingTrivia(node.GetTrailingTrivia());
+                    ).WithLeadingTrivia(node.GetLeadingTrivia()).WithTrailingTrivia(node.GetTrailingTrivia()));
                 }
             }
 

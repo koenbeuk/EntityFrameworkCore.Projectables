@@ -12,7 +12,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<string, char?>> Expression()
         {
-            return (string input) => input != null ? (input[0]) : ( char ? )null;
+            return (string input) => (input != null ? (input[0]) : ( char ? )null);
         }
     }
 }

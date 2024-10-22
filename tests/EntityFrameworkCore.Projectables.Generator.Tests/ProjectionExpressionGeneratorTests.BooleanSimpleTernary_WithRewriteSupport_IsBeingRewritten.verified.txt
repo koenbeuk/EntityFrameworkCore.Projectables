@@ -8,11 +8,11 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Foo_C_GetLength
+    static class Foo_C_Test
     {
-        static global::System.Linq.Expressions.Expression<global::System.Func<string, int?>> Expression()
+        static global::System.Linq.Expressions.Expression<global::System.Func<object, bool>> Expression()
         {
-            return (string input) => (input != null ? (input.Length) : ( int ? )null);
+            return (object x) => (x != null ? (x.Equals(4)) : ( bool ? )null) == false;
         }
     }
 }
