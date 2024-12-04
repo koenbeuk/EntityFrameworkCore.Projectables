@@ -1,9 +1,8 @@
 ﻿using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using EntityFrameworkCore.Projectables.Extensions;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
@@ -12,9 +11,10 @@ namespace EntityFrameworkCore.Projectables.Services
 {
     public sealed class ProjectableExpressionReplacer : ExpressionVisitor
     {
-        readonly IProjectionExpressionResolver _resolver;
-        readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
-        readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
+        private readonly IProjectionExpressionResolver _resolver;
+        private readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
+        private readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
+        private IQueryProvider? _currentQueryProvider;
         private bool _disableRootRewrite;
         private IEntityType? _entityType;
 
@@ -60,6 +60,9 @@ namespace EntityFrameworkCore.Projectables.Services
         public Expression? Replace(Expression? node)
         {
             _disableRootRewrite = false;
+            _currentQueryProvider = null;
+            _entityType = null;
+
             var ret = Visit(node);
 
             if (_disableRootRewrite)
@@ -190,6 +193,29 @@ namespace EntityFrameworkCore.Projectables.Services
 
         protected override Expression VisitMember(MemberExpression node)
         {
+            // Evaluate captured variables in closures that contain EF queries to inline them into the main query
+            if (node.Expression is ConstantExpression constant &&
+                constant.Type.Attributes.HasFlag(TypeAttributes.NestedPrivate) &&
+                Attribute.IsDefined(constant.Type, typeof(CompilerGeneratedAttribute), inherit: true))
+            {
+                try
+                {
+                    var value = Expression
+                        .Lambda<Func<object>>(Expression.Convert(node, typeof(object)))
+                        .Compile()
+                        .Invoke();
+
+                    if (value is IQueryable queryable && ReferenceEquals(queryable.Provider, _currentQueryProvider))
+                    {
+                        return Visit(queryable.Expression);
+                    }
+                }
+                catch
+                {
+                    // Ignore evaluation exceptions - continue with normal processing
+                }
+            }
+
             var nodeExpression = node.Expression switch {
                 UnaryExpression { NodeType: ExpressionType.Convert, Type: { IsInterface: true } type, Operand: { } operand }
                     when type.IsAssignableFrom(operand.Type)
@@ -232,6 +258,7 @@ namespace EntityFrameworkCore.Projectables.Services
             if (node is EntityQueryRootExpression root)
             {
                 _entityType = root.EntityType;
+                _currentQueryProvider = root.QueryProvider;
             }
 
             return base.VisitExtension(node);

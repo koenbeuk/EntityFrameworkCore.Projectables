@@ -1,0 +1,10 @@
+﻿SELECT [e2].[Id], [e2].[EntityId], [e2].[Name]
+FROM [Entity] AS [e]
+LEFT JOIN (
+    SELECT [e1].[Id], [e1].[EntityId], [e1].[Name]
+    FROM (
+        SELECT [e0].[Id], [e0].[EntityId], [e0].[Name], ROW_NUMBER() OVER(PARTITION BY [e0].[EntityId] ORDER BY [e0].[Id]) AS [row]
+        FROM [Entity] AS [e0]
+    ) AS [e1]
+    WHERE 0 < [e1].[row] AND [e1].[row] <= 1
+) AS [e2] ON [e].[Id] = [e2].[EntityId]
