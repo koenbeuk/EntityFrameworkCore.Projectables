@@ -1,9 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Threading.Tasks;
 using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
 using Microsoft.EntityFrameworkCore;
-using VerifyXunit;
-using Xunit;
 
 namespace EntityFrameworkCore.Projectables.FunctionalTests
 {
@@ -32,6 +29,21 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             using var dbContext = new SampleDbContext<Entity>();
 
             var query = dbContext.Set<Entity>();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+
+        [Fact]
+        public Task EntityRootSubqueryExpression()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var original = dbContext.Set<Entity>()
+                .Where(e => e.ComputedWithBacking == 5);
+
+            var query = original
+                .Select(e => new { Item = e, TotalCount = original.Count() });
 
             return Verifier.Verify(query.ToQueryString());
         }
