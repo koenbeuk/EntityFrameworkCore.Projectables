@@ -6,6 +6,7 @@
 	<Nullable>enable</Nullable>
 	<EnableNETAnalyzers>true</EnableNETAnalyzers>
 	<NoWarn>CS1591</NoWarn>
+	<NuGetAudit>false</NuGetAudit>
 	<ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
