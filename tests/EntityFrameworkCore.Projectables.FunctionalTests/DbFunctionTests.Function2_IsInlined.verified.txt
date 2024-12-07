@@ -1,0 +1,2 @@
+﻿SELECT [dbo].[Function2]([t].[Id])
+FROM [TestEntity] AS [t]

@@ -1,0 +1,4 @@
+﻿DECLARE @__arg_0 int = 1;
+
+SELECT [dbo].[Function2](@__arg_0)
+FROM [TestEntity] AS [t]
