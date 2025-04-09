@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure;
 
 namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 {
@@ -48,6 +49,9 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
 
                 return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
             }
+
+            // Custom convention to handle global query filters, etc
+            services.AddScoped<IConventionSetPlugin, CustomConventionSetPlugin>();
 
             if (_compatibilityMode is CompatibilityMode.Full)
             {
