@@ -86,5 +86,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task ProjectQueryFilters()
+        {
+            using var dbContext = new SampleUserWithGlobalQueryFilterDbContext();
+
+            var query = dbContext.Set<User>()
+                .SelectMany(x => x.Last2Orders)
+                .Select(x => x.RecordDate);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 }
