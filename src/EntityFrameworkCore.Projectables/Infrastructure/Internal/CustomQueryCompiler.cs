@@ -26,15 +26,34 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
         readonly IQueryCompiler _decoratedQueryCompiler;
         readonly ProjectableExpressionReplacer _projectableExpressionReplacer;
 
-        public CustomQueryCompiler(IQueryCompiler decoratedQueryCompiler, IQueryContextFactory queryContextFactory, ICompiledQueryCache compiledQueryCache, ICompiledQueryCacheKeyGenerator compiledQueryCacheKeyGenerator, IDatabase database, IDiagnosticsLogger<DbLoggerCategory.Query> logger, ICurrentDbContext currentContext, IEvaluatableExpressionFilter evaluatableExpressionFilter, IModel model) : base(queryContextFactory, compiledQueryCache, compiledQueryCacheKeyGenerator, database, logger, currentContext, evaluatableExpressionFilter, model)
+        public CustomQueryCompiler(IQueryCompiler decoratedQueryCompiler,
+            IQueryContextFactory queryContextFactory,
+            ICompiledQueryCache compiledQueryCache,
+            ICompiledQueryCacheKeyGenerator compiledQueryCacheKeyGenerator,
+            IDatabase database,
+            IDbContextOptions contextOptions,
+            IDiagnosticsLogger<DbLoggerCategory.Query> logger,
+            ICurrentDbContext currentContext,
+            IEvaluatableExpressionFilter evaluatableExpressionFilter,
+            IModel model) : base(queryContextFactory,
+            compiledQueryCache,
+            compiledQueryCacheKeyGenerator,
+            database,
+            logger,
+            currentContext,
+            evaluatableExpressionFilter,
+            model)
         {
             _decoratedQueryCompiler = decoratedQueryCompiler;
-            _projectableExpressionReplacer = new ProjectableExpressionReplacer(new ProjectionExpressionResolver());
+            var trackingByDefault = (contextOptions.FindExtension<CoreOptionsExtension>()?.QueryTrackingBehavior ?? QueryTrackingBehavior.TrackAll) ==
+                                    QueryTrackingBehavior.TrackAll;
+
+            _projectableExpressionReplacer = new ProjectableExpressionReplacer(new ProjectionExpressionResolver(), trackingByDefault);
         }
 
-        public override Func<QueryContext, TResult> CreateCompiledAsyncQuery<TResult>(Expression query) 
+        public override Func<QueryContext, TResult> CreateCompiledAsyncQuery<TResult>(Expression query)
             => _decoratedQueryCompiler.CreateCompiledAsyncQuery<TResult>(Expand(query));
-        public override Func<QueryContext, TResult> CreateCompiledQuery<TResult>(Expression query) 
+        public override Func<QueryContext, TResult> CreateCompiledQuery<TResult>(Expression query)
             => _decoratedQueryCompiler.CreateCompiledQuery<TResult>(Expand(query));
         public override TResult Execute<TResult>(Expression query)
             => _decoratedQueryCompiler.Execute<TResult>(Expand(query));

@@ -14,10 +14,12 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.Helpers
         where TEntity : class
     {
         readonly CompatibilityMode _compatibilityMode;
+        readonly QueryTrackingBehavior _queryTrackingBehavior;
 
-        public SampleDbContext(CompatibilityMode compatibilityMode = CompatibilityMode.Full)
+        public SampleDbContext(CompatibilityMode compatibilityMode = CompatibilityMode.Full, QueryTrackingBehavior queryTrackingBehavior = QueryTrackingBehavior.TrackAll)
         {
             _compatibilityMode = compatibilityMode;
+            _queryTrackingBehavior = queryTrackingBehavior;
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -26,6 +28,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.Helpers
             optionsBuilder.UseProjectables(options => {
                 options.CompatibilityMode(_compatibilityMode); // Needed by our ComplexModelTests
             });
+            optionsBuilder.UseQueryTrackingBehavior(_queryTrackingBehavior);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
