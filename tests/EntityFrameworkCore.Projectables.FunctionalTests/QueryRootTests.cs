@@ -26,7 +26,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         [Fact]
         public Task UseMemberPropertyQueryRootExpression()
         {
-            using var dbContext = new SampleDbContext<Entity>();
+            using var dbContext = new SampleDbContext<Entity>(queryTrackingBehavior: QueryTrackingBehavior.NoTracking);
+
+            var query = dbContext.Set<Entity>();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task DontUseMemberPropertyQueryRootExpression()
+        {
+            using var dbContext = new SampleDbContext<Entity>(queryTrackingBehavior: QueryTrackingBehavior.TrackAll);
 
             var query = dbContext.Set<Entity>();
 
@@ -44,6 +54,26 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             var query = original
                 .Select(e => new { Item = e, TotalCount = original.Count() });
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task AsTrackingQueryRootExpression()
+        {
+            using var dbContext = new SampleDbContext<Entity>(queryTrackingBehavior: QueryTrackingBehavior.NoTracking);
+
+            var query = dbContext.Set<Entity>().AsTracking();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task AsNoTrackingQueryRootExpression()
+        {
+            using var dbContext = new SampleDbContext<Entity>(queryTrackingBehavior: QueryTrackingBehavior.TrackAll);
+
+            var query = dbContext.Set<Entity>().AsNoTracking();
 
             return Verifier.Verify(query.ToQueryString());
         }

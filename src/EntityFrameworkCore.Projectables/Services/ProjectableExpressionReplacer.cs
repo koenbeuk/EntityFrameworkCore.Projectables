@@ -4,6 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using EntityFrameworkCore.Projectables.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
 
@@ -15,14 +16,16 @@ namespace EntityFrameworkCore.Projectables.Services
         private readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
         private readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
         private IQueryProvider? _currentQueryProvider;
-        private bool _disableRootRewrite;
+        private bool _disableRootRewrite = false;
+        private readonly bool _trackingByDefault;
         private IEntityType? _entityType;
 
         private readonly MethodInfo _select;
         private readonly MethodInfo _where;
 
-        public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver)
+        public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver, bool trackByDefault = false)
         {
+            _trackingByDefault = trackByDefault;
             _resolver = projectionExpressionResolver;
             _select = typeof(Queryable).GetMethods(BindingFlags.Static | BindingFlags.Public)
                 .Where(x => x.Name == nameof(Queryable.Select))
@@ -59,7 +62,7 @@ namespace EntityFrameworkCore.Projectables.Services
         [return: NotNullIfNotNull(nameof(node))]
         public Expression? Replace(Expression? node)
         {
-            _disableRootRewrite = false;
+            _disableRootRewrite = _trackingByDefault;
             _currentQueryProvider = null;
             _entityType = null;
 
@@ -161,6 +164,15 @@ namespace EntityFrameworkCore.Projectables.Services
             if (methodInfo.Name == nameof(Queryable.Select))
             {
                 _disableRootRewrite = true;
+            }
+
+            if (methodInfo.Name == nameof(EntityFrameworkQueryableExtensions.AsTracking))
+            {
+                _disableRootRewrite = true;
+            }
+            if (methodInfo.Name is nameof(EntityFrameworkQueryableExtensions.AsNoTracking) or nameof(EntityFrameworkQueryableExtensions.AsNoTrackingWithIdentityResolution))
+            {
+                _disableRootRewrite = false;
             }
 
             if (TryGetReflectedExpression(methodInfo, out var reflectedExpression))
