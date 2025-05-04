@@ -54,6 +54,9 @@ namespace EntityFrameworkCore.Projectables.Infrastructure.Internal
                 return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
             }
 
+            // Custom convention to handle global query filters, etc
+            services.AddScoped<IConventionSetPlugin, CustomConventionSetPlugin>();
+
             if (_compatibilityMode is CompatibilityMode.Full)
             {
                 var targetDescriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IQueryCompiler));
