@@ -56,9 +56,18 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         public interface IDefaultBase
         {
             int Explicit { get; }
+
+            [Projectable]
+            int Default => 49;
         }
 
-        public class Concrete : Base
+        public interface IDefaultBaseImplementation : IDefaultBase, IBase
+        {
+            [Projectable]
+            int IDefaultBase.Explicit => Id * 2;
+        }
+
+        public class Concrete : Base, IDefaultBaseImplementation
         {
             [Projectable]
             public override int SampleProperty => 1;
@@ -142,11 +151,31 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         }
 
         [Fact]
+        public Task ProjectOverDefaultImplementedProperty()
+        {
+            using var dbContext = new SampleDbContext<Concrete>();
+
+            var query = dbContext.Set<Concrete>().SelectDefaultProperty();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
         public Task ProjectOverExplicitlyImplementedProperty()
         {
             using var dbContext = new SampleDbContext<OtherConcrete>();
 
             var query = dbContext.Set<OtherConcrete>().SelectExplicitProperty();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ProjectOverDefaultExplicitlyImplementedProperty()
+        {
+            using var dbContext = new SampleDbContext<Concrete>();
+
+            var query = dbContext.Set<Concrete>().SelectExplicitProperty();
 
             return Verifier.Verify(query.ToQueryString());
         }
@@ -177,7 +206,11 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         public static IQueryable<int> SelectComputedProperty<TConcrete>(this IQueryable<TConcrete> concretes)
             where TConcrete : InheritedModelTests.IBase
             => concretes.Select(x => x.ComputedProperty);
-
+        
+        public static IQueryable<int> SelectDefaultProperty<TConcrete>(this IQueryable<TConcrete> concretes)
+            where TConcrete : InheritedModelTests.IDefaultBase
+            => concretes.Select(x => x.Default);
+        
         public static IQueryable<int> SelectExplicitProperty<TConcrete>(this IQueryable<TConcrete> concretes)
             where TConcrete : InheritedModelTests.IDefaultBase
             => concretes.Select(x => x.Explicit);

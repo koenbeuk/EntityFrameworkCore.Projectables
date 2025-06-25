@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Reflection.Metadata;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 
 namespace EntityFrameworkCore.Projectables.Extensions
 {
@@ -137,12 +129,31 @@ namespace EntityFrameworkCore.Projectables.Extensions
                 return propertyInfo;
             }
 
-            var derivedProperties = derivedType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var implementingType = implementingAccessor.DeclaringType 
+                                   // This should only be null if it is a property accessor on the global module,
+                                   // which should never happen since we found it from derivedType
+                                ?? throw new ApplicationException("The property accessor has no declaring type!");
+
+            var derivedProperties = implementingType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
             return derivedProperties.First(propertyInfo.GetMethod == accessor
-                ? p => p.GetMethod == implementingAccessor
-                : p => p.SetMethod == implementingAccessor);
+                ? p => MethodInfosEqual(p.GetMethod, implementingAccessor)
+                : p => MethodInfosEqual(p.SetMethod, implementingAccessor));
         }
+
+        /// <summary>
+        /// The built-in <see cref="MethodInfo.op_Equality(System.Reflection.MethodInfo?,System.Reflection.MethodInfo?)"/>
+        /// does not work if the <see cref="MemberInfo.ReflectedType"/>s don't agree.
+        /// </summary>
+        private static bool MethodInfosEqual(MethodInfo? first, MethodInfo second)
+            => first?.ReflectedType == second.ReflectedType
+                ? first             == second
+                : first is not null
+               && first.DeclaringType == second.DeclaringType
+               && first.Name          == second.Name
+               && first.GetParameters().Select(p => p.ParameterType)
+                       .SequenceEqual(second.GetParameters().Select(p => p.ParameterType))
+               && first.GetGenericArguments().SequenceEqual(second.GetGenericArguments());
 
         public static MethodInfo GetConcreteMethod(this Type derivedType, MethodInfo methodInfo)
             => methodInfo.DeclaringType?.IsInterface == true

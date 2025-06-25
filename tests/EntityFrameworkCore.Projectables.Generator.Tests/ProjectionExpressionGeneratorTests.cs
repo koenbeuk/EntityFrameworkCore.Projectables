@@ -1885,6 +1885,71 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task DefaultInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+                
+                public interface IBase
+                {
+                    int Id { get; }
+                    int ComputedProperty { get; }
+                    int ComputedMethod();
+                }
+
+                public interface IDefaultBase : IBase
+                {
+                    [Projectable]
+                    int Default => ComputedProperty * 2;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task DefaultExplicitInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+
+                public interface IBase
+                {
+                    int Id { get; }
+                    int ComputedProperty { get; }
+                    int ComputedMethod();
+                }
+
+                public interface IDefaultBase
+                {
+                    int Default { get; }
+                }
+
+                public interface IDefaultBaseImplementation : IDefaultBase, IBase
+                {
+                    [Projectable]
+                    int IDefaultBase.Default => ComputedProperty * 2;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
