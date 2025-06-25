@@ -1856,6 +1856,35 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ExplicitInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+
+                public interface IBase
+                {
+                    int ComputedProperty { get; }
+                }
+
+                public class Concrete : IBase
+                {
+                    int Id { get; }
+                    [Projectable]
+                    int IBase.ComputedProperty => Id + 1;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

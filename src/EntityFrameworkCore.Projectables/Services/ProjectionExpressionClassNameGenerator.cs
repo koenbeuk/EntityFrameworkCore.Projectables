@@ -55,7 +55,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 }
 
             }
-            stringBuilder.Append(memberName);
+            stringBuilder.Append(memberName.Replace(".", "__")); // Support explicit interface implementations
 
             if (arity > 0)
             {

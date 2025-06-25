@@ -1,0 +1,2 @@
+﻿SELECT [o].[Id] / 2
+FROM [OtherConcrete] AS [o]
