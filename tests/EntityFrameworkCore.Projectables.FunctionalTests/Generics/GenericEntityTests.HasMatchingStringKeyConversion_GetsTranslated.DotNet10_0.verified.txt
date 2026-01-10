@@ -1,0 +1,5 @@
+﻿DECLARE @key varchar(11) = 'x';
+
+SELECT [c].[Id]
+FROM [ConcreteEntity] AS [c]
+WHERE CONVERT(varchar(11), [c].[Id]) = @key

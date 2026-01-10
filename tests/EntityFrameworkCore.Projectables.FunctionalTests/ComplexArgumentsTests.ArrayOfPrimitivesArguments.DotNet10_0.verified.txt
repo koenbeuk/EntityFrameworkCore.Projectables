@@ -1,0 +1,7 @@
+﻿DECLARE @validArray1 int = 1;
+DECLARE @validArray2 int = 2;
+DECLARE @validArray3 int = 3;
+
+SELECT [t].[Id]
+FROM [TestEntity] AS [t]
+WHERE [t].[Id] IN (@validArray1, @validArray2, @validArray3)

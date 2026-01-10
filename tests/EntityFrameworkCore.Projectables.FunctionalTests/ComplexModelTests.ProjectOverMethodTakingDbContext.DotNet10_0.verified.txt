@@ -1,0 +1,10 @@
+﻿SELECT [o1].[Id], [o1].[RecordDate], [o1].[UserId]
+FROM [User] AS [u]
+LEFT JOIN (
+    SELECT [o0].[Id], [o0].[RecordDate], [o0].[UserId]
+    FROM (
+        SELECT [o].[Id], [o].[RecordDate], [o].[UserId], ROW_NUMBER() OVER(PARTITION BY [o].[UserId] ORDER BY [o].[RecordDate] DESC) AS [row]
+        FROM [Order] AS [o]
+    ) AS [o0]
+    WHERE [o0].[row] <= 1
+) AS [o1] ON [u].[Id] = [o1].[UserId]
