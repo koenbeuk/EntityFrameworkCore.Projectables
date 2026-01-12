@@ -1901,6 +1901,80 @@ class EntityBase<TId> where TId : ICloneable, new() {
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
+        
+        [Fact]
+        public Task DictionaryIndexInitializer_IsBeingRewritten()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class EntityExtensions
+    {
+        public record Entity
+        {
+            public int Id { get; set; }
+            public string? FullName { get; set; }
+        }
+
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+        public static Dictionary<string, string> ToDictionary(this Entity entity)
+            => new Dictionary<string, string> 
+            {
+                [""FullName""] = entity.FullName ?? ""N/A"" 
+            };
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+        
+        [Fact]
+        public Task DictionaryObjectInitializer_IsNotBeingRewritten()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public static class EntityExtensions
+    {
+        public record Entity
+        {
+            public int Id { get; set; }
+            public string? FullName { get; set; }
+        }
+
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+        public static Dictionary<string, string> ToDictionary(this Entity entity)
+            => new Dictionary<string, string> 
+            {
+                { ""FullName"", entity.FullName ?? ""N/A"" }
+            };
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
 
         #region Helpers
 
