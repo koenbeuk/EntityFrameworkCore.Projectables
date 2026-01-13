@@ -473,6 +473,10 @@ namespace Foo {
         [Fact]
         public Task ProjectableCSharp14ImplicitExtensionMethod()
         {
+            // Note: C# 14 implicit extension syntax may not be fully supported by the current Roslyn version (4.11.0)
+            // This test verifies that the generator is prepared to handle C# 14 implicit extensions when they become available
+            // The actual C# 14 support depends on the Roslyn version used at runtime
+            
             var compilation = CreateCompilation(@"
 using System;
 using System.Linq;
@@ -485,18 +489,18 @@ namespace Foo {
         public int Foo() => 1;
     }
 }
-", expectedToCompile: false); // C# 14 may not compile on older Roslyn
+", expectedToCompile: false); // C# 14 may not fully compile with current Roslyn version
 
             var result = RunGenerator(compilation);
 
-            // The generator should handle this gracefully even if compilation fails
-            // If Roslyn supports C# 14, this should generate correctly
+            // If Roslyn supports C# 14 and the code compiles, verify the generated output
+            // Otherwise, the test passes to indicate the generator doesn't crash
             if (result.GeneratedTrees.Length > 0)
             {
                 return Verifier.Verify(result.GeneratedTrees[0].ToString());
             }
             
-            // If C# 14 is not supported, just pass the test
+            // If C# 14 is not fully supported yet, the test still passes
             return Task.CompletedTask;
         }
 
