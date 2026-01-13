@@ -2,7 +2,7 @@
   <PropertyGroup>
 	<TargetFrameworks>net8.0;net10.0</TargetFrameworks>
 	<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-	<LangVersion>14.0</LangVersion>
+	<LangVersion>12.0</LangVersion>
 	<Nullable>enable</Nullable>
 	<EnableNETAnalyzers>true</EnableNETAnalyzers>
 	<NoWarn>CS1591</NoWarn>
