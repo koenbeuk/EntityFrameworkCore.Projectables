@@ -389,7 +389,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         public override SyntaxNode? VisitInitializerExpression(InitializerExpressionSyntax node)
         {
             // Only handle object initializers that might contain indexer assignments
-            if (node.Kind() != SyntaxKind.ObjectInitializerExpression)
+            if (!node.IsKind(SyntaxKind.ObjectInitializerExpression))
             {
                 return base.VisitInitializerExpression(node);
             }

@@ -1922,10 +1922,11 @@ namespace Foo {
         }
 
         [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
-        public static Dictionary<string, string> ToDictionary(this Entity entity)
-            => new Dictionary<string, string> 
+        public static Dictionary<string, object> ToDictionary(this Entity entity)
+            => new Dictionary<string, object> 
             {
-                [""FullName""] = entity.FullName ?? ""N/A"" 
+                [""FullName""] = entity.FullName ?? ""N/A"",
+                [""Id""] = entity.Id.ToString(),
             };
     }
 }
@@ -1940,7 +1941,7 @@ namespace Foo {
         }
         
         [Fact]
-        public Task DictionaryObjectInitializer_IsNotBeingRewritten()
+        public Task DictionaryObjectInitializer_PreservesCollectionInitializerSyntax()
         {
             // lang=csharp
             var compilation = CreateCompilation(@"
