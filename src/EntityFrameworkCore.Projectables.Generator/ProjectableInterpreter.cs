@@ -188,29 +188,37 @@ namespace EntityFrameworkCore.Projectables.Generator
             // For extension methods, determine the target type and handle parameters
             if (methodSymbol is { IsExtensionMethod: true })
             {
-                // For extension methods, get the target type
-                // For traditional extensions: it's the type of the first parameter (with 'this' modifier)
-                // For C# 14 implicit extensions: it's the ReceiverType
-                ITypeSymbol targetTypeSymbol;
+                // Determine the extended type:
+                // - For traditional extensions (static): First parameter with 'this' modifier
+                // - For C# 14 implicit extensions (non-static): ReceiverType property
+                ITypeSymbol? targetTypeSymbol = null;
                 
-                // Check if this is a C# 14 implicit extension by checking if the method is non-static
-                // but IsExtensionMethod is true (traditional extensions are always static)
+                // Detect C# 14 implicit extension: IsExtensionMethod but not static
+                // Traditional extension methods are always static
                 isImplicitExtension = !member.Modifiers.Any(SyntaxKind.StaticKeyword);
                 
                 if (methodSymbol.ReceiverType is not null)
                 {
-                    // C# 14 implicit extension or Roslyn provides ReceiverType
+                    // ReceiverType is available (C# 14 implicit extension or newer Roslyn API)
                     targetTypeSymbol = methodSymbol.ReceiverType;
                 }
                 else if (methodSymbol.Parameters.Length > 0)
                 {
-                    // Traditional extension method with 'this' parameter
+                    // Traditional extension method: get type from first parameter
                     targetTypeSymbol = methodSymbol.Parameters.First().Type;
                 }
-                else
+                
+                if (targetTypeSymbol is null)
                 {
-                    // Shouldn't happen, but fallback to containing type
-                    targetTypeSymbol = memberSymbol.ContainingType;
+                    // Invalid extension method - neither ReceiverType nor parameters available
+                    // This shouldn't happen for valid extension methods, so report an error
+                    var diagnostic = Diagnostic.Create(
+                        Diagnostics.RequiresExpressionBodyDefinition, 
+                        member.GetLocation(), 
+                        memberSymbol.Name
+                    );
+                    context.ReportDiagnostic(diagnostic);
+                    return null;
                 }
                 
                 descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
