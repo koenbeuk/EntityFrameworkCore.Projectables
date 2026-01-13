@@ -182,8 +182,59 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
             }
 
-            if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
+            var methodSymbol = memberSymbol as IMethodSymbol;
+            bool isImplicitExtension = false;
+
+            // For extension methods, determine the target type and handle parameters
+            if (methodSymbol is { IsExtensionMethod: true })
             {
+                // For extension methods, get the target type
+                // For traditional extensions: it's the type of the first parameter (with 'this' modifier)
+                // For C# 14 implicit extensions: it's the ReceiverType
+                ITypeSymbol targetTypeSymbol;
+                
+                // Check if this is a C# 14 implicit extension by checking if the method is non-static
+                // but IsExtensionMethod is true (traditional extensions are always static)
+                isImplicitExtension = !member.Modifiers.Any(SyntaxKind.StaticKeyword);
+                
+                if (methodSymbol.ReceiverType is not null)
+                {
+                    // C# 14 implicit extension or Roslyn provides ReceiverType
+                    targetTypeSymbol = methodSymbol.ReceiverType;
+                }
+                else if (methodSymbol.Parameters.Length > 0)
+                {
+                    // Traditional extension method with 'this' parameter
+                    targetTypeSymbol = methodSymbol.Parameters.First().Type;
+                }
+                else
+                {
+                    // Shouldn't happen, but fallback to containing type
+                    targetTypeSymbol = memberSymbol.ContainingType;
+                }
+                
+                descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
+                descriptor.TargetNestedInClassNames = GetNestedInClassPath(targetTypeSymbol);
+                
+                // For C# 14 implicit extensions, add a synthetic receiver parameter
+                // For traditional extensions, the parameter will be added from the method's parameter list later
+                if (isImplicitExtension)
+                {
+                    descriptor.ParametersList = descriptor.ParametersList.AddParameters(
+                        SyntaxFactory.Parameter(
+                            SyntaxFactory.Identifier("@this")
+                        )
+                        .WithType(
+                            SyntaxFactory.ParseTypeName(
+                                targetTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                            )
+                        )
+                    );
+                }
+            }
+            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
+            {
+                // Non-extension instance member
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
                         SyntaxFactory.Identifier("@this")
@@ -194,18 +245,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                         )
                     )
                 );
-            }
-
-            var methodSymbol = memberSymbol as IMethodSymbol;
-
-            if (methodSymbol is { IsExtensionMethod: true })
-            {
-                var targetTypeSymbol = methodSymbol.Parameters.First().Type;
-                descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
-                descriptor.TargetNestedInClassNames = GetNestedInClassPath(targetTypeSymbol);
+                
+                descriptor.TargetClassNamespace = descriptor.ClassNamespace;
+                descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
             else
             {
+                // Static non-extension member
                 descriptor.TargetClassNamespace = descriptor.ClassNamespace;
                 descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
@@ -223,7 +269,13 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 descriptor.ReturnTypeName = returnType.ToString();
                 descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
-                foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
+                
+                var parameters = ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters;
+                
+                // Add parameters from the method declaration
+                // For traditional extension methods, all parameters (including the 'this' parameter) are in the parameter list
+                // For C# 14 implicit extensions, the receiver is not in the parameter list (we added it above)
+                foreach (var additionalParameter in parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
                 }

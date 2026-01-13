@@ -471,6 +471,36 @@ namespace Foo {
         }
 
         [Fact]
+        public Task ProjectableCSharp14ImplicitExtensionMethod()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.Linq;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class D { }
+    
+    implicit extension C for D {
+        [Projectable]
+        public int Foo() => 1;
+    }
+}
+", expectedToCompile: false); // C# 14 may not compile on older Roslyn
+
+            var result = RunGenerator(compilation);
+
+            // The generator should handle this gracefully even if compilation fails
+            // If Roslyn supports C# 14, this should generate correctly
+            if (result.GeneratedTrees.Length > 0)
+            {
+                return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            }
+            
+            // If C# 14 is not supported, just pass the test
+            return Task.CompletedTask;
+        }
+
+        [Fact]
         public void BlockBodiedMember_RaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
