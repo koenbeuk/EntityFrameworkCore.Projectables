@@ -287,9 +287,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             if (_extensionParameterName is not null && node.Identifier.Text == _extensionParameterName)
             {
                 var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+                
                 // Check if this identifier refers to the extension parameter
-                if (symbol is IParameterSymbol paramSymbol && 
-                    paramSymbol.ContainingSymbol is INamedTypeSymbol { IsExtension: true })
+                if (symbol is IParameterSymbol { ContainingSymbol: INamedTypeSymbol { IsExtension: true } })
                 {
                     return SyntaxFactory.IdentifierName("@this")
                         .WithLeadingTrivia(node.GetLeadingTrivia())

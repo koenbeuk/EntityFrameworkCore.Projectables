@@ -1902,11 +1902,11 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
-#if NET10_0
+#if NET10_0_OR_GREATER
         [Fact]
         public Task ExtensionMemberProperty()
         {
-            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+            var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
 
@@ -1935,7 +1935,7 @@ namespace Foo {
         [Fact]
         public Task ExtensionMemberMethod()
         {
-            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+            var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
 
@@ -1964,7 +1964,7 @@ namespace Foo {
         [Fact]
         public Task ExtensionMemberMethodWithParameters()
         {
-            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+            var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
 
@@ -1993,7 +1993,7 @@ namespace Foo {
         [Fact]
         public Task ExtensionMemberOnPrimitive()
         {
-            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+            var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
 
@@ -2016,7 +2016,7 @@ static class IntExtensions {
         [Fact]
         public Task ExtensionMemberWithMemberAccess()
         {
-            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+            var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
 
@@ -2090,50 +2090,6 @@ namespace Foo {
 
             return compilation;
         }
-
-#if NET10_0
-        /// <summary>
-        /// Creates a compilation with preview language version to support C# 14 features like extension members.
-        /// </summary>
-        Compilation CreateCompilationWithPreviewLanguageVersion(string source, bool expectedToCompile = true)
-        {
-            var references = Basic.Reference.Assemblies.Net100.References.All.ToList();
-            
-            references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
-
-            var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-
-            var compilation = CSharpCompilation.Create("compilation",
-                new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
-                references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-#if DEBUG
-
-            if (expectedToCompile)
-            {
-                var compilationDiagnostics = compilation.GetDiagnostics();
-
-                if (!compilationDiagnostics.IsEmpty)
-                {
-                    _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
-
-                    foreach (var diagnostic in compilationDiagnostics)
-                    {
-                        _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
-                    }
-
-                    if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
-                    {
-                        Debug.Fail("Compilation diagnostics produced");
-                    }
-                }
-            }
-#endif
-
-            return compilation;
-        }
-#endif
 
         private GeneratorDriverRunResult RunGenerator(Compilation compilation)
         {

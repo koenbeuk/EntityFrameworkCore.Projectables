@@ -31,11 +31,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             // For extension members, the ContainingType is the extension block,
             // and its ContainingType is the outer class (e.g., EntityExtensions)
             var outerType = extensionType.ContainingType;
+            
             if (outerType is not null)
             {
                 return GetNestedInClassPath(outerType);
             }
-            return Enumerable.Empty<string>();
+            
+            return [];
         }
 
         public static ProjectableDescriptor? GetDescriptor(Compilation compilation, MemberDeclarationSyntax member, SourceProductionContext context)
@@ -132,11 +134,11 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             // Check if this member is inside a C# 14 extension block
-            var isExtensionMember = memberSymbol.ContainingType is INamedTypeSymbol { IsExtension: true };
+            var isExtensionMember = memberSymbol.ContainingType is { IsExtension: true };
             IParameterSymbol? extensionParameter = null;
             ITypeSymbol? extensionReceiverType = null;
             
-            if (isExtensionMember && memberSymbol.ContainingType is INamedTypeSymbol extensionType)
+            if (isExtensionMember && memberSymbol.ContainingType is { } extensionType)
             {
                 extensionParameter = extensionType.ExtensionParameter;
                 extensionReceiverType = extensionParameter?.Type;
@@ -160,8 +162,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ? memberSymbol.ContainingType.ContainingType
                 : memberSymbol.ContainingType;
 
-            var descriptor = new ProjectableDescriptor {
-
+            var descriptor = new ProjectableDescriptor
+            {
                 UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
                 ClassName = classForNaming.Name,
                 ClassNamespace = classForNaming.ContainingNamespace.IsGlobalNamespace ? null : classForNaming.ContainingNamespace.ToDisplayString(),
@@ -172,11 +174,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ParametersList = SyntaxFactory.ParameterList()
             };
 
-            if (classForNaming is INamedTypeSymbol { IsGenericType: true } containingNamedType)
+            if (classForNaming is { IsGenericType: true })
             {
                 descriptor.ClassTypeParameterList = SyntaxFactory.TypeParameterList();
 
-                foreach (var additionalClassTypeParameter in containingNamedType.TypeParameters)
+                foreach (var additionalClassTypeParameter in classForNaming.TypeParameters)
                 {
                     descriptor.ClassTypeParameterList = descriptor.ClassTypeParameterList.AddParameters(
                         SyntaxFactory.TypeParameter(additionalClassTypeParameter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
