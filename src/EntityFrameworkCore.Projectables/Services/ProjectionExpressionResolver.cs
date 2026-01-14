@@ -128,6 +128,13 @@ namespace EntityFrameworkCore.Projectables.Services
                     return type.Name;
                 }
                 
+                // Handle nullable value types (e.g., int? -> int?)
+                var underlyingType = Nullable.GetUnderlyingType(type);
+                if (underlyingType != null)
+                {
+                    return $"{GetFullTypeName(underlyingType)}?";
+                }
+                
                 // Handle array types
                 if (type.IsArray)
                 {
