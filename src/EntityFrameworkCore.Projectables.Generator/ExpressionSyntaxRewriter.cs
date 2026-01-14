@@ -18,13 +18,15 @@ namespace EntityFrameworkCore.Projectables.Generator
         readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
         readonly SourceProductionContext _context;
         readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
+        readonly string? _extensionParameterName;
         
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, SemanticModel semanticModel, SourceProductionContext context)
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, SemanticModel semanticModel, SourceProductionContext context, string? extensionParameterName = null)
         {
             _targetTypeSymbol = targetTypeSymbol;
             _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
             _semanticModel = semanticModel;
             _context = context;
+            _extensionParameterName = extensionParameterName;
         }
 
         private SyntaxNode? VisitThisBaseExpression(CSharpSyntaxNode node)
@@ -281,8 +283,22 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
-            if (symbol is not null)
+            // Handle C# 14 extension parameter replacement (e.g., `e` in `extension(Entity e)` becomes `@this`)
+            if (_extensionParameterName is not null && node.Identifier.Text == _extensionParameterName)
+            {
+                var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+                // Check if this identifier refers to the extension parameter
+                if (symbol is IParameterSymbol paramSymbol && 
+                    paramSymbol.ContainingSymbol is INamedTypeSymbol { IsExtension: true })
+                {
+                    return SyntaxFactory.IdentifierName("@this")
+                        .WithLeadingTrivia(node.GetLeadingTrivia())
+                        .WithTrailingTrivia(node.GetTrailingTrivia());
+                }
+            }
+
+            var identifierSymbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            if (identifierSymbol is not null)
             {
                 var operation = node switch { { Parent: { } parent } when parent.IsKind(SyntaxKind.InvocationExpression) => _semanticModel.GetOperation(node.Parent),
                     _ => _semanticModel.GetOperation(node!)
@@ -337,10 +353,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
 
                 // if this node refers to a named type which is not yet fully qualified, we want to fully qualify it
-                if (symbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
+                if (identifierSymbol.Kind is SymbolKind.NamedType && node.Parent?.Kind() is not SyntaxKind.QualifiedName)
                 {
                     return SyntaxFactory.ParseTypeName(
-                        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        identifierSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                     ).WithLeadingTrivia(node.GetLeadingTrivia());
                 }
             }

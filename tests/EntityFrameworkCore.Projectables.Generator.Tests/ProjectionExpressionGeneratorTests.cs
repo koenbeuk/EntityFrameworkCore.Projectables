@@ -1902,6 +1902,148 @@ class EntityBase<TId> where TId : ICloneable, new() {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+#if NET10_0
+        [Fact]
+        public Task ExtensionMemberProperty()
+        {
+            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int DoubleId => e.Id * 2;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethod()
+        {
+            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int TripleId() => e.Id * 3;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethodWithParameters()
+        {
+            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int Multiply(int factor) => e.Id * factor;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberOnPrimitive()
+        {
+            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+static class IntExtensions {
+    extension(int i) {
+        [Projectable]
+        public int Squared => i * i;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberWithMemberAccess()
+        {
+            var compilation = CreateCompilationWithPreviewLanguageVersion(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public string IdAndName => e.Id + "": "" + e.Name;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+#endif
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
@@ -1948,6 +2090,50 @@ class EntityBase<TId> where TId : ICloneable, new() {
 
             return compilation;
         }
+
+#if NET10_0
+        /// <summary>
+        /// Creates a compilation with preview language version to support C# 14 features like extension members.
+        /// </summary>
+        Compilation CreateCompilationWithPreviewLanguageVersion(string source, bool expectedToCompile = true)
+        {
+            var references = Basic.Reference.Assemblies.Net100.References.All.ToList();
+            
+            references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
+
+            var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+
+            var compilation = CSharpCompilation.Create("compilation",
+                new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+                references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+#if DEBUG
+
+            if (expectedToCompile)
+            {
+                var compilationDiagnostics = compilation.GetDiagnostics();
+
+                if (!compilationDiagnostics.IsEmpty)
+                {
+                    _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
+
+                    foreach (var diagnostic in compilationDiagnostics)
+                    {
+                        _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
+                    }
+
+                    if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
+                    {
+                        Debug.Fail("Compilation diagnostics produced");
+                    }
+                }
+            }
+#endif
+
+            return compilation;
+        }
+#endif
 
         private GeneratorDriverRunResult RunGenerator(Compilation compilation)
         {
