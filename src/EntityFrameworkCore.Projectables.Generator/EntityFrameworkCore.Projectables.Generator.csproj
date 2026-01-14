@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	<TargetFramework>netstandard2.0</TargetFramework>
+    <!-- Override TargetFrameworks with an "s" from Directory.Build.props settings as needed -->
+    <TargetFrameworks>netstandard2.0;</TargetFrameworks>
 	<NoWarn>$(NoWarn);NU5128</NoWarn>
 	<IsPackable>false</IsPackable>
 	<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>

@@ -10,7 +10,9 @@
   </ItemGroup>
 
   <ItemGroup>
-	<PackageReference Include="Basic.Reference.Assemblies.Net80" />
+	<PackageReference Include="Basic.Reference.Assemblies.Net80"  Condition="'$(TargetFramework)' == 'net8.0'" />
+	<PackageReference Include="Basic.Reference.Assemblies.Net90"  Condition="'$(TargetFramework)' == 'net9.0'" />
+	<PackageReference Include="Basic.Reference.Assemblies.Net100" Condition="'$(TargetFramework)' == 'net10.0'" />
 	<PackageReference Include="coverlet.collector">
 	  <PrivateAssets>all</PrivateAssets>
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

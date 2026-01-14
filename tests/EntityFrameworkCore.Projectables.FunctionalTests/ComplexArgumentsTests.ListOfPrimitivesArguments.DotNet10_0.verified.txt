@@ -1,0 +1,7 @@
+﻿DECLARE @validList1 int = 1;
+DECLARE @validList2 int = 2;
+DECLARE @validList3 int = 3;
+
+SELECT [t].[Id]
+FROM [TestEntity] AS [t]
+WHERE [t].[Id] IN (@validList1, @validList2, @validList3)

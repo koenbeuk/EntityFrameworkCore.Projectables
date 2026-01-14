@@ -1966,7 +1966,16 @@ namespace Foo {
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
         {
-            var references = Basic.Reference.Assemblies.Net80.References.All.ToList();
+            var references = Basic.Reference.Assemblies.
+#if NET10_0
+                Net100
+#elif NET9_0
+                Net90
+#elif NET8_0
+                Net80
+#endif
+                .References.All.ToList();
+            
             references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
 
             var compilation = CSharpCompilation.Create("compilation",
