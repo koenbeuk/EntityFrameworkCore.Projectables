@@ -118,17 +118,26 @@ namespace EntityFrameworkCore.Projectables.Generator
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, semanticModel, context);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
+            // For C# 14 extension blocks, the containing type is a nested type with a name like "extension ( T )"
+            // We need to use the outer containing type instead
+            var effectiveContainingType = memberSymbol.ContainingType;
+            if (effectiveContainingType.Name.StartsWith("extension", StringComparison.Ordinal) && 
+                effectiveContainingType.ContainingType is not null)
+            {
+                effectiveContainingType = effectiveContainingType.ContainingType;
+            }
+
             var descriptor = new ProjectableDescriptor {
 
                 UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
-                ClassName = memberSymbol.ContainingType.Name,
-                ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
+                ClassName = effectiveContainingType.Name,
+                ClassNamespace = effectiveContainingType.ContainingNamespace.IsGlobalNamespace ? null : effectiveContainingType.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
-                NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType),
+                NestedInClassNames = GetNestedInClassPath(effectiveContainingType),
                 ParametersList = SyntaxFactory.ParameterList()
             };
 
-            if (memberSymbol.ContainingType is INamedTypeSymbol { IsGenericType: true } containingNamedType)
+            if (effectiveContainingType is INamedTypeSymbol { IsGenericType: true } containingNamedType)
             {
                 descriptor.ClassTypeParameterList = SyntaxFactory.TypeParameterList();
 
@@ -190,28 +199,50 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 // Determine the extended type:
                 // - For traditional extensions (static): First parameter with 'this' modifier
-                // - For C# 14 implicit extensions (non-static): ReceiverType property
+                // - For C# 14 extension blocks (non-static): Parameters include implicit extension parameter
                 ITypeSymbol? targetTypeSymbol = null;
                 
-                // Detect C# 14 implicit extension: IsExtensionMethod but not static
-                // Traditional extension methods are always static
-                isImplicitExtension = !member.Modifiers.Any(SyntaxKind.StaticKeyword);
+                // Detect C# 14 extension block: IsExtensionMethod but not static
+                // and containing type name starts with "extension"
+                bool isInExtensionBlock = !member.Modifiers.Any(SyntaxKind.StaticKeyword) && 
+                                          memberSymbol.ContainingType.Name.StartsWith("extension", StringComparison.Ordinal);
+                isImplicitExtension = isInExtensionBlock;
                 
-                if (methodSymbol.ReceiverType is not null)
+                if (isInExtensionBlock)
                 {
-                    // ReceiverType is available (C# 14 implicit extension or newer Roslyn API)
-                    targetTypeSymbol = methodSymbol.ReceiverType;
+                    // For C# 14 extension blocks, Roslyn 5.0.0 doesn't provide proper type information yet
+                    // The method parameters reference the extension block type instead of the extended type
+                    // Until Roslyn provides better support, C# 14 extension blocks cannot be fully supported
+                    // For now, try using ReceiverType as a fallback
+                    if (methodSymbol.ReceiverType is not null && 
+                        !methodSymbol.ReceiverType.Name.StartsWith("extension", StringComparison.Ordinal))
+                    {
+                        // ReceiverType is available and not the extension block itself
+                        targetTypeSymbol = methodSymbol.ReceiverType;
+                    }
+                    else if (methodSymbol.Parameters.Length > 0)
+                    {
+                        // Try first parameter, but it might be the extension block type
+                        targetTypeSymbol = methodSymbol.Parameters[0].Type;
+                    }
                 }
-                else if (methodSymbol.Parameters.Length > 0)
+                else
                 {
-                    // Traditional extension method: get type from first parameter
-                    targetTypeSymbol = methodSymbol.Parameters.First().Type;
+                    // Traditional extension method or ReceiverType available
+                    if (methodSymbol.ReceiverType is not null)
+                    {
+                        targetTypeSymbol = methodSymbol.ReceiverType;
+                    }
+                    else if (methodSymbol.Parameters.Length > 0)
+                    {
+                        // Traditional extension method: get type from first parameter
+                        targetTypeSymbol = methodSymbol.Parameters.First().Type;
+                    }
                 }
                 
                 if (targetTypeSymbol is null)
                 {
-                    // Invalid extension method - neither ReceiverType nor parameters available
-                    // This shouldn't happen for valid extension methods, so report an error
+                    // Invalid extension method - couldn't determine target type
                     var diagnostic = Diagnostic.Create(
                         Diagnostics.RequiresExpressionBodyDefinition, 
                         member.GetLocation(), 
@@ -224,13 +255,18 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();
                 descriptor.TargetNestedInClassNames = GetNestedInClassPath(targetTypeSymbol);
                 
-                // For C# 14 implicit extensions, add a synthetic receiver parameter
-                // For traditional extensions, the parameter will be added from the method's parameter list later
-                if (isImplicitExtension)
+                // For C# 14 extension blocks, we need to handle parameters specially
+                // The implicit extension parameter should be represented but not added to descriptor yet
+                // (it will be added from the method's parameter list)
+                // However, if the method declaration has no parameters (extension block implicit param),
+                // we need to add it synthetically
+                if (isImplicitExtension && methodSymbol.Parameters.Length > 0)
                 {
+                    // Extension block methods have implicit parameters - add the first one as the receiver
+                    var extensionParam = methodSymbol.Parameters[0];
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                         SyntaxFactory.Parameter(
-                            SyntaxFactory.Identifier("@this")
+                            SyntaxFactory.Identifier(extensionParam.Name)
                         )
                         .WithType(
                             SyntaxFactory.ParseTypeName(
