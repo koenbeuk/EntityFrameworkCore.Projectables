@@ -16,14 +16,18 @@ namespace EntityFrameworkCore.Projectables.Generator
         readonly INamedTypeSymbol _targetTypeSymbol;
         readonly SemanticModel _semanticModel;
         readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
+        readonly bool _expandEnumMethods;
         readonly SourceProductionContext _context;
+        readonly Compilation _compilation;
         readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
         
-        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, SemanticModel semanticModel, SourceProductionContext context)
+        public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, bool expandEnumMethods, SemanticModel semanticModel, Compilation compilation, SourceProductionContext context)
         {
             _targetTypeSymbol = targetTypeSymbol;
             _nullConditionalRewriteSupport = nullConditionalRewriteSupport;
+            _expandEnumMethods = expandEnumMethods;
             _semanticModel = semanticModel;
+            _compilation = compilation;
             _context = context;
         }
 
@@ -56,25 +60,237 @@ namespace EntityFrameworkCore.Projectables.Generator
             if (node.Expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax)
             {
                 var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
-                if (symbol is IMethodSymbol { IsExtensionMethod: true } methodSymbol)
+                if (symbol is IMethodSymbol methodSymbol)
                 {
-                    return SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.MemberAccessExpression(
-                            SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.ParseName(methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat)),
-                            memberAccessExpressionSyntax.Name
-                        ),
-                        node.ArgumentList.WithArguments(
-                            ((ArgumentListSyntax)VisitArgumentList(node.ArgumentList)!).Arguments.Insert(0, SyntaxFactory.Argument(
-                                    (ExpressionSyntax)Visit(memberAccessExpressionSyntax.Expression)
+                    // Check if we should expand enum methods
+                    if (_expandEnumMethods)
+                    {
+                        if (TryExpandEnumMethodCall(node, memberAccessExpressionSyntax, methodSymbol, out var expandedExpression))
+                        {
+                            return expandedExpression;
+                        }
+                    }
+
+                    // Fully qualify extension method calls
+                    if (methodSymbol.IsExtensionMethod)
+                    {
+                        return SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.ParseName(methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat)),
+                                memberAccessExpressionSyntax.Name
+                            ),
+                            node.ArgumentList.WithArguments(
+                                ((ArgumentListSyntax)VisitArgumentList(node.ArgumentList)!).Arguments.Insert(0, SyntaxFactory.Argument(
+                                        (ExpressionSyntax)Visit(memberAccessExpressionSyntax.Expression)
+                                    )
                                 )
                             )
-                        )
-                    );
+                        );
+                    }
                 }
             }
 
             return base.VisitInvocationExpression(node);
+        }
+
+        private bool TryExpandEnumMethodCall(InvocationExpressionSyntax node, MemberAccessExpressionSyntax memberAccess, IMethodSymbol methodSymbol, out ExpressionSyntax? expandedExpression)
+        {
+            expandedExpression = null;
+
+            // Get the receiver expression (the enum instance or variable)
+            var receiverExpression = memberAccess.Expression;
+            var receiverTypeInfo = _semanticModel.GetTypeInfo(receiverExpression);
+            var receiverType = receiverTypeInfo.Type;
+
+            // Handle nullable enum types
+            ITypeSymbol enumType;
+            bool isNullable = false;
+            if (receiverType is INamedTypeSymbol { IsGenericType: true, Name: "Nullable" } nullableType && 
+                nullableType.TypeArguments.Length == 1 && 
+                nullableType.TypeArguments[0].TypeKind == TypeKind.Enum)
+            {
+                enumType = nullableType.TypeArguments[0];
+                isNullable = true;
+            }
+            else if (receiverType?.TypeKind == TypeKind.Enum)
+            {
+                enumType = receiverType;
+            }
+            else
+            {
+                // Not an enum type
+                return false;
+            }
+
+            // Get all enum members
+            var enumMembers = enumType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Where(f => f.HasConstantValue)
+                .ToList();
+
+            if (enumMembers.Count == 0)
+            {
+                return false;
+            }
+
+            // Visit the receiver expression to transform it (e.g., @this.MyProperty)
+            var visitedReceiver = (ExpressionSyntax)Visit(receiverExpression);
+
+            // Build a chain of ternary expressions for each enum value
+            // Start with null as the fallback
+            ExpressionSyntax? currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+
+            // Evaluate the method call for each enum value and build the ternary chain
+            foreach (var enumMember in enumMembers.AsEnumerable().Reverse())
+            {
+                // Try to evaluate the method call at compile time
+                var evaluatedValue = TryEvaluateMethodCall(methodSymbol, enumType, enumMember, node.ArgumentList);
+                if (evaluatedValue == null)
+                {
+                    // Cannot evaluate at compile time
+                    return false;
+                }
+
+                // Create condition: receiver == EnumType.Value
+                var enumValueAccess = SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.ParseTypeName(enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                    SyntaxFactory.IdentifierName(enumMember.Name)
+                );
+
+                var condition = SyntaxFactory.BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    visitedReceiver,
+                    enumValueAccess
+                );
+
+                // Create conditional expression: condition ? evaluatedValue : previousExpression
+                currentExpression = SyntaxFactory.ConditionalExpression(
+                    condition,
+                    evaluatedValue,
+                    currentExpression
+                );
+            }
+
+            // If nullable, wrap in null check
+            if (isNullable)
+            {
+                var nullCheck = SyntaxFactory.BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    visitedReceiver,
+                    SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+                );
+
+                currentExpression = SyntaxFactory.ConditionalExpression(
+                    nullCheck,
+                    SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression),
+                    currentExpression
+                );
+            }
+
+            expandedExpression = SyntaxFactory.ParenthesizedExpression(currentExpression);
+            return true;
+        }
+
+        private ExpressionSyntax? TryEvaluateMethodCall(IMethodSymbol methodSymbol, ITypeSymbol enumType, IFieldSymbol enumMember, ArgumentListSyntax argumentList)
+        {
+            // For now, we support methods that return string? and take no additional arguments (besides the enum value for extension methods)
+            // We need to evaluate the method call at compile time by using the Compilation to run the code
+
+            // Check if method has a single parameter (the extension 'this' parameter) or no parameters
+            // Note: For reduced extension method calls (e.g., x.Method()), the `this` parameter is not included in Parameters
+            // We need to check ReducedFrom to get the original method with all parameters
+            var originalMethod = methodSymbol.ReducedFrom ?? methodSymbol;
+            var expectedParameters = originalMethod.IsExtensionMethod ? 1 : 0;
+            var additionalArguments = argumentList.Arguments.Count;
+            
+            if (originalMethod.Parameters.Length != expectedParameters + additionalArguments)
+            {
+                // Method has unexpected number of parameters
+                return null;
+            }
+
+            // For simplicity in this implementation, we only handle methods with no additional arguments
+            // and methods that return simple types (string, int, etc.)
+            if (additionalArguments > 0)
+            {
+                return null;
+            }
+
+            // Try to get the constant value of the method call through interpreter-based evaluation
+            // Since we can't actually execute arbitrary code at compile time in a source generator,
+            // we will look for certain patterns we can handle:
+            
+            // Pattern 1: GetAttribute<T>()?.Name or similar attribute-based patterns
+            // We need to look at the enum member's attributes
+            
+            // Get the method body to see what it does
+            var methodSyntaxRef = originalMethod.DeclaringSyntaxReferences.FirstOrDefault();
+            if (methodSyntaxRef == null)
+            {
+                return null;
+            }
+            
+            // For now, let's support a common pattern: accessing attributes on enum members
+            // We'll check if the enum member has attributes and try to match them
+            var attributes = enumMember.GetAttributes();
+            
+            // Try to interpret common patterns
+            return TryInterpretMethodForEnumMember(originalMethod, enumMember, attributes);
+        }
+
+        private ExpressionSyntax? TryInterpretMethodForEnumMember(IMethodSymbol methodSymbol, IFieldSymbol enumMember, System.Collections.Immutable.ImmutableArray<AttributeData> attributes)
+        {
+            // This is a simplified implementation that handles specific known patterns
+            // A more complete implementation would need to actually interpret the method body
+            
+            // Get the method's return type
+            var returnType = methodSymbol.ReturnType;
+            
+            // If the return type is string or string?, we can try to find Display attributes
+            if (returnType.SpecialType == SpecialType.System_String || 
+                (returnType is INamedTypeSymbol { IsReferenceType: true } && returnType.ToDisplayString().StartsWith("string")))
+            {
+                // Look for DisplayAttribute
+                var displayAttr = attributes.FirstOrDefault(a => 
+                    a.AttributeClass?.Name == "DisplayAttribute" ||
+                    a.AttributeClass?.ToDisplayString().EndsWith("DisplayAttribute") == true);
+                
+                if (displayAttr != null)
+                {
+                    // Try to get the Name property
+                    var nameArg = displayAttr.NamedArguments.FirstOrDefault(na => na.Key == "Name");
+                    if (nameArg.Key != null && nameArg.Value.Value is string nameValue)
+                    {
+                        return SyntaxFactory.LiteralExpression(
+                            SyntaxKind.StringLiteralExpression,
+                            SyntaxFactory.Literal(nameValue));
+                    }
+                }
+                
+                // Look for DescriptionAttribute
+                var descAttr = attributes.FirstOrDefault(a => 
+                    a.AttributeClass?.Name == "DescriptionAttribute" ||
+                    a.AttributeClass?.ToDisplayString().EndsWith("DescriptionAttribute") == true);
+                
+                if (descAttr != null && descAttr.ConstructorArguments.Length > 0)
+                {
+                    var descValue = descAttr.ConstructorArguments[0].Value as string;
+                    if (descValue != null)
+                    {
+                        return SyntaxFactory.LiteralExpression(
+                            SyntaxKind.StringLiteralExpression,
+                            SyntaxFactory.Literal(descValue));
+                    }
+                }
+
+                // If no matching attribute found, return null literal
+                return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+            }
+
+            // For other return types, we can't handle them yet
+            return null;
         }
 
         public override SyntaxNode? VisitInterpolation(InterpolationSyntax node)

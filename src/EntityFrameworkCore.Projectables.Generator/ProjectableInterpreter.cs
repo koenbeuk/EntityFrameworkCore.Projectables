@@ -57,6 +57,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .OfType<string?>()
                 .FirstOrDefault();
 
+            var expandEnumMethods = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "ExpandEnumMethods")
+                .Select(x => x.Value.Value is bool b && b)
+                .FirstOrDefault();
+
             var memberBody = member;
 
             if (useMemberBody is not null)
@@ -115,7 +120,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (memberBody is null) return null;
             }
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, semanticModel, context);
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, expandEnumMethods, semanticModel, compilation, context);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {

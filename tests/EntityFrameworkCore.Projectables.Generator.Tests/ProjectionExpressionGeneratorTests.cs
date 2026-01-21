@@ -1977,6 +1977,144 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ExpandEnumMethodsWithDisplayAttribute()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum CustomEnum
+    {
+        [Display(Name = ""Value 1"")]
+        Value1,
+        
+        [Display(Name = ""Value 2"")]
+        Value2,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayName(this CustomEnum value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public CustomEnum MyValue { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string MyEnumName => MyValue.GetDisplayName();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithNullableEnum()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum CustomEnum
+    {
+        [Display(Name = ""First Value"")]
+        First,
+        
+        [Display(Name = ""Second Value"")]
+        Second,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayName(this CustomEnum value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public CustomEnum? MyValue { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string MyEnumName => MyValue.HasValue ? MyValue.Value.GetDisplayName() : null;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithDescriptionAttribute()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Status
+    {
+        [Description(""The item is pending"")]
+        Pending,
+        
+        [Description(""The item is approved"")]
+        Approved,
+        
+        [Description(""The item is rejected"")]
+        Rejected,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDescription(this Status value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Status Status { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string StatusDescription => Status.GetDescription();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
