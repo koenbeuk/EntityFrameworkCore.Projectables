@@ -1,0 +1,10 @@
+﻿SELECT CASE
+    WHEN [o].[Priority] IS NOT NULL THEN CASE
+        WHEN [o].[Priority] = 0 THEN N'Low Priority'
+        WHEN [o].[Priority] = 1 THEN N'Medium Priority'
+        WHEN [o].[Priority] = 2 THEN N'High Priority'
+        ELSE NULL
+    END
+    ELSE NULL
+END
+FROM [Order] AS [o]

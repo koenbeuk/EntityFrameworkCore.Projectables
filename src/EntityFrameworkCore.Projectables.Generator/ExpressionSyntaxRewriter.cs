@@ -138,7 +138,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             foreach (var enumMember in enumMembers.AsEnumerable().Reverse())
             {
                 // Try to evaluate the method call at compile time
-                var evaluatedValue = EnumMethodCallEvaluator.TryEvaluateMethodCall(methodSymbol, enumType, enumMember, node.ArgumentList);
+                var evaluatedValue = EnumMethodCallEvaluator.TryEvaluateMethodCall(methodSymbol, enumType, enumMember, node.ArgumentList, _context, node.GetLocation());
                 if (evaluatedValue == null)
                 {
                     // Cannot evaluate at compile time

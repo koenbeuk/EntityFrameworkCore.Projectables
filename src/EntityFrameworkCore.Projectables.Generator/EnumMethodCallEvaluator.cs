@@ -6,103 +6,131 @@ namespace EntityFrameworkCore.Projectables.Generator;
 
 static internal class EnumMethodCallEvaluator
 {
-    static internal ExpressionSyntax? TryEvaluateMethodCall(IMethodSymbol methodSymbol, ITypeSymbol enumType, IFieldSymbol enumMember, ArgumentListSyntax argumentList)
-    {
-        // For now, we support methods that return string? and take no additional arguments (besides the enum value for extension methods)
-        // We need to evaluate the method call at compile time by using the Compilation to run the code
+    private const string ProjectableEnumMethodAttributeName = "EntityFrameworkCore.Projectables.ProjectableEnumMethodAttribute";
 
-        // Check if method has a single parameter (the extension 'this' parameter) or no parameters
-        // Note: For reduced extension method calls (e.g., x.Method()), the `this` parameter is not included in Parameters
-        // We need to check ReducedFrom to get the original method with all parameters
+    /// <summary>
+    /// Tries to evaluate an enum method call at compile time using the ProjectableEnumMethodAttribute.
+    /// </summary>
+    /// <param name="methodSymbol">The method symbol being called.</param>
+    /// <param name="enumType">The enum type.</param>
+    /// <param name="enumMember">The specific enum member to evaluate.</param>
+    /// <param name="argumentList">The argument list of the invocation.</param>
+    /// <param name="context">The source production context for reporting diagnostics.</param>
+    /// <param name="location">The location for diagnostic reporting.</param>
+    /// <returns>The evaluated expression, or null if evaluation failed.</returns>
+    static internal ExpressionSyntax? TryEvaluateMethodCall(
+        IMethodSymbol methodSymbol, 
+        ITypeSymbol enumType, 
+        IFieldSymbol enumMember, 
+        ArgumentListSyntax argumentList,
+        SourceProductionContext context,
+        Location? location)
+    {
+        // Get the original method (in case of reduced extension method)
         var originalMethod = methodSymbol.ReducedFrom ?? methodSymbol;
         var expectedParameters = originalMethod.IsExtensionMethod ? 1 : 0;
         var additionalArguments = argumentList.Arguments.Count;
             
         if (originalMethod.Parameters.Length != expectedParameters + additionalArguments)
         {
-            // Method has unexpected number of parameters
             return null;
         }
 
         // For simplicity in this implementation, we only handle methods with no additional arguments
-        // and methods that return simple types (string, int, etc.)
         if (additionalArguments > 0)
         {
             return null;
         }
 
-        // Try to get the constant value of the method call through interpreter-based evaluation
-        // Since we can't actually execute arbitrary code at compile time in a source generator,
-        // we will look for certain patterns we can handle:
-            
-        // Pattern 1: GetAttribute<T>()?.Name or similar attribute-based patterns
-        // We need to look at the enum member's attributes
-            
-        // Get the method body to see what it does
-        var methodSyntaxRef = originalMethod.DeclaringSyntaxReferences.FirstOrDefault();
-        if (methodSyntaxRef == null)
+        // Look for ProjectableEnumMethodAttribute on the method
+        var projectableEnumMethodAttr = originalMethod.GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == ProjectableEnumMethodAttributeName);
+
+        if (projectableEnumMethodAttr == null)
         {
+            // Report diagnostic for missing attribute
+            var diagnostic = Diagnostic.Create(
+                Diagnostics.MissingProjectableEnumMethodAttribute, 
+                location, 
+                originalMethod.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat));
+            context.ReportDiagnostic(diagnostic);
             return null;
         }
-            
-        // For now, let's support a common pattern: accessing attributes on enum members
-        // We'll check if the enum member has attributes and try to match them
-        var attributes = enumMember.GetAttributes();
-            
-        // Try to interpret common patterns
-        return TryInterpretMethodForEnumMember(originalMethod, enumMember, attributes);
-    }
 
-    private static ExpressionSyntax? TryInterpretMethodForEnumMember(IMethodSymbol methodSymbol, IFieldSymbol enumMember, System.Collections.Immutable.ImmutableArray<AttributeData> attributes)
-    {
-        // This is a simplified implementation that handles specific known patterns
-        // A more complete implementation would need to actually interpret the method body
-            
-        // Get the method's return type
-        var returnType = methodSymbol.ReturnType;
-            
-        // If the return type is string or string?, we can try to find Display attributes
-        if (returnType.SpecialType == SpecialType.System_String || 
-            (returnType is INamedTypeSymbol { IsReferenceType: true } && returnType.ToDisplayString().StartsWith("string")))
+        // Parse the attribute arguments
+        INamedTypeSymbol? attributeType = null;
+        string? propertyName = null;
+
+        if (projectableEnumMethodAttr.ConstructorArguments.Length >= 1)
         {
-            // Look for DisplayAttribute
-            var displayAttr = attributes.FirstOrDefault(a => 
-                a.AttributeClass?.Name == "DisplayAttribute" ||
-                a.AttributeClass?.ToDisplayString().EndsWith("DisplayAttribute") == true);
-                
-            if (displayAttr != null)
-            {
-                // Try to get the Name property
-                var nameArg = displayAttr.NamedArguments.FirstOrDefault(na => na.Key == "Name");
-                if (nameArg.Key != null && nameArg.Value.Value is string nameValue)
-                {
-                    return SyntaxFactory.LiteralExpression(
-                        SyntaxKind.StringLiteralExpression,
-                        SyntaxFactory.Literal(nameValue));
-                }
-            }
-                
-            // Look for DescriptionAttribute
-            var descAttr = attributes.FirstOrDefault(a => 
-                a.AttributeClass?.Name == "DescriptionAttribute" ||
-                a.AttributeClass?.ToDisplayString().EndsWith("DescriptionAttribute") == true);
-                
-            if (descAttr != null && descAttr.ConstructorArguments.Length > 0)
-            {
-                var descValue = descAttr.ConstructorArguments[0].Value as string;
-                if (descValue != null)
-                {
-                    return SyntaxFactory.LiteralExpression(
-                        SyntaxKind.StringLiteralExpression,
-                        SyntaxFactory.Literal(descValue));
-                }
-            }
+            attributeType = projectableEnumMethodAttr.ConstructorArguments[0].Value as INamedTypeSymbol;
+        }
 
-            // If no matching attribute found, return null literal
+        if (projectableEnumMethodAttr.ConstructorArguments.Length >= 2)
+        {
+            propertyName = projectableEnumMethodAttr.ConstructorArguments[1].Value as string;
+        }
+
+        // Get the enum member's attributes
+        var enumMemberAttributes = enumMember.GetAttributes();
+
+        // If no attribute type specified, we can't evaluate
+        if (attributeType == null)
+        {
+            // Try to infer from generic type argument if present
+            if (originalMethod.TypeArguments.Length > 0)
+            {
+                attributeType = originalMethod.TypeArguments[0] as INamedTypeSymbol;
+            }
+            
+            if (attributeType == null)
+            {
+                return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+            }
+        }
+
+        // Find the matching attribute on the enum member
+        var matchingAttr = enumMemberAttributes.FirstOrDefault(a => 
+            SymbolEqualityComparer.Default.Equals(a.AttributeClass, attributeType) ||
+            a.AttributeClass?.ToDisplayString() == attributeType.ToDisplayString());
+
+        if (matchingAttr == null)
+        {
             return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
         }
 
-        // For other return types, we can't handle them yet
-        return null;
+        // Extract the value based on whether we have a property name or not
+        if (propertyName != null)
+        {
+            // Get the named argument with the specified property name
+            var namedArg = matchingAttr.NamedArguments.FirstOrDefault(na => na.Key == propertyName);
+            if (namedArg.Key != null)
+            {
+                return CreateLiteralExpression(namedArg.Value.Value);
+            }
+            return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+        }
+        else
+        {
+            // Get the first constructor argument value
+            if (matchingAttr.ConstructorArguments.Length > 0)
+            {
+                return CreateLiteralExpression(matchingAttr.ConstructorArguments[0].Value);
+            }
+            return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+        }
+    }
+
+    private static ExpressionSyntax CreateLiteralExpression(object? value)
+    {
+        return value switch
+        {
+            string s => SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(s)),
+            int i => SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(i)),
+            bool b => b ? SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression) 
+                       : SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression),
+            null => SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression),
+            _ => SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+        };
     }
 }

@@ -25,5 +25,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor MissingProjectableEnumMethodAttribute = new DiagnosticDescriptor(
+            id: "EFP0003",
+            title: "Enum extension method requires ProjectableEnumMethodAttribute",
+            messageFormat: "The method '{0}' is called on an enum type with ExpandEnumMethods enabled but does not have the [ProjectableEnumMethod] attribute. Add this attribute to describe what the method returns for compile-time evaluation.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
     }
 }

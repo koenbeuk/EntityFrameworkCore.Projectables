@@ -1997,6 +1997,7 @@ namespace Foo {
     
     public static class EnumExtensions
     {
+        [ProjectableEnumMethod(typeof(DisplayAttribute), nameof(DisplayAttribute.Name))]
         public static string GetDisplayName(this CustomEnum value)
         {
             return value.ToString();
@@ -2042,6 +2043,7 @@ namespace Foo {
     
     public static class EnumExtensions
     {
+        [ProjectableEnumMethod(typeof(DisplayAttribute), nameof(DisplayAttribute.Name))]
         public static string GetDisplayName(this CustomEnum value)
         {
             return value.ToString();
@@ -2090,6 +2092,7 @@ namespace Foo {
     
     public static class EnumExtensions
     {
+        [ProjectableEnumMethod(typeof(DescriptionAttribute))]
         public static string GetDescription(this Status value)
         {
             return value.ToString();
@@ -2113,6 +2116,49 @@ namespace Foo {
             Assert.Single(result.GeneratedTrees);
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public void ExpandEnumMethodsWithMissingAttribute_ReportsError()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum CustomEnum
+    {
+        [Display(Name = ""Value 1"")]
+        Value1,
+        
+        [Display(Name = ""Value 2"")]
+        Value2,
+    }
+    
+    public static class EnumExtensions
+    {
+        // Missing [ProjectableEnumMethod] attribute
+        public static string GetDisplayName(this CustomEnum value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public CustomEnum MyValue { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string MyEnumName => MyValue.GetDisplayName();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0003");
         }
 
         #region Helpers
