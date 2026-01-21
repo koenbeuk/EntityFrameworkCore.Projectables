@@ -26,7 +26,8 @@ static internal class EnumMethodCallEvaluator
         SourceProductionContext context,
         Location? location)
     {
-        // Get the original method (in case of reduced extension method)
+        // For reduced extension method calls (e.g., x.Method()), the 'this' parameter is not included
+        // in methodSymbol.Parameters. We need ReducedFrom to get the original method with all parameters.
         var originalMethod = methodSymbol.ReducedFrom ?? methodSymbol;
         var expectedParameters = originalMethod.IsExtensionMethod ? 1 : 0;
         var additionalArguments = argumentList.Arguments.Count;
@@ -89,10 +90,13 @@ static internal class EnumMethodCallEvaluator
             }
         }
 
-        // Find the matching attribute on the enum member
+        // Find the matching attribute on the enum member.
+        // We first try SymbolEqualityComparer, but fall back to string comparison when the 
+        // attribute type comes from a different compilation (e.g., system attributes).
         var matchingAttr = enumMemberAttributes.FirstOrDefault(a => 
-            SymbolEqualityComparer.Default.Equals(a.AttributeClass, attributeType) ||
-            a.AttributeClass?.ToDisplayString() == attributeType.ToDisplayString());
+            SymbolEqualityComparer.Default.Equals(a.AttributeClass, attributeType)) ??
+            enumMemberAttributes.FirstOrDefault(a => 
+                a.AttributeClass?.ToDisplayString() == attributeType.ToDisplayString());
 
         if (matchingAttr == null)
         {
