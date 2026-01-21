@@ -120,7 +120,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (memberBody is null) return null;
             }
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, expandEnumMethods, semanticModel, compilation, context);
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, expandEnumMethods, semanticModel, context);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
             var descriptor = new ProjectableDescriptor {
