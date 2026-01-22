@@ -140,7 +140,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Start with default(T) as the fallback for non-nullable types, or null for nullable/reference types
             ExpressionSyntax? currentExpression;
             if (returnType.IsReferenceType || returnType.NullableAnnotation == NullableAnnotation.Annotated || 
-                (returnType is INamedTypeSymbol { IsGenericType: true, Name: "Nullable" }))
+                (returnType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T))
             {
                 currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
             }
