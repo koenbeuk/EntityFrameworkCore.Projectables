@@ -1,4 +1,4 @@
-﻿SELECT [o].[Id], [o].[Priority], [o].[Status]
+﻿SELECT [o].[Id], [o].[CustomerId], [o].[Priority], [o].[Status]
 FROM [Order] AS [o]
 ORDER BY CASE
     WHEN [o].[Status] = 0 THEN N'Pending Review'

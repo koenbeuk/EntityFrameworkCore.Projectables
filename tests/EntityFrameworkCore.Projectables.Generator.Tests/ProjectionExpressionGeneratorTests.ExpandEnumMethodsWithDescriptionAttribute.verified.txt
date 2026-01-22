@@ -12,7 +12,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.Entity, string>> Expression()
         {
-            return (global::Foo.Entity @this) => (@this.Status == global::Foo.Status.Pending ? "The item is pending" : @this.Status == global::Foo.Status.Approved ? "The item is approved" : @this.Status == global::Foo.Status.Rejected ? "The item is rejected" : null);
+            return (global::Foo.Entity @this) => (@this.Status == global::Foo.Status.Pending ? global::Foo.EnumExtensions.GetDescription(global::Foo.Status.Pending) : @this.Status == global::Foo.Status.Approved ? global::Foo.EnumExtensions.GetDescription(global::Foo.Status.Approved) : @this.Status == global::Foo.Status.Rejected ? global::Foo.EnumExtensions.GetDescription(global::Foo.Status.Rejected) : null);
         }
     }
 }

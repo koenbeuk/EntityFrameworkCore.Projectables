@@ -1997,7 +1997,6 @@ namespace Foo {
     
     public static class EnumExtensions
     {
-        [ProjectableEnumMethod(typeof(DisplayAttribute), nameof(DisplayAttribute.Name))]
         public static string GetDisplayName(this CustomEnum value)
         {
             return value.ToString();
@@ -2043,7 +2042,6 @@ namespace Foo {
     
     public static class EnumExtensions
     {
-        [ProjectableEnumMethod(typeof(DisplayAttribute), nameof(DisplayAttribute.Name))]
         public static string GetDisplayName(this CustomEnum value)
         {
             return value.ToString();
@@ -2092,7 +2090,6 @@ namespace Foo {
     
     public static class EnumExtensions
     {
-        [ProjectableEnumMethod(typeof(DescriptionAttribute))]
         public static string GetDescription(this Status value)
         {
             return value.ToString();
@@ -2119,7 +2116,7 @@ namespace Foo {
         }
 
         [Fact]
-        public void ExpandEnumMethodsWithMissingAttribute_ReportsError()
+        public Task ExpandEnumMethodsOnNavigationProperty()
         {
             var compilation = CreateCompilation(@"
 using System;
@@ -2127,38 +2124,46 @@ using System.ComponentModel.DataAnnotations;
 using EntityFrameworkCore.Projectables;
 
 namespace Foo {
-    public enum CustomEnum
+    public enum OrderStatus
     {
-        [Display(Name = ""Value 1"")]
-        Value1,
+        [Display(Name = ""Pending Review"")]
+        Pending,
         
-        [Display(Name = ""Value 2"")]
-        Value2,
+        [Display(Name = ""Approved"")]
+        Approved,
     }
     
     public static class EnumExtensions
     {
-        // Missing [ProjectableEnumMethod] attribute
-        public static string GetDisplayName(this CustomEnum value)
+        public static string GetDisplayName(this OrderStatus value)
         {
             return value.ToString();
         }
     }
-    
-    public record Entity
+
+    public record Order
     {
         public int Id { get; set; }
-        public CustomEnum MyValue { get; set; }
+        public OrderStatus Status { get; set; }
+    }
+    
+    public record OrderItem
+    {
+        public int Id { get; set; }
+        public Order Order { get; set; }
         
         [Projectable(ExpandEnumMethods = true)]
-        public string MyEnumName => MyValue.GetDisplayName();
+        public string OrderStatusName => Order.Status.GetDisplayName();
     }
 }
 ");
 
             var result = RunGenerator(compilation);
 
-            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0003");
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
         #region Helpers

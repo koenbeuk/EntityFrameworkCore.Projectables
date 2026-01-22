@@ -130,38 +130,37 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Visit the receiver expression to transform it (e.g., @this.MyProperty)
             var visitedReceiver = (ExpressionSyntax)Visit(receiverExpression);
 
+            // Get the original method (in case of reduced extension method)
+            var originalMethod = methodSymbol.ReducedFrom ?? methodSymbol;
+            
             // Build a chain of ternary expressions for each enum value
             // Start with null as the fallback
             ExpressionSyntax? currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
 
-            // Evaluate the method call for each enum value and build the ternary chain
+            // Build the ternary chain, calling the method on each enum value
             foreach (var enumMember in enumMembers.AsEnumerable().Reverse())
             {
-                // Try to evaluate the method call at compile time
-                var evaluatedValue = EnumMethodCallEvaluator.TryEvaluateMethodCall(methodSymbol, enumType, enumMember, node.ArgumentList, _context, node.GetLocation());
-                if (evaluatedValue == null)
-                {
-                    // Cannot evaluate at compile time
-                    return false;
-                }
-
-                // Create condition: receiver == EnumType.Value
+                // Create the enum value access: EnumType.Value
                 var enumValueAccess = SyntaxFactory.MemberAccessExpression(
                     SyntaxKind.SimpleMemberAccessExpression,
                     SyntaxFactory.ParseTypeName(enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
                     SyntaxFactory.IdentifierName(enumMember.Name)
                 );
 
+                // Create the method call on the enum value: ExtensionClass.Method(EnumType.Value)
+                var methodCall = CreateMethodCallOnEnumValue(originalMethod, enumValueAccess, node.ArgumentList);
+
+                // Create condition: receiver == EnumType.Value
                 var condition = SyntaxFactory.BinaryExpression(
                     SyntaxKind.EqualsExpression,
                     visitedReceiver,
                     enumValueAccess
                 );
 
-                // Create conditional expression: condition ? evaluatedValue : previousExpression
+                // Create conditional expression: condition ? methodCall : previousExpression
                 currentExpression = SyntaxFactory.ConditionalExpression(
                     condition,
-                    evaluatedValue,
+                    methodCall,
                     currentExpression
                 );
             }
@@ -184,6 +183,34 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             expandedExpression = SyntaxFactory.ParenthesizedExpression(currentExpression);
             return true;
+        }
+
+        private ExpressionSyntax CreateMethodCallOnEnumValue(IMethodSymbol methodSymbol, ExpressionSyntax enumValueExpression, ArgumentListSyntax originalArguments)
+        {
+            // Get the fully qualified containing type name
+            var containingTypeName = methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat);
+            
+            // Create the method access expression: ContainingType.MethodName
+            var methodAccess = SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                SyntaxFactory.ParseName(containingTypeName),
+                SyntaxFactory.IdentifierName(methodSymbol.Name)
+            );
+
+            // Build arguments: the enum value as the first argument (for extension methods), followed by any additional arguments
+            var arguments = SyntaxFactory.SeparatedList<ArgumentSyntax>();
+            arguments = arguments.Add(SyntaxFactory.Argument(enumValueExpression));
+            
+            // Add any additional arguments from the original call
+            foreach (var arg in originalArguments.Arguments)
+            {
+                arguments = arguments.Add((ArgumentSyntax)Visit(arg));
+            }
+
+            return SyntaxFactory.InvocationExpression(
+                methodAccess,
+                SyntaxFactory.ArgumentList(arguments)
+            );
         }
 
         public override SyntaxNode? VisitInterpolation(InterpolationSyntax node)

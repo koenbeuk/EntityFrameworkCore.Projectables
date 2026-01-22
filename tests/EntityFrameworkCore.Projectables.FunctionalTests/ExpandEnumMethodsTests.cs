@@ -41,12 +41,29 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             public int Id { get; set; }
             public OrderStatus Status { get; set; }
             public Priority? Priority { get; set; }
+            public Customer? Customer { get; set; }
 
             [Projectable(ExpandEnumMethods = true)]
             public string StatusName => Status.GetDisplayName();
 
             [Projectable(ExpandEnumMethods = true, NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
             public string? PriorityDescription => Priority.HasValue ? Priority.Value.GetDescription() : null;
+        }
+
+        public record Customer
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = "";
+            public Priority PreferredPriority { get; set; }
+        }
+
+        public record OrderWithNavigation
+        {
+            public int Id { get; set; }
+            public Customer? Customer { get; set; }
+
+            [Projectable(ExpandEnumMethods = true)]
+            public string CustomerPriorityDescription => Customer!.PreferredPriority.GetDescription();
         }
 
         [Fact]
@@ -92,11 +109,21 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task SelectEnumOnNavigationProperty()
+        {
+            using var dbContext = new SampleDbContext<OrderWithNavigation>();
+
+            var query = dbContext.Set<OrderWithNavigation>()
+                .Select(x => x.CustomerPriorityDescription);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 
     public static class EnumExtensions
     {
-        [ProjectableEnumMethod(typeof(DisplayAttribute), nameof(DisplayAttribute.Name))]
         public static string GetDisplayName<TEnum>(this TEnum value) where TEnum : struct, System.Enum
         {
             var type = value.GetType();
@@ -107,7 +134,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             return displayAttribute?.Name ?? value.ToString();
         }
 
-        [ProjectableEnumMethod(typeof(DescriptionAttribute))]
         public static string GetDescription<TEnum>(this TEnum value) where TEnum : struct, System.Enum
         {
             var type = value.GetType();

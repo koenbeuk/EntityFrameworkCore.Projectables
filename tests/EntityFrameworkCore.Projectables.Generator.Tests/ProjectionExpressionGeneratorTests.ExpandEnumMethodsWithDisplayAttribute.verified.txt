@@ -12,7 +12,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.Entity, string>> Expression()
         {
-            return (global::Foo.Entity @this) => (@this.MyValue == global::Foo.CustomEnum.Value1 ? "Value 1" : @this.MyValue == global::Foo.CustomEnum.Value2 ? "Value 2" : null);
+            return (global::Foo.Entity @this) => (@this.MyValue == global::Foo.CustomEnum.Value1 ? global::Foo.EnumExtensions.GetDisplayName(global::Foo.CustomEnum.Value1) : @this.MyValue == global::Foo.CustomEnum.Value2 ? global::Foo.EnumExtensions.GetDisplayName(global::Foo.CustomEnum.Value2) : null);
         }
     }
 }
