@@ -48,6 +48,15 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             [Projectable(ExpandEnumMethods = true, NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
             public string? PriorityDescription => Priority.HasValue ? Priority.Value.GetDescription() : null;
+
+            [Projectable(ExpandEnumMethods = true)]
+            public bool IsApproved => Status.IsApproved();
+
+            [Projectable(ExpandEnumMethods = true)]
+            public int PrioritySortOrder => (Priority ?? ExpandEnumMethodsTests.Priority.Low).GetSortOrder();
+
+            [Projectable(ExpandEnumMethods = true)]
+            public string StatusWithPrefix => Status.GetDisplayNameWithPrefix("Order Status: ");
         }
 
         public record Customer
@@ -120,6 +129,50 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task FilterOnBooleanEnumExpansion()
+        {
+            using var dbContext = new SampleDbContext<Order>();
+
+            var query = dbContext.Set<Order>()
+                .Where(x => x.IsApproved);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SelectBooleanEnumExpansion()
+        {
+            using var dbContext = new SampleDbContext<Order>();
+
+            var query = dbContext.Set<Order>()
+                .Select(x => x.IsApproved);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task OrderByIntegerEnumExpansion()
+        {
+            using var dbContext = new SampleDbContext<Order>();
+
+            var query = dbContext.Set<Order>()
+                .OrderBy(x => x.PrioritySortOrder);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SelectEnumMethodWithParameter()
+        {
+            using var dbContext = new SampleDbContext<Order>();
+
+            var query = dbContext.Set<Order>()
+                .Select(x => x.StatusWithPrefix);
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 
     public static class EnumExtensions
@@ -142,6 +195,27 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
                 .OfType<DescriptionAttribute>()
                 .FirstOrDefault();
             return descriptionAttribute?.Description ?? value.ToString();
+        }
+
+        public static bool IsApproved(this ExpandEnumMethodsTests.OrderStatus value)
+        {
+            return value == ExpandEnumMethodsTests.OrderStatus.Approved;
+        }
+
+        public static int GetSortOrder(this ExpandEnumMethodsTests.Priority value)
+        {
+            return value switch
+            {
+                ExpandEnumMethodsTests.Priority.Low => 1,
+                ExpandEnumMethodsTests.Priority.Medium => 2,
+                ExpandEnumMethodsTests.Priority.High => 3,
+                _ => 0
+            };
+        }
+
+        public static string GetDisplayNameWithPrefix(this ExpandEnumMethodsTests.OrderStatus value, string prefix)
+        {
+            return prefix + value.ToString();
         }
     }
 }

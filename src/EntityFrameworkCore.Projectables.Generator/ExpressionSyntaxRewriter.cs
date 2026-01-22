@@ -133,9 +133,23 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Get the original method (in case of reduced extension method)
             var originalMethod = methodSymbol.ReducedFrom ?? methodSymbol;
             
+            // Get the return type of the method to determine the default value
+            var returnType = methodSymbol.ReturnType;
+            
             // Build a chain of ternary expressions for each enum value
-            // Start with null as the fallback
-            ExpressionSyntax? currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+            // Start with default(T) as the fallback for non-nullable types, or null for nullable/reference types
+            ExpressionSyntax? currentExpression;
+            if (returnType.IsReferenceType || returnType.NullableAnnotation == NullableAnnotation.Annotated || 
+                (returnType is INamedTypeSymbol { IsGenericType: true, Name: "Nullable" }))
+            {
+                currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+            }
+            else
+            {
+                // Use default(T) for value types
+                currentExpression = SyntaxFactory.DefaultExpression(
+                    SyntaxFactory.ParseTypeName(returnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            }
 
             // Build the ternary chain, calling the method on each enum value
             foreach (var enumMember in enumMembers.AsEnumerable().Reverse())
