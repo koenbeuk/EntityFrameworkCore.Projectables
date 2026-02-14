@@ -1905,6 +1905,7 @@ class EntityBase<TId> where TId : ICloneable, new() {
         [Fact]
         public Task MethodOverloads_WithDifferentParameterTypes()
         {
+            // lang=csharp
             var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
@@ -1926,8 +1927,8 @@ namespace Foo {
             
             // Verify both overloads are generated with distinct names
             var generatedFiles = result.GeneratedTrees.Select(t => t.FilePath).ToList();
-            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int"));
-            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_string"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int.g.cs"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_string.g.cs"));
 
             return Verifier.Verify(result.GeneratedTrees.Select(t => t.ToString()));
         }
@@ -1935,6 +1936,7 @@ namespace Foo {
         [Fact]
         public Task MethodOverloads_WithDifferentParameterCounts()
         {
+            // lang=csharp
             var compilation = CreateCompilation(@"
 using System;
 using EntityFrameworkCore.Projectables;
