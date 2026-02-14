@@ -25,5 +25,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor UnsupportedStatementInBlockBody = new DiagnosticDescriptor(
+            id: "EFP0003",
+            title: "Unsupported statement in block-bodied method",
+            messageFormat: "Method '{0}' contains an unsupported statement: {1}",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
     }
 }

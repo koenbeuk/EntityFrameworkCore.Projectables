@@ -493,7 +493,7 @@ namespace Foo {
         }
 
         [Fact]
-        public void BlockBodiedMethod_RaisesDiagnostics()
+        public void BlockBodiedMethod_NoLongerRaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
 using System;
@@ -511,7 +511,9 @@ namespace Foo {
 
             var result = RunGenerator(compilation);
 
-            Assert.Single(result.Diagnostics);
+            // Block-bodied methods are now supported, so no diagnostics should be raised
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
         }
 
         [Fact]
@@ -1975,6 +1977,250 @@ namespace Foo {
             Assert.Single(result.GeneratedTrees);
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_SimpleReturn()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Foo()
+        {
+            return 42;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithPropertyAccess()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            return Bar + 10;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithIfElse()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            if (Bar > 10)
+            {
+                return 1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithNestedIfElse()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public string Foo()
+        {
+            if (Bar > 10)
+            {
+                return ""High"";
+            }
+            else if (Bar > 5)
+            {
+                return ""Medium"";
+            }
+            else
+            {
+                return ""Low"";
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithLocalVariable()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            var temp = Bar * 2;
+            return temp + 5;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithMultipleParameters()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Add(int a, int b)
+        {
+            return a + b;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithIfElseAndCondition()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+        public bool IsActive { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            if (IsActive && Bar > 0)
+            {
+                return Bar * 2;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_UnsupportedStatement_WithoutElse()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            if (Bar > 10)
+            {
+                return 1;
+            }
+            return 0;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a warning diagnostic
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0003");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
         }
 
         #region Helpers

@@ -97,7 +97,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                             return false;
                         }
                         else if (x is MethodDeclarationSyntax xMethod &&
-                            xMethod.ExpressionBody is not null)
+                            (xMethod.ExpressionBody is not null || xMethod.Body is not null))
                         {
                             return true;
                         }
@@ -212,7 +212,28 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             if (memberBody is MethodDeclarationSyntax methodDeclarationSyntax)
             {
-                if (methodDeclarationSyntax.ExpressionBody is null)
+                ExpressionSyntax? bodyExpression = null;
+
+                if (methodDeclarationSyntax.ExpressionBody is not null)
+                {
+                    // Expression-bodied method (e.g., int Foo() => 1;)
+                    bodyExpression = methodDeclarationSyntax.ExpressionBody.Expression;
+                }
+                else if (methodDeclarationSyntax.Body is not null)
+                {
+                    // Block-bodied method (e.g., int Foo() { return 1; })
+                    var blockConverter = new BlockStatementConverter(semanticModel, context, expressionSyntaxRewriter);
+                    bodyExpression = blockConverter.TryConvertBlock(methodDeclarationSyntax.Body, memberSymbol.Name);
+
+                    if (bodyExpression is null)
+                    {
+                        // Diagnostics already reported by BlockStatementConverter
+                        return null;
+                    }
+                    
+                    // The expression has already been rewritten by BlockStatementConverter, so we don't rewrite it again
+                }
+                else
                 {
                     var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
@@ -222,7 +243,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
+                // Only rewrite expression-bodied methods, block-bodied methods are already rewritten
+                descriptor.ExpressionBody = methodDeclarationSyntax.ExpressionBody is not null 
+                    ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression)
+                    : bodyExpression;
                 foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
