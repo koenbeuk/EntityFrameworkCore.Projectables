@@ -401,7 +401,63 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             return base.VisitNullableType(node);
         }
-        
+
+        public override SyntaxNode? VisitInitializerExpression(InitializerExpressionSyntax node)
+        {
+            // Only handle object initializers that might contain indexer assignments
+            if (!node.IsKind(SyntaxKind.ObjectInitializerExpression))
+            {
+                return base.VisitInitializerExpression(node);
+            }
+
+            // Check if any expression is an indexer assignment (e.g., ["key"] = value)
+            var hasIndexerAssignment = node.Expressions.Any(e => 
+                e is AssignmentExpressionSyntax { Left: ImplicitElementAccessSyntax });
+
+            if (!hasIndexerAssignment)
+            {
+                return base.VisitInitializerExpression(node);
+            }
+
+            var newExpressions = new SeparatedSyntaxList<ExpressionSyntax>();
+
+            foreach (var expression in node.Expressions)
+            {
+                if (expression is AssignmentExpressionSyntax assignment &&
+                    assignment.Left is ImplicitElementAccessSyntax implicitElementAccess)
+                {
+                    // Transform ["key"] = value into { "key", value }
+                    var arguments = new SeparatedSyntaxList<ExpressionSyntax>();
+
+                    foreach (var argument in implicitElementAccess.ArgumentList.Arguments)
+                    {
+                        var visitedArgument = (ExpressionSyntax?)Visit(argument.Expression) ?? argument.Expression;
+                        arguments = arguments.Add(visitedArgument);
+                    }
+
+                    var visitedValue = (ExpressionSyntax?)Visit(assignment.Right) ?? assignment.Right;
+                    arguments = arguments.Add(visitedValue);
+
+                    var complexElementInitializer = SyntaxFactory.InitializerExpression(
+                        SyntaxKind.ComplexElementInitializerExpression,
+                        arguments
+                    );
+
+                    newExpressions = newExpressions.Add(complexElementInitializer);
+                }
+                else
+                {
+                    var visitedExpression = (ExpressionSyntax?)Visit(expression) ?? expression;
+                    newExpressions = newExpressions.Add(visitedExpression);
+                }
+            }
+
+            return SyntaxFactory.InitializerExpression(
+                SyntaxKind.CollectionInitializerExpression,
+                newExpressions
+            ).WithTriviaFrom(node);
+        }
+
         private ExpressionSyntax ReplaceVariableWithCast(ExpressionSyntax expression, DeclarationPatternSyntax declaration, ExpressionSyntax governingExpression)
         {
             if (declaration.Designation is SingleVariableDesignationSyntax variableDesignation)

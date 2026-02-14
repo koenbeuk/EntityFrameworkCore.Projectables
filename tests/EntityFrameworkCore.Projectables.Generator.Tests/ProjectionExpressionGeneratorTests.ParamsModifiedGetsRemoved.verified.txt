@@ -5,7 +5,7 @@ using EntityFrameworkCore.Projectables;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class _Foo_First
+    static class _Foo_First_P0_int__
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo, int[], int>> Expression()
         {

@@ -173,6 +173,16 @@ namespace EntityFrameworkCore.Projectables.Generator
                     : GetNestedInClassPath(memberSymbol.ContainingType),
                 ParametersList = SyntaxFactory.ParameterList()
             };
+            
+            var methodSymbol = memberSymbol as IMethodSymbol;
+
+            // Collect parameter type names for method overload disambiguation
+            if (methodSymbol is not null)
+            {
+                descriptor.ParameterTypeNames = methodSymbol.Parameters
+                    .Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .ToList();
+            }
 
             if (classForNaming is { IsGenericType: true })
             {
@@ -255,8 +265,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                     )
                 );
             }
-
-            var methodSymbol = memberSymbol as IMethodSymbol;
 
             // Handle target type for extension members
             if (isExtensionMember && extensionReceiverType is not null)

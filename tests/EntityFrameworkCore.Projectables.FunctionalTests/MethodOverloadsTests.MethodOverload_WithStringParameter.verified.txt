@@ -1,0 +1,2 @@
+﻿SELECT [e].[Id], CAST(LEN(N'Hello_' + [e].[Name]) AS int) AS [Result]
+FROM [Entity] AS [e]

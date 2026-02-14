@@ -25,6 +25,9 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             [Projectable]
             public bool IsValid3(params int[] validIds) => validIds.Contains(Id);
+
+            [Projectable]
+            public bool IsValid4(int? validId, Guid? guid) => validId > Id && guid != Guid.Parse("00000000-0000-0000-0000-000000000000");
         }
 
         [Fact]
@@ -52,8 +55,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
-
-
+        
         [Fact]
         public Task ParamsOfPrimitivesArguments()
         {
@@ -61,6 +63,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             var query = dbContext.Set<TestEntity>()
                 .Where(x => x.IsValid3(1, 2, 3));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+        
+        [Fact]
+        public Task NullableValueTypes()
+        {
+            using var dbContext = new SampleDbContext<TestEntity>();
+
+            var query = dbContext.Set<TestEntity>()
+                .Where(x => x.IsValid4(1, Guid.NewGuid()));
 
             return Verifier.Verify(query.ToQueryString());
         }
