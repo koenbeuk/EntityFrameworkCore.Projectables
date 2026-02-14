@@ -179,9 +179,19 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Collect parameter type names for method overload disambiguation
             if (methodSymbol is not null)
             {
-                descriptor.ParameterTypeNames = methodSymbol.Parameters
+                var parameterTypeNames = methodSymbol.Parameters
                     .Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                     .ToList();
+                
+                // For extension members, prepend the extension receiver type to match how the runtime sees the method.
+                // At runtime, extension member methods have the receiver as the first parameter, but Roslyn's
+                // methodSymbol.Parameters doesn't include it.
+                if (isExtensionMember && extensionReceiverType is not null)
+                {
+                    parameterTypeNames.Insert(0, extensionReceiverType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                }
+                
+                descriptor.ParameterTypeNames = parameterTypeNames;
             }
 
             if (classForNaming is { IsGenericType: true })
