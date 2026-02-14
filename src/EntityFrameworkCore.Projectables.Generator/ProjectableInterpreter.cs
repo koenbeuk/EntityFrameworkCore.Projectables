@@ -22,6 +22,24 @@ namespace EntityFrameworkCore.Projectables.Generator
             yield return namedTypeSymbol.Name;
         }
 
+        /// <summary>
+        /// Gets the nested class path for extension members, skipping the extension block itself
+        /// and using the outer class as the containing type.
+        /// </summary>
+        static IEnumerable<string> GetNestedInClassPathForExtensionMember(ITypeSymbol extensionType)
+        {
+            // For extension members, the ContainingType is the extension block,
+            // and its ContainingType is the outer class (e.g., EntityExtensions)
+            var outerType = extensionType.ContainingType;
+            
+            if (outerType is not null)
+            {
+                return GetNestedInClassPath(outerType);
+            }
+            
+            return [];
+        }
+
         public static ProjectableDescriptor? GetDescriptor(Compilation compilation, MemberDeclarationSyntax member, SourceProductionContext context)
         {
             var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
@@ -120,24 +138,73 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (memberBody is null) return null;
             }
 
-            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(memberSymbol.ContainingType, nullConditionalRewriteSupport, expandEnumMethods, semanticModel, context);
+            // Check if this member is inside a C# 14 extension block
+            var isExtensionMember = memberSymbol.ContainingType is { IsExtension: true };
+            IParameterSymbol? extensionParameter = null;
+            ITypeSymbol? extensionReceiverType = null;
+            
+            if (isExtensionMember && memberSymbol.ContainingType is { } extensionType)
+            {
+                extensionParameter = extensionType.ExtensionParameter;
+                extensionReceiverType = extensionParameter?.Type;
+            }
+
+            // For extension members, use the extension receiver type for rewriting
+            var targetTypeForRewriting = isExtensionMember && extensionReceiverType is INamedTypeSymbol receiverNamedType
+                ? receiverNamedType
+                : memberSymbol.ContainingType;
+
+            var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(
+                targetTypeForRewriting, 
+                nullConditionalRewriteSupport, 
+                expandEnumMethods,
+                semanticModel, 
+                context,
+                extensionParameter?.Name);
             var declarationSyntaxRewriter = new DeclarationSyntaxRewriter(semanticModel);
 
-            var descriptor = new ProjectableDescriptor {
+            // For extension members, use the outer class for class naming
+            var classForNaming = isExtensionMember && memberSymbol.ContainingType.ContainingType is not null
+                ? memberSymbol.ContainingType.ContainingType
+                : memberSymbol.ContainingType;
 
+            var descriptor = new ProjectableDescriptor
+            {
                 UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
-                ClassName = memberSymbol.ContainingType.Name,
-                ClassNamespace = memberSymbol.ContainingType.ContainingNamespace.IsGlobalNamespace ? null : memberSymbol.ContainingType.ContainingNamespace.ToDisplayString(),
+                ClassName = classForNaming.Name,
+                ClassNamespace = classForNaming.ContainingNamespace.IsGlobalNamespace ? null : classForNaming.ContainingNamespace.ToDisplayString(),
                 MemberName = memberSymbol.Name,
-                NestedInClassNames = GetNestedInClassPath(memberSymbol.ContainingType),
+                NestedInClassNames = isExtensionMember 
+                    ? GetNestedInClassPathForExtensionMember(memberSymbol.ContainingType)
+                    : GetNestedInClassPath(memberSymbol.ContainingType),
                 ParametersList = SyntaxFactory.ParameterList()
             };
+            
+            var methodSymbol = memberSymbol as IMethodSymbol;
 
-            if (memberSymbol.ContainingType is INamedTypeSymbol { IsGenericType: true } containingNamedType)
+            // Collect parameter type names for method overload disambiguation
+            if (methodSymbol is not null)
+            {
+                var parameterTypeNames = methodSymbol.Parameters
+                    .Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .ToList();
+                
+                // For extension members, prepend the extension receiver type to match how the runtime sees the method.
+                // At runtime, extension member methods have the receiver as the first parameter, but Roslyn's
+                // methodSymbol.Parameters doesn't include it.
+                if (isExtensionMember && extensionReceiverType is not null)
+                {
+                    parameterTypeNames.Insert(0, extensionReceiverType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                }
+                
+                descriptor.ParameterTypeNames = parameterTypeNames;
+            }
+
+            if (classForNaming is { IsGenericType: true })
             {
                 descriptor.ClassTypeParameterList = SyntaxFactory.TypeParameterList();
 
-                foreach (var additionalClassTypeParameter in containingNamedType.TypeParameters)
+                foreach (var additionalClassTypeParameter in classForNaming.TypeParameters)
                 {
                     descriptor.ClassTypeParameterList = descriptor.ClassTypeParameterList.AddParameters(
                         SyntaxFactory.TypeParameter(additionalClassTypeParameter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
@@ -187,7 +254,21 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
             }
 
-            if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
+            // Handle extension members - add @this parameter with the extension receiver type
+            if (isExtensionMember && extensionReceiverType is not null)
+            {
+                descriptor.ParametersList = descriptor.ParametersList.AddParameters(
+                    SyntaxFactory.Parameter(
+                        SyntaxFactory.Identifier("@this")
+                    )
+                    .WithType(
+                        SyntaxFactory.ParseTypeName(
+                            extensionReceiverType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                        )
+                    )
+                );
+            }
+            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
             {
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
@@ -201,9 +282,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                 );
             }
 
-            var methodSymbol = memberSymbol as IMethodSymbol;
-
-            if (methodSymbol is { IsExtensionMethod: true })
+            // Handle target type for extension members
+            if (isExtensionMember && extensionReceiverType is not null)
+            {
+                descriptor.TargetClassNamespace = extensionReceiverType.ContainingNamespace.IsGlobalNamespace ? null : extensionReceiverType.ContainingNamespace.ToDisplayString();
+                descriptor.TargetNestedInClassNames = GetNestedInClassPath(extensionReceiverType);
+            }
+            else if (methodSymbol is { IsExtensionMethod: true })
             {
                 var targetTypeSymbol = methodSymbol.Parameters.First().Type;
                 descriptor.TargetClassNamespace = targetTypeSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetTypeSymbol.ContainingNamespace.ToDisplayString();

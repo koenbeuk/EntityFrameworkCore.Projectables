@@ -12,20 +12,30 @@ namespace EntityFrameworkCore.Projectables.Services
 
         public static string GenerateName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
         {
+            return GenerateName(namespaceName, nestedInClassNames, memberName, null);
+        }
+
+        public static string GenerateName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName, IEnumerable<string>? parameterTypeNames)
+        {
             var stringBuilder = new StringBuilder();
 
-            return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName);
+            return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName, parameterTypeNames);
         }
 
         public static string GenerateFullName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
         {
+            return GenerateFullName(namespaceName, nestedInClassNames, memberName, null);
+        }
+
+        public static string GenerateFullName(string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName, IEnumerable<string>? parameterTypeNames)
+        {
             var stringBuilder = new StringBuilder(Namespace);
             stringBuilder.Append('.');
 
-            return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName);
+            return GenerateNameImpl(stringBuilder, namespaceName, nestedInClassNames, memberName, parameterTypeNames);
         }
 
-        static string GenerateNameImpl(StringBuilder stringBuilder, string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName)
+        static string GenerateNameImpl(StringBuilder stringBuilder, string? namespaceName, IEnumerable<string>? nestedInClassNames, string memberName, IEnumerable<string>? parameterTypeNames)
         {
             stringBuilder.Append(namespaceName?.Replace('.', '_'));
             stringBuilder.Append('_');
@@ -57,6 +67,35 @@ namespace EntityFrameworkCore.Projectables.Services
             }
             stringBuilder.Append(memberName);
 
+            // Add parameter types to make method overloads unique
+            if (parameterTypeNames is not null)
+            {
+                var parameterIndex = 0;
+                foreach (var parameterTypeName in parameterTypeNames)
+                {
+                    stringBuilder.Append("_P");
+                    stringBuilder.Append(parameterIndex);
+                    stringBuilder.Append('_');
+                    // Replace characters that are not valid in type names with underscores
+                    var sanitizedTypeName = parameterTypeName
+                        .Replace("global::", "")  // Remove global:: prefix
+                        .Replace('.', '_')
+                        .Replace('<', '_')
+                        .Replace('>', '_')
+                        .Replace(',', '_')
+                        .Replace(' ', '_')
+                        .Replace('[', '_')
+                        .Replace(']', '_')
+                        .Replace('`', '_')
+                        .Replace(':', '_')  // Additional safety for any remaining colons
+                        .Replace('?', '_'); // Handle nullable reference types
+                    stringBuilder.Append(sanitizedTypeName);
+                    parameterIndex++;
+                }
+            }
+
+            // Add generic arity at the very end (after parameter types)
+            // This matches how the CLR names generic types
             if (arity > 0)
             {
                 stringBuilder.Append('`');

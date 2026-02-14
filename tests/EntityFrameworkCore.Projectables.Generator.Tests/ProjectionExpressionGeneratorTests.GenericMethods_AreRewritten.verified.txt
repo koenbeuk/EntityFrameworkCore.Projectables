@@ -9,7 +9,7 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Foo_EntityExtensions_EnforceString
+    static class Foo_EntityExtensions_EnforceString_P0_T
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<T, string>> Expression<T>()
             where T : unmanaged

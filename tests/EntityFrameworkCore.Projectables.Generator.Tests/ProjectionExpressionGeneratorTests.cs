@@ -1978,6 +1978,210 @@ namespace Foo {
         }
 
         [Fact]
+        public Task MethodOverloads_WithDifferentParameterTypes()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Method(int x) => x;
+        
+        [Projectable]
+        public int Method(string s) => s.Length;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+            
+            // Verify both overloads are generated with distinct names
+            var generatedFiles = result.GeneratedTrees.Select(t => t.FilePath).ToList();
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int.g.cs"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_string.g.cs"));
+
+            return Verifier.Verify(result.GeneratedTrees.Select(t => t.ToString()));
+        }
+        
+        [Fact]
+        public Task MethodOverloads_WithDifferentParameterCounts()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Method(int x) => x;
+        
+        [Projectable]
+        public int Method(int x, int y) => x + y;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+            
+            // Verify both overloads are generated with distinct names
+            var generatedFiles = result.GeneratedTrees.Select(t => t.FilePath).ToList();
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int.g.cs"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int_P1_int.g.cs"));
+
+            return Verifier.Verify(result.GeneratedTrees.Select(t => t.ToString()));
+        }
+
+#if NET10_0_OR_GREATER
+        [Fact]
+        public Task ExtensionMemberProperty()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int DoubleId => e.Id * 2;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethod()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int TripleId() => e.Id * 3;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethodWithParameters()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int Multiply(int factor) => e.Id * factor;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberOnPrimitive()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+static class IntExtensions {
+    extension(int i) {
+        [Projectable]
+        public int Squared => i * i;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberWithMemberAccess()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public string IdAndName => e.Id + "": "" + e.Name;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+#endif
+
+        [Fact]
         public Task ExpandEnumMethodsWithDisplayAttribute()
         {
             var compilation = CreateCompilation(@"
