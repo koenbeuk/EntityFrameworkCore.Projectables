@@ -82,7 +82,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
             }
 
-            // Process local variable declarations
+            // If we reach here, the pattern was not detected
+            // Process local variable declarations before the final return
             foreach (var stmt in nonReturnStatements)
             {
                 if (stmt is LocalDeclarationStatementSyntax localDecl)

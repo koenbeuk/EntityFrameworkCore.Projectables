@@ -2224,7 +2224,7 @@ namespace Foo {
         }
 
         [Fact]
-        public Task BlockBodiedMethod_IfWithoutElse_ReturnsDefault()
+        public Task BlockBodiedMethod_IfWithoutElse_ImplicitReturn()
         {
             var compilation = CreateCompilation(@"
 using System;
