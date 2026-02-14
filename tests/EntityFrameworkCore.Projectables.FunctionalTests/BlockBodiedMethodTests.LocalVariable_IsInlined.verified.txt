@@ -1,0 +1,2 @@
+﻿SELECT [e].[Value] * 2 + 5
+FROM [Entity] AS [e]
