@@ -2191,8 +2191,9 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+
         [Fact]
-        public Task BlockBodiedMethod_UnsupportedStatement_WithoutElse()
+        public Task BlockBodiedMethod_IfWithoutElse_UsesDefault()
         {
             var compilation = CreateCompilation(@"
 using System;
@@ -2212,15 +2213,150 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
-            // Should have a warning diagnostic
-            Assert.NotEmpty(result.Diagnostics);
-            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0003");
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
 
-            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_IfWithoutElse_ReturnsDefault()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int? Foo()
+        {
+            if (Bar > 10)
+            {
+                return 1;
+            }
+        }
+    }
+}
+", expectedToCompile: false);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_SwitchStatement_Simple()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public string Foo()
+        {
+            switch (Bar)
+            {
+                case 1:
+                    return ""One"";
+                case 2:
+                    return ""Two"";
+                default:
+                    return ""Other"";
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_SwitchStatement_WithMultipleCases()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public string Foo()
+        {
+            switch (Bar)
+            {
+                case 1:
+                case 2:
+                    return ""Low"";
+                case 3:
+                case 4:
+                case 5:
+                    return ""Medium"";
+                default:
+                    return ""High"";
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_SwitchStatement_WithoutDefault()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public string? Foo()
+        {
+            switch (Bar)
+            {
+                case 1:
+                    return ""One"";
+                case 2:
+                    return ""Two"";
+            }
+        }
+    }
+}
+", expectedToCompile: false);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
         #region Helpers

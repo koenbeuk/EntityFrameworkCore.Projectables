@@ -94,6 +94,50 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task IfWithoutElse_UsesDefault()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetPremiumIfActive());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task IfWithoutElse_WithFallbackReturn()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetStatus());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SwitchStatement_Simple()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetValueLabel());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SwitchStatement_WithMultipleCases()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetPriority());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 
     public static class EntityExtensions
@@ -164,6 +208,63 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         public static int Add(this BlockBodiedMethodTests.Entity entity, int a, int b)
         {
             return a + b;
+        }
+
+        [Projectable]
+        public static int? GetPremiumIfActive(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.IsActive)
+            {
+                return entity.Value * 2;
+            }
+            return null;
+        }
+
+        [Projectable]
+        public static string GetStatus(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.IsActive)
+            {
+                return "Active";
+            }
+            return "Inactive";
+        }
+
+        [Projectable]
+        public static string GetValueLabel(this BlockBodiedMethodTests.Entity entity)
+        {
+            switch (entity.Value)
+            {
+                case 1:
+                    return "One";
+                case 2:
+                    return "Two";
+                case 3:
+                    return "Three";
+                default:
+                    return "Many";
+            }
+        }
+
+        [Projectable]
+        public static string GetPriority(this BlockBodiedMethodTests.Entity entity)
+        {
+            switch (entity.Value)
+            {
+                case 1:
+                case 2:
+                    return "Low";
+                case 3:
+                case 4:
+                case 5:
+                    return "Medium";
+                case 6:
+                case 7:
+                case 8:
+                    return "High";
+                default:
+                    return "Critical";
+            }
         }
     }
 }

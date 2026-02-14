@@ -1,0 +1,7 @@
+﻿SELECT CASE
+    WHEN [e].[Value] = 1 THEN N'One'
+    WHEN [e].[Value] = 2 THEN N'Two'
+    WHEN [e].[Value] = 3 THEN N'Three'
+    ELSE N'Many'
+END
+FROM [Entity] AS [e]

@@ -1,0 +1,7 @@
+﻿SELECT CASE
+    WHEN [e].[Value] IN (1, 2) THEN N'Low'
+    WHEN [e].[Value] IN (3, 4, 5) THEN N'Medium'
+    WHEN [e].[Value] IN (6, 7, 8) THEN N'High'
+    ELSE N'Critical'
+END
+FROM [Entity] AS [e]

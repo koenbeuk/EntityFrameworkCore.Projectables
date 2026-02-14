@@ -61,44 +61,113 @@ public int CalculateDouble()
 }
 ```
 
+### 5. Switch Statements (converted to nested ternary expressions)
+```csharp
+[Projectable]
+public string GetValueLabel()
+{
+    switch (Value)
+    {
+        case 1:
+            return "One";
+        case 2:
+            return "Two";
+        case 3:
+            return "Three";
+        default:
+            return "Many";
+    }
+}
+```
+
+### 6. If Statements Without Else (uses default value)
+```csharp
+[Projectable]
+public int? GetPremiumIfActive()
+{
+    if (IsActive)
+    {
+        return Value * 2;
+    }
+    // Implicitly returns null (default for int?)
+}
+
+// Or with explicit fallback:
+[Projectable]
+public string GetStatus()
+{
+    if (IsActive)
+    {
+        return "Active";
+    }
+    return "Inactive";  // Explicit fallback
+}
+```
+
 ## Limitations and Warnings
 
 The source generator will produce **warning EFP0003** when it encounters unsupported statements in block-bodied methods:
 
 ### Unsupported Statements:
-- If statements without else clauses
 - While, for, foreach loops  
-- Switch statements (use switch expressions instead)
 - Try-catch-finally blocks
 - Throw statements
 - New object instantiation in statement position
-- Multiple statements (except local variable declarations before return)
 
 ### Example of Unsupported Pattern:
 ```csharp
 [Projectable]
 public int GetValue()
 {
-    if (IsActive)  // ❌ No else clause - will produce EFP0003 warning
+    for (int i = 0; i < 10; i++)  // ❌ Loops not supported
     {
-        return Value;
+        // ...
     }
     return 0;
 }
 ```
 
-Should be written as:
+Supported patterns:
 ```csharp
 [Projectable]
 public int GetValue()
 {
-    if (IsActive)  // ✅ Has else clause
+    if (IsActive)  // ✅ If without else is now supported!
     {
         return Value;
     }
     else
     {
         return 0;
+    }
+}
+```
+
+Additional supported patterns:
+```csharp
+// If without else using fallback return:
+[Projectable]
+public int GetValue()
+{
+    if (IsActive)
+    {
+        return Value;
+    }
+    return 0;  // ✅ Fallback return
+}
+
+// Switch statement:
+[Projectable]
+public string GetLabel()
+{
+    switch (Value)  // ✅ Switch statements now supported!
+    {
+        case 1:
+            return "One";
+        case 2:
+            return "Two";
+        default:
+            return "Other";
     }
 }
 ```
@@ -114,17 +183,48 @@ public int GetValue() => IsActive ? Value : 0;  // ✅ Expression-bodied
 The source generator:
 1. Parses block-bodied methods
 2. Converts if-else statements to conditional (ternary) expressions
-3. Inlines local variables into the return expression
-4. Rewrites the resulting expression using the existing expression transformation pipeline
-5. Generates the same output as expression-bodied methods
+3. Converts switch statements to nested conditional expressions
+4. Inlines local variables into the return expression
+5. Rewrites the resulting expression using the existing expression transformation pipeline
+6. Generates the same output as expression-bodied methods
 
 ## Benefits
 
-- **More readable code**: Complex logic with nested conditions is often easier to read with if-else blocks than with nested ternary operators
+- **More readable code**: Complex logic with nested conditions and switch statements is often easier to read than nested ternary operators
 - **Gradual migration**: Existing code with block bodies can now be marked as `[Projectable]` without rewriting
 - **Intermediate variables**: Local variables can make complex calculations more understandable
+- **Switch support**: Traditional switch statements now work alongside switch expressions
 
-## Example Output
+## SQL Output Examples
+
+### Switch Statement with Multiple Cases
+Given this code:
+```csharp
+switch (Value)
+{
+    case 1:
+    case 2:
+        return "Low";
+    case 3:
+    case 4:
+    case 5:
+        return "Medium";
+    default:
+        return "High";
+}
+```
+
+Generates optimized SQL:
+```sql
+SELECT CASE
+    WHEN [e].[Value] IN (1, 2) THEN N'Low'
+    WHEN [e].[Value] IN (3, 4, 5) THEN N'Medium'
+    ELSE N'High'
+END
+FROM [Entity] AS [e]
+```
+
+### If-Else Example Output
 
 Given this code:
 ```csharp

@@ -57,6 +57,31 @@ namespace EntityFrameworkCore.Projectables.Generator
             var nonReturnStatements = statements.Take(statements.Count - 1).ToList();
             var lastStatement = statements.Last();
 
+            // Check if we have a pattern like: if { return x; } return y;
+            // This can be converted to: condition ? x : y
+            if (nonReturnStatements.Count == 1 && 
+                nonReturnStatements[0] is IfStatementSyntax ifWithoutElse && 
+                ifWithoutElse.Else == null &&
+                lastStatement is ReturnStatementSyntax finalReturn)
+            {
+                // Convert: if (condition) { return x; } return y;
+                // To: condition ? x : y
+                var ifBody = TryConvertStatement(ifWithoutElse.Statement, memberName);
+                if (ifBody == null)
+                {
+                    return null;
+                }
+
+                var elseBody = TryConvertReturnStatement(finalReturn, memberName);
+                if (elseBody == null)
+                {
+                    return null;
+                }
+
+                var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifWithoutElse.Condition);
+                return SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
+            }
+
             // Process local variable declarations
             foreach (var stmt in nonReturnStatements)
             {
@@ -106,6 +131,9 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 case IfStatementSyntax ifStmt:
                     return TryConvertIfStatement(ifStmt, memberName);
+
+                case SwitchStatementSyntax switchStmt:
+                    return TryConvertSwitchStatement(switchStmt, memberName);
 
                 case BlockSyntax blockStmt:
                     return TryConvertStatements(blockStmt.Statements.ToList(), memberName);
@@ -166,9 +194,12 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
             else
             {
-                // If there's no else clause, we can't convert to a ternary
-                ReportUnsupportedStatement(ifStmt, memberName, "If statements must have an else clause to be converted to expressions");
-                return null;
+                // If there's no else clause, use a default literal
+                // This will be inferred to the correct type by the compiler
+                whenFalse = SyntaxFactory.LiteralExpression(
+                    SyntaxKind.DefaultLiteralExpression,
+                    SyntaxFactory.Token(SyntaxKind.DefaultKeyword)
+                );
             }
 
             // Create a conditional expression with the rewritten nodes
@@ -177,6 +208,133 @@ namespace EntityFrameworkCore.Projectables.Generator
                 whenTrue,
                 whenFalse
             );
+        }
+
+        private ExpressionSyntax? TryConvertSwitchStatement(SwitchStatementSyntax switchStmt, string memberName)
+        {
+            // Convert switch statement to nested conditional expressions
+            // Process sections in reverse order to build from the default case up
+            
+            var switchExpression = (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
+            ExpressionSyntax? currentExpression = null;
+            
+            // Find default case first
+            SwitchSectionSyntax? defaultSection = null;
+            var nonDefaultSections = new List<SwitchSectionSyntax>();
+            
+            foreach (var section in switchStmt.Sections)
+            {
+                bool hasDefault = section.Labels.Any(label => label is DefaultSwitchLabelSyntax);
+                if (hasDefault)
+                {
+                    defaultSection = section;
+                }
+                else
+                {
+                    nonDefaultSections.Add(section);
+                }
+            }
+            
+            // Start with default case or null
+            if (defaultSection != null)
+            {
+                currentExpression = ConvertSwitchSection(defaultSection, memberName);
+                if (currentExpression == null)
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                // No default case - use default literal
+                currentExpression = SyntaxFactory.LiteralExpression(
+                    SyntaxKind.DefaultLiteralExpression,
+                    SyntaxFactory.Token(SyntaxKind.DefaultKeyword)
+                );
+            }
+            
+            // Process non-default sections in reverse order
+            for (int i = nonDefaultSections.Count - 1; i >= 0; i--)
+            {
+                var section = nonDefaultSections[i];
+                var sectionExpression = ConvertSwitchSection(section, memberName);
+                if (sectionExpression == null)
+                {
+                    return null;
+                }
+                
+                // Build condition for all labels in this section (OR'd together)
+                ExpressionSyntax? condition = null;
+                foreach (var label in section.Labels)
+                {
+                    if (label is CaseSwitchLabelSyntax caseLabel)
+                    {
+                        var labelCondition = SyntaxFactory.BinaryExpression(
+                            SyntaxKind.EqualsExpression,
+                            switchExpression,
+                            (ExpressionSyntax)_expressionRewriter.Visit(caseLabel.Value)
+                        );
+                        
+                        condition = condition == null 
+                            ? labelCondition
+                            : SyntaxFactory.BinaryExpression(
+                                SyntaxKind.LogicalOrExpression,
+                                condition,
+                                labelCondition
+                            );
+                    }
+                    else if (label is not DefaultSwitchLabelSyntax)
+                    {
+                        // Unsupported label type (e.g., pattern-based switch in older syntax)
+                        ReportUnsupportedStatement(switchStmt, memberName, 
+                            $"Switch label type '{label.GetType().Name}' is not supported. Use case labels or switch expressions instead.");
+                        return null;
+                    }
+                }
+                
+                if (condition != null)
+                {
+                    currentExpression = SyntaxFactory.ConditionalExpression(
+                        condition,
+                        sectionExpression,
+                        currentExpression
+                    );
+                }
+            }
+            
+            return currentExpression;
+        }
+        
+        private ExpressionSyntax? ConvertSwitchSection(SwitchSectionSyntax section, string memberName)
+        {
+            // Convert the statements in the switch section
+            // Most switch sections end with break, return, or throw
+            var statements = section.Statements.ToList();
+            
+            // Remove trailing break statements as they're not needed in expressions
+            if (statements.Count > 0 && statements.Last() is BreakStatementSyntax)
+            {
+                statements = statements.Take(statements.Count - 1).ToList();
+            }
+            
+            if (statements.Count == 0)
+            {
+                // Use the section's first label location for error reporting
+                var firstLabel = section.Labels.FirstOrDefault();
+                if (firstLabel != null)
+                {
+                    var diagnostic = Diagnostic.Create(
+                        Diagnostics.UnsupportedStatementInBlockBody,
+                        firstLabel.GetLocation(),
+                        memberName,
+                        "Switch section must have at least one statement"
+                    );
+                    _context.ReportDiagnostic(diagnostic);
+                }
+                return null;
+            }
+            
+            return TryConvertStatements(statements, memberName);
         }
 
         private ExpressionSyntax ReplaceLocalVariables(ExpressionSyntax expression)
