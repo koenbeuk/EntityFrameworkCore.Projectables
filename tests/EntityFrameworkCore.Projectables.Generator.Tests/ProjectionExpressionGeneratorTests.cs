@@ -2359,6 +2359,567 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task MethodOverloads_WithDifferentParameterTypes()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Method(int x) => x;
+        
+        [Projectable]
+        public int Method(string s) => s.Length;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+            
+            // Verify both overloads are generated with distinct names
+            var generatedFiles = result.GeneratedTrees.Select(t => t.FilePath).ToList();
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int.g.cs"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_string.g.cs"));
+
+            return Verifier.Verify(result.GeneratedTrees.Select(t => t.ToString()));
+        }
+        
+        [Fact]
+        public Task MethodOverloads_WithDifferentParameterCounts()
+        {
+            // lang=csharp
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Method(int x) => x;
+        
+        [Projectable]
+        public int Method(int x, int y) => x + y;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+            
+            // Verify both overloads are generated with distinct names
+            var generatedFiles = result.GeneratedTrees.Select(t => t.FilePath).ToList();
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int.g.cs"));
+            Assert.Contains(generatedFiles, f => f.Contains("Method_P0_int_P1_int.g.cs"));
+
+            return Verifier.Verify(result.GeneratedTrees.Select(t => t.ToString()));
+        }
+
+#if NET10_0_OR_GREATER
+        [Fact]
+        public Task ExtensionMemberProperty()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int DoubleId => e.Id * 2;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethod()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int TripleId() => e.Id * 3;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberMethodWithParameters()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public int Multiply(int factor) => e.Id * factor;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberOnPrimitive()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+static class IntExtensions {
+    extension(int i) {
+        [Projectable]
+        public int Squared => i * i;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberWithMemberAccess()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity { 
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+    
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public string IdAndName => e.Id + "": "" + e.Name;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+#endif
+
+        [Fact]
+        public Task ExpandEnumMethodsWithDisplayAttribute()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum CustomEnum
+    {
+        [Display(Name = ""Value 1"")]
+        Value1,
+        
+        [Display(Name = ""Value 2"")]
+        Value2,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayName(this CustomEnum value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public CustomEnum MyValue { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string MyEnumName => MyValue.GetDisplayName();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithNullableEnum()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum CustomEnum
+    {
+        [Display(Name = ""First Value"")]
+        First,
+        
+        [Display(Name = ""Second Value"")]
+        Second,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayName(this CustomEnum value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public CustomEnum? MyValue { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string MyEnumName => MyValue.HasValue ? MyValue.Value.GetDisplayName() : null;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithDescriptionAttribute()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Status
+    {
+        [Description(""The item is pending"")]
+        Pending,
+        
+        [Description(""The item is approved"")]
+        Approved,
+        
+        [Description(""The item is rejected"")]
+        Rejected,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDescription(this Status value)
+        {
+            return value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Status Status { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string StatusDescription => Status.GetDescription();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsOnNavigationProperty()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using System.ComponentModel.DataAnnotations;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum OrderStatus
+    {
+        [Display(Name = ""Pending Review"")]
+        Pending,
+        
+        [Display(Name = ""Approved"")]
+        Approved,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayName(this OrderStatus value)
+        {
+            return value.ToString();
+        }
+    }
+
+    public record Order
+    {
+        public int Id { get; set; }
+        public OrderStatus Status { get; set; }
+    }
+    
+    public record OrderItem
+    {
+        public int Id { get; set; }
+        public Order Order { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string OrderStatusName => Order.Status.GetDisplayName();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsReturningBoolean()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Status
+    {
+        Pending,
+        Approved,
+        Rejected,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static bool IsApproved(this Status value)
+        {
+            return value == Status.Approved;
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Status Status { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public bool IsStatusApproved => Status.IsApproved();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsReturningInteger()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Priority
+    {
+        Low,
+        Medium,
+        High,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static int GetSortOrder(this Priority value)
+        {
+            return (int)value;
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Priority Priority { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public int PrioritySortOrder => Priority.GetSortOrder();
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithParameter()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Status
+    {
+        Pending,
+        Approved,
+        Rejected,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string GetDisplayNameWithPrefix(this Status value, string prefix)
+        {
+            return prefix + value.ToString();
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Status Status { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string StatusWithPrefix => Status.GetDisplayNameWithPrefix(""Status: "");
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpandEnumMethodsWithMultipleParameters()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public enum Status
+    {
+        Pending,
+        Approved,
+        Rejected,
+    }
+    
+    public static class EnumExtensions
+    {
+        public static string Format(this Status value, string prefix, string suffix)
+        {
+            return prefix + value.ToString() + suffix;
+        }
+    }
+    
+    public record Entity
+    {
+        public int Id { get; set; }
+        public Status Status { get; set; }
+        
+        [Projectable(ExpandEnumMethods = true)]
+        public string FormattedStatus => Status.Format(""["", ""]"");
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

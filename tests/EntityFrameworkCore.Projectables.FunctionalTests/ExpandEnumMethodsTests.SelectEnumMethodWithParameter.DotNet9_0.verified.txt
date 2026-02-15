@@ -1,0 +1,6 @@
+﻿SELECT CASE
+    WHEN [o].[Status] = 0 THEN N'Order Status: Pending'
+    WHEN [o].[Status] = 1 THEN N'Order Status: Approved'
+    WHEN [o].[Status] = 2 THEN N'Order Status: Rejected'
+END
+FROM [Order] AS [o]

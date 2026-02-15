@@ -8,7 +8,7 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Foo_C_Test
+    static class Foo_C_Test_P0_object
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<object, bool>> Expression()
         {

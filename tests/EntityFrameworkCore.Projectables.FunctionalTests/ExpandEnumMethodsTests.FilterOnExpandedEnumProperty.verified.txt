@@ -1,0 +1,8 @@
+﻿SELECT [o].[Id], [o].[CustomerId], [o].[Priority], [o].[Status]
+FROM [Order] AS [o]
+WHERE CASE
+    WHEN [o].[Status] = 0 THEN N'Pending Review'
+    WHEN [o].[Status] = 1 THEN N'Approved'
+    WHEN [o].[Status] = 2 THEN N'Rejected'
+    ELSE NULL
+END = N'Pending Review'
