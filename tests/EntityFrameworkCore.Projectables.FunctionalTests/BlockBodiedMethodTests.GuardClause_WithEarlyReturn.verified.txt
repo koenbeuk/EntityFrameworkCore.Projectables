@@ -1,0 +1,6 @@
+﻿SELECT CASE
+    WHEN [e].[IsActive] = CAST(0 AS bit) THEN 0
+    WHEN [e].[Value] < 0 THEN 0
+    ELSE [e].[Value] * 2
+END
+FROM [Entity] AS [e]

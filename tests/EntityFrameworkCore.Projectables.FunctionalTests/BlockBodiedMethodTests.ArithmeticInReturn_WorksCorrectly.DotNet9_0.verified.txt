@@ -1,0 +1,2 @@
+﻿SELECT (CAST([e].[Value] AS float) / 100.0E0) * 50.0E0
+FROM [Entity] AS [e]

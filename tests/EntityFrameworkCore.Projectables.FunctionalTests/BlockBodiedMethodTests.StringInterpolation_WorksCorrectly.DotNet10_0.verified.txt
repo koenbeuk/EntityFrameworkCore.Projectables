@@ -1,0 +1,2 @@
+﻿SELECT [e].[Value]
+FROM [Entity] AS [e]

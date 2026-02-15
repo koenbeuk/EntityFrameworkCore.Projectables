@@ -149,6 +149,193 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task NullCoalescing_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetNameOrDefault());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ConditionalAccess_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetNameLength());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SwitchExpression_Simple()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetValueLabelModern());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SwitchExpression_WithDiscard()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetPriorityModern());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task MultipleLocalVariables_AreInlinedCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.CalculateComplex());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task NestedConditionals_WithLogicalOperators()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetComplexCategory());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task GuardClause_WithEarlyReturn()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetGuardedValue());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task NestedSwitchInIf_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetCombinedLogic());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task TernaryExpression_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetValueUsingTernary());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task NestedTernary_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetNestedTernary());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task MixedIfAndSwitch_WithMultiplePatterns()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetComplexMix());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task SwitchWithWhenClause_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetValueWithCondition());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task LocalVariableReuse_IsInlinedMultipleTimes()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.CalculateWithReuse());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task BooleanReturn_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.IsHighValue());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ConditionalWithNegation_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetInactiveStatus());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task StringInterpolation_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetFormattedValue());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ArithmeticInReturn_WorksCorrectly()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.CalculatePercentage());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 
     public static class EntityExtensions
@@ -297,6 +484,189 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             }
 
             return "Low";
+        }
+
+        [Projectable]
+        public static string GetNameOrDefault(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Name ?? "Unknown";
+        }
+
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+        public static int? GetNameLength(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Name?.Length;
+        }
+
+        [Projectable]
+        public static string GetValueLabelModern(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Value switch
+            {
+                1 => "One",
+                2 => "Two",
+                3 => "Three",
+                _ => "Many"
+            };
+        }
+
+        [Projectable]
+        public static string GetPriorityModern(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Value switch
+            {
+                <= 2 => "Low",
+                <= 5 => "Medium",
+                <= 8 => "High",
+                _ => "Critical"
+            };
+        }
+
+        [Projectable]
+        public static int CalculateComplex(this BlockBodiedMethodTests.Entity entity)
+        {
+            var doubled = entity.Value * 2;
+            var tripled = entity.Value * 3;
+            var sum = doubled + tripled;
+            return sum + 10;
+        }
+
+        [Projectable]
+        public static string GetComplexCategory(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.IsActive && entity.Value > 100)
+            {
+                return "Active High";
+            }
+
+            if (entity.IsActive || entity.Value > 50)
+            {
+                return "Active or Medium";
+            }
+
+            if (!entity.IsActive && entity.Value <= 10)
+            {
+                return "Inactive Low";
+            }
+
+            return "Other";
+        }
+
+        [Projectable]
+        public static int GetGuardedValue(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (!entity.IsActive)
+            {
+                return 0;
+            }
+
+            if (entity.Value < 0)
+            {
+                return 0;
+            }
+
+            return entity.Value * 2;
+        }
+
+        [Projectable]
+        public static string GetCombinedLogic(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.IsActive)
+            {
+                switch (entity.Value)
+                {
+                    case 1:
+                        return "Active One";
+                    case 2:
+                        return "Active Two";
+                    default:
+                        return "Active Other";
+                }
+            }
+
+            return "Inactive";
+        }
+
+        [Projectable]
+        public static string GetValueUsingTernary(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.IsActive ? "Active" : "Inactive";
+        }
+
+        [Projectable]
+        public static string GetNestedTernary(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Value > 100 ? "High" : entity.Value > 50 ? "Medium" : "Low";
+        }
+
+        [Projectable]
+        public static string GetComplexMix(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.IsActive)
+            {
+                return entity.Value switch
+                {
+                    > 100 => "Active High",
+                    > 50 => "Active Medium",
+                    _ => "Active Low"
+                };
+            }
+
+            return "Inactive";
+        }
+
+        [Projectable]
+        public static string GetValueWithCondition(this BlockBodiedMethodTests.Entity entity)
+        {
+            return entity.Value switch
+            {
+                1 when entity.IsActive => "Active One",
+                1 => "Inactive One",
+                > 10 when entity.IsActive => "Active High",
+                _ => "Other"
+            };
+        }
+
+        [Projectable]
+        public static int CalculateWithReuse(this BlockBodiedMethodTests.Entity entity)
+        {
+            var doubled = entity.Value * 2;
+            return doubled + doubled;
+        }
+
+        [Projectable]
+        public static bool IsHighValue(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.Value > 100)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        [Projectable]
+        public static string GetInactiveStatus(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (!entity.IsActive)
+            {
+                return "Not Active";
+            }
+            else
+            {
+                return "Active";
+            }
+        }
+
+        [Projectable]
+        public static string GetFormattedValue(this BlockBodiedMethodTests.Entity entity)
+        {
+            return $"Value: {entity.Value}";
+        }
+
+        [Projectable]
+        public static double CalculatePercentage(this BlockBodiedMethodTests.Entity entity)
+        {
+            return (double)entity.Value / 100.0 * 50.0;
         }
     }
 }

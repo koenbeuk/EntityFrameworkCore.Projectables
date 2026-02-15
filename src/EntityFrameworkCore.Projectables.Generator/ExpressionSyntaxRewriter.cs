@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+﻿﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
@@ -386,8 +386,47 @@ namespace EntityFrameworkCore.Projectables.Generator
                     continue;
                 }
 
+                // Handle relational patterns (<=, <, >=, >)
+                if (arm.Pattern is RelationalPatternSyntax relational)
+                {
+                    // Map the pattern operator token to a binary expression kind
+                    var binaryKind = relational.OperatorToken.Kind() switch
+                    {
+                        SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
+                        SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
+                        SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
+                        SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
+                        _ => throw new InvalidOperationException(
+                            $"Unsupported relational operator in switch expression: {relational.OperatorToken.Kind()}")
+                    };
+
+                    var condition = SyntaxFactory.BinaryExpression(
+                        binaryKind,
+                        (ExpressionSyntax)Visit(node.GoverningExpression),
+                        (ExpressionSyntax)Visit(relational.Expression)
+                    );
+
+                    // Add the when clause as a AND expression
+                    if (arm.WhenClause != null)
+                    {
+                        condition = SyntaxFactory.BinaryExpression(
+                            SyntaxKind.LogicalAndExpression,
+                            condition,
+                            (ExpressionSyntax)Visit(arm.WhenClause.Condition)
+                        );
+                    }
+
+                    currentExpression = SyntaxFactory.ConditionalExpression(
+                        condition,
+                        armExpression,
+                        currentExpression
+                    );
+
+                    continue;
+                }
+
                 throw new InvalidOperationException(
-                    $"Switch expressions rewriting supports only constant values and declaration patterns (Type var). " +
+                    $"Switch expressions rewriting supports constant values, relational patterns (<=, <, >=, >), and declaration patterns (Type var). " +
                     $"Unsupported pattern: {arm.Pattern.GetType().Name}"
                 );
             }

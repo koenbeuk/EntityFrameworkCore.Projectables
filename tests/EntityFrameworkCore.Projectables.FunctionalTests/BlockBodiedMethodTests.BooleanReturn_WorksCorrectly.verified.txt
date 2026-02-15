@@ -1,0 +1,5 @@
+﻿SELECT CASE
+    WHEN [e].[Value] > 100 THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+FROM [Entity] AS [e]

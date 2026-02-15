@@ -1,0 +1,5 @@
+﻿SELECT CASE
+    WHEN [e].[IsActive] = CAST(0 AS bit) THEN N'Not Active'
+    ELSE N'Active'
+END
+FROM [Entity] AS [e]

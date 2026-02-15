@@ -1,0 +1,2 @@
+﻿SELECT COALESCE([e].[Name], N'Unknown')
+FROM [Entity] AS [e]
