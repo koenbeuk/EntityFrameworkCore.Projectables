@@ -59,7 +59,22 @@ public int CalculateDouble()
     var doubled = Value * 2;
     return doubled + 5;
 }
+
+// Transitive inlining is also supported:
+[Projectable]
+public int CalculateComplex()
+{
+    var a = Value * 2;
+    var b = a + 5;
+    return b + 10;  // Fully expanded to: Value * 2 + 5 + 10
+}
 ```
+
+**⚠️ Important Notes:**
+- Local variables are inlined at each usage point, which duplicates the initializer expression
+- If a local variable is used multiple times, the generator will emit a warning (EFP0003) as this could change semantics if the initializer has side effects
+- Local variables can only be declared at the method body level, not inside nested blocks (if/switch/etc.)
+- Variables are fully expanded transitively (variables that reference other variables are fully inlined)
 
 ### 5. Switch Statements (converted to nested ternary expressions)
 ```csharp
@@ -82,6 +97,7 @@ public string GetValueLabel()
 
 ### 6. If Statements Without Else (uses default value)
 ```csharp
+// Pattern 1: Explicit null return
 [Projectable]
 public int? GetPremiumIfActive()
 {
@@ -89,10 +105,10 @@ public int? GetPremiumIfActive()
     {
         return Value * 2;
     }
-    // Implicitly returns null (default for int?)
+    return null;  // Explicit return for all code paths
 }
 
-// Or with explicit fallback:
+// Pattern 2: Explicit fallback return
 [Projectable]
 public string GetStatus()
 {

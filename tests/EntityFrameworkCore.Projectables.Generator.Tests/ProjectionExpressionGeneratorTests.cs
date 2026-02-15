@@ -2132,6 +2132,68 @@ namespace Foo {
         }
 
         [Fact]
+        public Task BlockBodiedMethod_WithTransitiveLocalVariables()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            var a = Bar * 2;
+            var b = a + 5;
+            return b + 10;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_LocalsInNestedBlock_ProducesDiagnostic()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            if (Bar > 10)
+            {
+                var temp = Bar * 2;
+                return temp;
+            }
+            return 0;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a diagnostic about locals in nested blocks
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0003");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+        }
+
+        [Fact]
         public Task BlockBodiedMethod_WithMultipleParameters()
         {
             var compilation = CreateCompilation(@"

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -28,6 +30,13 @@ namespace EntityFrameworkCore.Projectables.Generator
         {
             if (block.Statements.Count == 0)
             {
+                var diagnostic = Diagnostic.Create(
+                    Diagnostics.UnsupportedStatementInBlockBody,
+                    block.GetLocation(),
+                    memberName,
+                    "Block body must contain at least one statement"
+                );
+                _context.ReportDiagnostic(diagnostic);
                 return null;
             }
 
@@ -145,7 +154,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var variableName = variable.Identifier.Text;
                 
                 // Rewrite the initializer expression NOW while it's still in the tree
-                _localVariables[variableName] = (ExpressionSyntax)_expressionRewriter.Visit(variable.Initializer.Value);
+                var rewrittenInitializer = (ExpressionSyntax)_expressionRewriter.Visit(variable.Initializer.Value);
+                
+                // Also expand any previously defined local variables in this initializer
+                // This ensures transitive inlining (e.g., var a = 1; var b = a + 2; return b; -> 1 + 2)
+                rewrittenInitializer = ReplaceLocalVariables(rewrittenInitializer);
+                
+                _localVariables[variableName] = rewrittenInitializer;
             }
 
             return true;
@@ -165,6 +180,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return TryConvertSwitchStatement(switchStmt, memberName);
 
                 case BlockSyntax blockStmt:
+                    // Prevent locals declared in nested blocks from leaking into outer scopes
+                    var nestedLocal = blockStmt.DescendantNodes()
+                        .OfType<LocalDeclarationStatementSyntax>()
+                        .FirstOrDefault();
+
+                    if (nestedLocal is not null)
+                    {
+                        ReportUnsupportedStatement(nestedLocal, memberName, "Local declarations in nested blocks are not supported");
+                        return null;
+                    }
+                    
                     return TryConvertStatements(blockStmt.Statements.ToList(), memberName);
 
                 case ExpressionStatementSyntax:
@@ -368,6 +394,28 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         private ExpressionSyntax ReplaceLocalVariables(ExpressionSyntax expression)
         {
+            // Count how many times each local variable is referenced
+            var referenceCounter = new LocalVariableReferenceCounter(_localVariables.Keys);
+            referenceCounter.Visit(expression);
+            
+            // Warn if any local variable is referenced more than once (semantics could change due to duplication)
+            foreach (var kvp in referenceCounter.ReferenceCounts)
+            {
+                if (kvp.Value > 1)
+                {
+                    // This is a warning because inlining still produces correct results for pure expressions,
+                    // but could change behavior if the initializer has side effects or is expensive
+                    var diagnostic = Diagnostic.Create(
+                        Diagnostics.UnsupportedStatementInBlockBody,
+                        expression.GetLocation(),
+                        "local variable",
+                        $"Local variable '{kvp.Key}' is referenced {kvp.Value} times and will be inlined at each use. " +
+                        "This may change semantics if the initializer has side effects or is evaluated multiple times."
+                    );
+                    _context.ReportDiagnostic(diagnostic);
+                }
+            }
+            
             // Use a rewriter to replace local variable references with their initializer expressions
             var rewriter = new LocalVariableReplacer(_localVariables);
             return (ExpressionSyntax)rewriter.Visit(expression);
@@ -382,6 +430,31 @@ namespace EntityFrameworkCore.Projectables.Generator
                 reason
             );
             _context.ReportDiagnostic(diagnostic);
+        }
+
+        private class LocalVariableReferenceCounter : CSharpSyntaxWalker
+        {
+            private readonly HashSet<string> _localVariableNames;
+            public Dictionary<string, int> ReferenceCounts { get; } = new Dictionary<string, int>();
+
+            public LocalVariableReferenceCounter(IEnumerable<string> localVariableNames)
+            {
+                _localVariableNames = new HashSet<string>(localVariableNames);
+                foreach (var name in localVariableNames)
+                {
+                    ReferenceCounts[name] = 0;
+                }
+            }
+
+            public override void VisitIdentifierName(IdentifierNameSyntax node)
+            {
+                var identifier = node.Identifier.Text;
+                if (_localVariableNames.Contains(identifier))
+                {
+                    ReferenceCounts[identifier]++;
+                }
+                base.VisitIdentifierName(node);
+            }
         }
 
         private class LocalVariableReplacer : CSharpSyntaxRewriter
