@@ -61,14 +61,39 @@ namespace EntityFrameworkCore.Projectables.Generator
             var nonReturnStatements = statements.Take(statements.Count - 1).ToList();
             var lastStatement = statements.Last();
 
+            // First, process any local variable declarations at the beginning
+            var localDeclStatements = new List<LocalDeclarationStatementSyntax>();
+            var remainingStatements = new List<StatementSyntax>();
+            
+            foreach (var stmt in nonReturnStatements)
+            {
+                if (stmt is LocalDeclarationStatementSyntax localDecl)
+                {
+                    localDeclStatements.Add(localDecl);
+                }
+                else
+                {
+                    remainingStatements.Add(stmt);
+                }
+            }
+
+            // Process local variable declarations first
+            foreach (var localDecl in localDeclStatements)
+            {
+                if (!TryProcessLocalDeclaration(localDecl, memberName))
+                {
+                    return null;
+                }
+            }
+
             // Check if we have a pattern like multiple if statements without else followed by a final return:
-            // if (a) return 1; if (b) return 2; return 3;
+            // var x = ...; if (a) return 1; if (b) return 2; return 3;
             // This can be converted to nested ternaries: a ? 1 : (b ? 2 : 3)
             if (lastStatement is ReturnStatementSyntax finalReturn &&
-                nonReturnStatements.All(s => s is IfStatementSyntax { Else: null }))
+                remainingStatements.All(s => s is IfStatementSyntax { Else: null }))
             {
-                // All non-return statements are if statements without else
-                var ifStatements = nonReturnStatements.Cast<IfStatementSyntax>().ToList();
+                // All remaining non-return statements are if statements without else
+                var ifStatements = remainingStatements.Cast<IfStatementSyntax>().ToList();
                 
                 // Start with the final return as the base expression
                 var elseBody = TryConvertReturnStatement(finalReturn, memberName);
@@ -87,29 +112,22 @@ namespace EntityFrameworkCore.Projectables.Generator
                         return null;
                     }
                     
+                    // Rewrite the condition and replace any local variables
                     var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifStmt.Condition);
+                    condition = ReplaceLocalVariables(condition);
+                    
                     elseBody = SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
                 }
                 
                 return elseBody;
             }
 
-            // If we reach here, the pattern was not detected
-            // Process local variable declarations before the final return
-            foreach (var stmt in nonReturnStatements)
+            // If there are any remaining non-if statements, they're not supported
+            if (remainingStatements.Count > 0)
             {
-                if (stmt is LocalDeclarationStatementSyntax localDecl)
-                {
-                    if (!TryProcessLocalDeclaration(localDecl, memberName))
-                    {
-                        return null;
-                    }
-                }
-                else
-                {
-                    ReportUnsupportedStatement(stmt, memberName, "Only local variable declarations are supported before the return statement");
-                    return null;
-                }
+                ReportUnsupportedStatement(remainingStatements[0], memberName, 
+                    "Only local variable declarations and if statements without else (with return) are supported before the final return statement");
+                return null;
             }
 
             // Convert the final statement (should be a return)

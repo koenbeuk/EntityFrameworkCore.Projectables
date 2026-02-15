@@ -251,18 +251,18 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return entity.IsActive ? entity.GetCategory() : "Inactive";
         }
 
-        // [Projectable]
-        // public static string GetChainedResult(this BlockBodyProjectableCallTests.Entity entity)
-        // {
-        //     var doubled = entity.GetDoubled();
-        //     
-        //     if (doubled > 200)
-        //     {
-        //         return entity.GetCategory() + " Priority";
-        //     }
-        //     
-        //     return entity.GetLevel();
-        // }
+        [Projectable]
+        public static string GetChainedResult(this BlockBodyProjectableCallTests.Entity entity)
+        {
+            var doubled = entity.GetDoubled();
+            
+            if (doubled > 200)
+            {
+                return entity.GetCategory() + " Priority";
+            }
+            
+            return entity.GetLevel();
+        }
 
         [Projectable]
         public static bool IsComplexCondition(this BlockBodyProjectableCallTests.Entity entity)
