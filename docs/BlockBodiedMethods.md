@@ -104,6 +104,32 @@ public string GetStatus()
 }
 ```
 
+### 7. Multiple Early Returns (converted to nested ternary expressions)
+```csharp
+[Projectable]
+public string GetValueCategory()
+{
+    if (Value > 100)
+    {
+        return "Very High";
+    }
+
+    if (Value > 50)
+    {
+        return "High";
+    }
+
+    if (Value > 10)
+    {
+        return "Medium";
+    }
+
+    return "Low";
+}
+
+// Converted to: Value > 100 ? "Very High" : (Value > 50 ? "High" : (Value > 10 ? "Medium" : "Low"))
+```
+
 ## Limitations and Warnings
 
 The source generator will produce **warning EFP0003** when it encounters unsupported statements in block-bodied methods:
