@@ -41,8 +41,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             // Try to convert the block statements into an expression
-            var result = TryConvertStatements(block.Statements.ToList(), memberName);
-            return result;
+            return TryConvertStatements(block.Statements.ToList(), memberName);
         }
 
         private ExpressionSyntax? TryConvertStatements(List<StatementSyntax> statements, string memberName)
@@ -93,30 +92,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 
                 return elseBody;
-            }
-
-            // Check if we have a single if without else followed by a return (legacy path)
-            // This is now redundant with the above logic but kept for clarity and potential optimization
-            if (nonReturnStatements.Count == 1 &&
-                nonReturnStatements[0] is IfStatementSyntax { Else: null } ifWithoutElse &&
-                lastStatement is ReturnStatementSyntax singleFinalReturn)
-            {
-                // Convert: if (condition) { return x; } return y;
-                // To: condition ? x : y
-                var ifBody = TryConvertStatement(ifWithoutElse.Statement, memberName);
-                if (ifBody == null)
-                {
-                    return null;
-                }
-
-                var elseBody = TryConvertReturnStatement(singleFinalReturn, memberName);
-                if (elseBody == null)
-                {
-                    return null;
-                }
-
-                var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifWithoutElse.Condition);
-                return SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
             }
 
             // If we reach here, the pattern was not detected
@@ -226,7 +201,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             return expression;
         }
 
-        private ExpressionSyntax? TryConvertIfStatement(IfStatementSyntax ifStmt, string memberName)
+        private ConditionalExpressionSyntax? TryConvertIfStatement(IfStatementSyntax ifStmt, string memberName)
         {
             // Convert if-else to conditional (ternary) expression
             // First, rewrite the condition using the expression rewriter
@@ -371,25 +346,28 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 statements = statements.Take(statements.Count - 1).ToList();
             }
-            
-            if (statements.Count == 0)
+
+            if (statements.Count != 0)
             {
-                // Use the section's first label location for error reporting
-                var firstLabel = section.Labels.FirstOrDefault();
-                if (firstLabel != null)
-                {
-                    var diagnostic = Diagnostic.Create(
-                        Diagnostics.UnsupportedStatementInBlockBody,
-                        firstLabel.GetLocation(),
-                        memberName,
-                        "Switch section must have at least one statement"
-                    );
-                    _context.ReportDiagnostic(diagnostic);
-                }
+                return TryConvertStatements(statements, memberName);
+            }
+
+            // Use the section's first label location for error reporting
+            var firstLabel = section.Labels.FirstOrDefault();
+            if (firstLabel == null)
+            {
                 return null;
             }
-            
-            return TryConvertStatements(statements, memberName);
+
+            var diagnostic = Diagnostic.Create(
+                Diagnostics.UnsupportedStatementInBlockBody,
+                firstLabel.GetLocation(),
+                memberName,
+                "Switch section must have at least one statement"
+            );
+            _context.ReportDiagnostic(diagnostic);
+            return null;
+
         }
 
         private ExpressionSyntax ReplaceLocalVariables(ExpressionSyntax expression)

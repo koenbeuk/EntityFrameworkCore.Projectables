@@ -1,0 +1,2 @@
+﻿SELECT [e].[Value] * 2 + 84
+FROM [Entity] AS [e]

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using VerifyXunit;
 using Xunit;
 
-namespace EntityFrameworkCore.Projectables.FunctionalTests
+namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
 {
     [UsesVerify]
     public class BlockBodiedMethodTests
