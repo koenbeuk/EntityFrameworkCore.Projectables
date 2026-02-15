@@ -52,38 +52,39 @@ namespace EntityFrameworkCore.Projectables.Generator
         public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             // Fully qualify extension method calls
-            if (node.Expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax)
+            if (node.Expression is not MemberAccessExpressionSyntax memberAccessExpressionSyntax)
             {
-                var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
-                if (symbol is IMethodSymbol methodSymbol)
-                {
-                    // Check if we should expand enum methods
-                    if (_expandEnumMethods)
-                    {
-                        if (TryExpandEnumMethodCall(node, memberAccessExpressionSyntax, methodSymbol, out var expandedExpression))
-                        {
-                            return expandedExpression;
-                        }
-                    }
+                return base.VisitInvocationExpression(node);
+            }
 
-                    // Fully qualify extension method calls
-                    if (methodSymbol.IsExtensionMethod)
-                    {
-                        return SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.MemberAccessExpression(
-                                SyntaxKind.SimpleMemberAccessExpression,
-                                SyntaxFactory.ParseName(methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat)),
-                                memberAccessExpressionSyntax.Name
-                            ),
-                            node.ArgumentList.WithArguments(
-                                ((ArgumentListSyntax)VisitArgumentList(node.ArgumentList)!).Arguments.Insert(0, SyntaxFactory.Argument(
-                                        (ExpressionSyntax)Visit(memberAccessExpressionSyntax.Expression)
-                                    )
-                                )
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            if (symbol is not IMethodSymbol methodSymbol)
+            {
+                return base.VisitInvocationExpression(node);
+            }
+
+            // Check if we should expand enum methods
+            if (_expandEnumMethods && TryExpandEnumMethodCall(node, memberAccessExpressionSyntax, methodSymbol, out var expandedExpression))
+            {
+                return expandedExpression;
+            }
+
+            // Fully qualify extension method calls
+            if (methodSymbol.IsExtensionMethod)
+            {
+                return SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.ParseName(methodSymbol.ContainingType.ToDisplayString(NullableFlowState.None, SymbolDisplayFormat.FullyQualifiedFormat)),
+                        memberAccessExpressionSyntax.Name
+                    ),
+                    node.ArgumentList.WithArguments(
+                        ((ArgumentListSyntax)VisitArgumentList(node.ArgumentList)!).Arguments.Insert(0, SyntaxFactory.Argument(
+                                (ExpressionSyntax)Visit(memberAccessExpressionSyntax.Expression)
                             )
-                        );
-                    }
-                }
+                        )
+                    )
+                );
             }
 
             return base.VisitInvocationExpression(node);
@@ -100,7 +101,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             // Handle nullable enum types
             ITypeSymbol enumType;
-            bool isNullable = false;
+            var isNullable = false;
             if (receiverType is INamedTypeSymbol { IsGenericType: true, Name: "Nullable" } nullableType && 
                 nullableType.TypeArguments.Length == 1 && 
                 nullableType.TypeArguments[0].TypeKind == TypeKind.Enum)
@@ -140,29 +141,36 @@ namespace EntityFrameworkCore.Projectables.Generator
             
             // Build a chain of ternary expressions for each enum value
             // Start with default(T) as the fallback for non-nullable types, or null for nullable/reference types
-            ExpressionSyntax? currentExpression;
+            ExpressionSyntax defaultExpression;
             if (returnType.IsReferenceType || returnType.NullableAnnotation == NullableAnnotation.Annotated || 
-                (returnType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T))
+                returnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
             {
-                currentExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
+                defaultExpression = SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
             }
             else
             {
                 // Use default(T) for value types
-                currentExpression = SyntaxFactory.DefaultExpression(
+                defaultExpression = SyntaxFactory.DefaultExpression(
                     SyntaxFactory.ParseTypeName(returnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
             }
 
-            // Build the ternary chain, calling the method on each enum value
-            foreach (var enumMember in enumMembers.AsEnumerable().Reverse())
-            {
-                // Create the enum value access: EnumType.Value
-                var enumValueAccess = SyntaxFactory.MemberAccessExpression(
-                    SyntaxKind.SimpleMemberAccessExpression,
-                    SyntaxFactory.ParseTypeName(enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                    SyntaxFactory.IdentifierName(enumMember.Name)
+            var currentExpression = defaultExpression;
+            
+            // Create the enum value access: EnumType.Value
+            var enumAccessValues = enumMembers
+                .AsEnumerable()
+                .Reverse()
+                .Select(m =>
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.ParseTypeName(enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                        SyntaxFactory.IdentifierName(m.Name)
+                    )
                 );
 
+            // Build the ternary chain, calling the method on each enum value
+            foreach (var enumValueAccess in enumAccessValues)
+            {
                 // Create the method call on the enum value: ExtensionClass.Method(EnumType.Value)
                 var methodCall = CreateMethodCallOnEnumValue(originalMethod, enumValueAccess, node.ArgumentList);
 
@@ -192,7 +200,7 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 currentExpression = SyntaxFactory.ConditionalExpression(
                     nullCheck,
-                    SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression),
+                    defaultExpression,
                     currentExpression
                 );
             }

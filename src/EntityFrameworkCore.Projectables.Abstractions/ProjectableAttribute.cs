@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace EntityFrameworkCore.Projectables
+﻿namespace EntityFrameworkCore.Projectables
 {
     /// <summary>
     /// Declares this property or method to be Projectable. 
@@ -25,17 +19,18 @@ namespace EntityFrameworkCore.Projectables
         public string? UseMemberBody { get; set; }
 
         /// <summary>
-        /// Get or set whether to expand enum method/extension calls by evaluating them at compile time
-        /// and generating ternary expressions for each enum value.
+        /// Get or set whether to expand enum method/extension calls by evaluating them and generating ternary
+        /// expressions for each enum value.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// When enabled, method calls on enum values are resolved at compile time by evaluating 
+        /// When enabled, method calls on enum values are rewritten into a chain of ternary expressions that call
         /// the method for each possible enum value and generating a chain of ternary expressions.
         /// </para>
         /// <para>
         /// For example, <c>MyEnumValue.GetDescription()</c> would be expanded to:
-        /// <c>MyEnumValue == Value1 ? "Description 1" : MyEnumValue == Value2 ? "Description 2" : null</c>
+        /// <c>MyEnumValue == MyEnum.Value1 ? MyEnum.Value1.GetDescription() :
+        /// MyEnumValue == MyEnum.Value2 ? MyEnum.Value2.GetDescription() : null</c>
         /// </para>
         /// <para>
         /// This is useful for <c>Where()</c> and <c>OrderBy()</c> clauses where the expression
