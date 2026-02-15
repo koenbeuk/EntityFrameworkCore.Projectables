@@ -75,6 +75,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .OfType<string?>()
                 .FirstOrDefault();
 
+            var expandEnumMethods = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "ExpandEnumMethods")
+                .Select(x => x.Value.Value is bool b && b)
+                .FirstOrDefault();
+
             var memberBody = member;
 
             if (useMemberBody is not null)
@@ -152,6 +157,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             var expressionSyntaxRewriter = new ExpressionSyntaxRewriter(
                 targetTypeForRewriting, 
                 nullConditionalRewriteSupport, 
+                expandEnumMethods,
                 semanticModel, 
                 context,
                 extensionParameter?.Name);

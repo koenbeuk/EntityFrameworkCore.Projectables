@@ -1,0 +1,8 @@
+﻿SELECT [o].[Id], [o].[CustomerId], [o].[Priority], [o].[Status]
+FROM [Order] AS [o]
+ORDER BY CASE
+    WHEN COALESCE([o].[Priority], 0) = 0 THEN 1
+    WHEN COALESCE([o].[Priority], 0) = 1 THEN 2
+    WHEN COALESCE([o].[Priority], 0) = 2 THEN 3
+    ELSE 0
+END
