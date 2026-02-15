@@ -25,7 +25,7 @@
         /// <remarks>
         /// <para>
         /// When enabled, method calls on enum values are rewritten into a chain of ternary expressions that call
-        /// the method for each possible enum value and generating a chain of ternary expressions.
+        /// the method for each possible enum value.
         /// </para>
         /// <para>
         /// For example, <c>MyEnumValue.GetDescription()</c> would be expanded to:
