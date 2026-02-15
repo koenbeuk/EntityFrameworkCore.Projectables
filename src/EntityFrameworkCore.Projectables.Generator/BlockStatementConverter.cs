@@ -1,8 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace EntityFrameworkCore.Projectables.Generator
 {
@@ -12,14 +10,12 @@ namespace EntityFrameworkCore.Projectables.Generator
     /// </summary>
     public class BlockStatementConverter
     {
-        private readonly SemanticModel _semanticModel;
         private readonly SourceProductionContext _context;
         private readonly ExpressionSyntaxRewriter _expressionRewriter;
         private readonly Dictionary<string, ExpressionSyntax> _localVariables = new();
 
-        public BlockStatementConverter(SemanticModel semanticModel, SourceProductionContext context, ExpressionSyntaxRewriter expressionRewriter)
+        public BlockStatementConverter(SourceProductionContext context, ExpressionSyntaxRewriter expressionRewriter)
         {
-            _semanticModel = semanticModel;
             _context = context;
             _expressionRewriter = expressionRewriter;
         }
@@ -30,7 +26,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// </summary>
         public ExpressionSyntax? TryConvertBlock(BlockSyntax block, string memberName)
         {
-            if (block == null || block.Statements.Count == 0)
+            if (block.Statements.Count == 0)
             {
                 return null;
             }
@@ -57,12 +53,44 @@ namespace EntityFrameworkCore.Projectables.Generator
             var nonReturnStatements = statements.Take(statements.Count - 1).ToList();
             var lastStatement = statements.Last();
 
-            // Check if we have a pattern like: if { return x; } return y;
-            // This can be converted to: condition ? x : y
-            if (nonReturnStatements.Count == 1 && 
-                nonReturnStatements[0] is IfStatementSyntax ifWithoutElse && 
-                ifWithoutElse.Else == null &&
-                lastStatement is ReturnStatementSyntax finalReturn)
+            // Check if we have a pattern like multiple if statements without else followed by a final return:
+            // if (a) return 1; if (b) return 2; return 3;
+            // This can be converted to nested ternaries: a ? 1 : (b ? 2 : 3)
+            if (lastStatement is ReturnStatementSyntax finalReturn &&
+                nonReturnStatements.All(s => s is IfStatementSyntax { Else: null }))
+            {
+                // All non-return statements are if statements without else
+                var ifStatements = nonReturnStatements.Cast<IfStatementSyntax>().ToList();
+                
+                // Start with the final return as the base expression
+                var elseBody = TryConvertReturnStatement(finalReturn, memberName);
+                if (elseBody == null)
+                {
+                    return null;
+                }
+                
+                // Build nested conditionals from right to left (last to first)
+                for (var i = ifStatements.Count - 1; i >= 0; i--)
+                {
+                    var ifStmt = ifStatements[i];
+                    var ifBody = TryConvertStatement(ifStmt.Statement, memberName);
+                    if (ifBody == null)
+                    {
+                        return null;
+                    }
+                    
+                    var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifStmt.Condition);
+                    elseBody = SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
+                }
+                
+                return elseBody;
+            }
+
+            // Check if we have a single if without else followed by a return (legacy path)
+            // This is now redundant with the above logic but kept for clarity and potential optimization
+            if (nonReturnStatements.Count == 1 &&
+                nonReturnStatements[0] is IfStatementSyntax { Else: null } ifWithoutElse &&
+                lastStatement is ReturnStatementSyntax singleFinalReturn)
             {
                 // Convert: if (condition) { return x; } return y;
                 // To: condition ? x : y
@@ -72,7 +100,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                var elseBody = TryConvertReturnStatement(finalReturn, memberName);
+                var elseBody = TryConvertReturnStatement(singleFinalReturn, memberName);
                 if (elseBody == null)
                 {
                     return null;
@@ -115,9 +143,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
 
                 var variableName = variable.Identifier.Text;
+                
                 // Rewrite the initializer expression NOW while it's still in the tree
-                var rewrittenInitializer = (ExpressionSyntax)_expressionRewriter.Visit(variable.Initializer.Value);
-                _localVariables[variableName] = rewrittenInitializer;
+                _localVariables[variableName] = (ExpressionSyntax)_expressionRewriter.Visit(variable.Initializer.Value);
             }
 
             return true;
@@ -139,7 +167,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 case BlockSyntax blockStmt:
                     return TryConvertStatements(blockStmt.Statements.ToList(), memberName);
 
-                case ExpressionStatementSyntax exprStmt:
+                case ExpressionStatementSyntax:
                     // Expression statements are generally not useful in expression trees
                     ReportUnsupportedStatement(statement, memberName, "Expression statements are not supported");
                     return null;
@@ -217,7 +245,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Process sections in reverse order to build from the default case up
             
             var switchExpression = (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
-            ExpressionSyntax? currentExpression = null;
+            ExpressionSyntax? currentExpression;
             
             // Find default case first
             SwitchSectionSyntax? defaultSection = null;
@@ -225,7 +253,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             
             foreach (var section in switchStmt.Sections)
             {
-                bool hasDefault = section.Labels.Any(label => label is DefaultSwitchLabelSyntax);
+                var hasDefault = section.Labels.Any(label => label is DefaultSwitchLabelSyntax);
                 if (hasDefault)
                 {
                     defaultSection = section;
@@ -255,7 +283,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
             
             // Process non-default sections in reverse order
-            for (int i = nonDefaultSections.Count - 1; i >= 0; i--)
+            for (var i = nonDefaultSections.Count - 1; i >= 0; i--)
             {
                 var section = nonDefaultSections[i];
                 var sectionExpression = ConvertSwitchSection(section, memberName);

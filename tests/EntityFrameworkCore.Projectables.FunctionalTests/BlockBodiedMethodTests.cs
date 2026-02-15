@@ -138,6 +138,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task MultipleEarlyReturns_ConvertedToNestedTernaries()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var query = dbContext.Set<Entity>()
+                .Select(x => x.GetValueCategory());
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 
     public static class EntityExtensions
@@ -265,6 +276,27 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
                 default:
                     return "Critical";
             }
+        }
+
+        [Projectable]
+        public static string GetValueCategory(this BlockBodiedMethodTests.Entity entity)
+        {
+            if (entity.Value > 100)
+            {
+                return "Very High";
+            }
+
+            if (entity.Value > 50)
+            {
+                return "High";
+            }
+
+            if (entity.Value > 10)
+            {
+                return "Medium";
+            }
+
+            return "Low";
         }
     }
 }

@@ -312,7 +312,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 else if (methodDeclarationSyntax.Body is not null)
                 {
                     // Block-bodied method (e.g., int Foo() { return 1; })
-                    var blockConverter = new BlockStatementConverter(semanticModel, context, expressionSyntaxRewriter);
+                    var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
                     bodyExpression = blockConverter.TryConvertBlock(methodDeclarationSyntax.Body, memberSymbol.Name);
 
                     if (bodyExpression is null)
