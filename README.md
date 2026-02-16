@@ -160,7 +160,7 @@ ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ```
 
 #### Can I use block-bodied methods instead of expression-bodied methods?
-Yes! As of version 3.x, you can now use traditional block-bodied methods with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
+Yes! As of version 6.x, you can now use traditional block-bodied methods with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
 
 ```csharp
 // Expression-bodied (still supported)
