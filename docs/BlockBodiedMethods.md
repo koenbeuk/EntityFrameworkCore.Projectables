@@ -72,7 +72,7 @@ public int CalculateComplex()
 
 **⚠️ Important Notes:**
 - Local variables are inlined at each usage point, which duplicates the initializer expression
-- If a local variable is used multiple times, the generator will emit a warning (EFP0003) as this could change semantics if the initializer has side effects
+- If a local variable is used multiple times, its initializer expression is duplicated at each usage, which can change semantics if the initializer has side effects
 - Local variables can only be declared at the method body level, not inside nested blocks (if/switch/etc.)
 - Variables are fully expanded transitively (variables that reference other variables are fully inlined)
 

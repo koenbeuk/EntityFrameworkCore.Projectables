@@ -224,6 +224,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Convert if-else to conditional (ternary) expression
             // First, rewrite the condition using the expression rewriter
             var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifStmt.Condition);
+            
+            // Then replace any local variable references with their already-rewritten initializers
+            condition = ReplaceLocalVariables(condition);
 
             var whenTrue = TryConvertStatement(ifStmt.Statement, memberName);
             if (whenTrue == null)
@@ -264,6 +267,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Process sections in reverse order to build from the default case up
             
             var switchExpression = (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
+            // Replace any local variable references in the switch expression
+            switchExpression = ReplaceLocalVariables(switchExpression);
+            
             ExpressionSyntax? currentExpression;
             
             // Find default case first
@@ -317,10 +323,14 @@ namespace EntityFrameworkCore.Projectables.Generator
                 {
                     if (label is CaseSwitchLabelSyntax caseLabel)
                     {
+                        // Rewrite and replace locals in case label value
+                        var caseLabelValue = (ExpressionSyntax)_expressionRewriter.Visit(caseLabel.Value);
+                        caseLabelValue = ReplaceLocalVariables(caseLabelValue);
+                        
                         var labelCondition = SyntaxFactory.BinaryExpression(
                             SyntaxKind.EqualsExpression,
                             switchExpression,
-                            (ExpressionSyntax)_expressionRewriter.Visit(caseLabel.Value)
+                            caseLabelValue
                         );
                         
                         condition = condition == null 

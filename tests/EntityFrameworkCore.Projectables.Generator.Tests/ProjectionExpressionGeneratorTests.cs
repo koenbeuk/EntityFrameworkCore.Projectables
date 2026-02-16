@@ -2161,6 +2161,77 @@ namespace Foo {
         }
 
         [Fact]
+        public Task BlockBodiedMethod_LocalInIfCondition()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            var threshold = Bar * 2;
+            if (threshold > 10)
+            {
+                return 1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_LocalInSwitchExpression()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public string Foo()
+        {
+            var value = Bar * 2;
+            switch (value)
+            {
+                case 2:
+                    return ""Two"";
+                case 4:
+                    return ""Four"";
+                default:
+                    return ""Other"";
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task BlockBodiedMethod_LocalsInNestedBlock_ProducesDiagnostic()
         {
             var compilation = CreateCompilation(@"
