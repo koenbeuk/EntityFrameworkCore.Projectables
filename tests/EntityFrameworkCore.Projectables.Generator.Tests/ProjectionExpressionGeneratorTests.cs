@@ -2610,6 +2610,41 @@ namespace Foo {
         }
 
         [Fact]
+        public Task BlockBodiedMethod_WithPatternMatching()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public bool IsActive { get; set; }
+        public int Value { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable]
+        public static string GetComplexCategory(this Entity entity)
+        {
+            if (entity is { IsActive: true, Value: > 100 })
+            {
+                return ""Active High"";
+            }
+            return ""Other"";
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // The generator should not crash and should handle pattern matching
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task MethodOverloads_WithDifferentParameterTypes()
         {
             // lang=csharp
