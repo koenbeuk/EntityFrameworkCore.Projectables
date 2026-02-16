@@ -299,3 +299,85 @@ SELECT CASE
 END
 FROM [Entity] AS [e]
 ```
+
+## Side Effect Detection
+
+The generator provides specific error reporting for side effects in block-bodied methods, helping you identify and fix issues quickly.
+
+### Detected Side Effects
+
+#### 1. Property Assignments (EFP0004 - Error)
+
+Property assignments modify state and are not allowed:
+
+```csharp
+[Projectable]
+public int Foo()
+{
+    Bar = 10;  // ❌ Error: Assignment operation has side effects
+    return Bar;
+}
+```
+
+#### 2. Compound Assignments (EFP0004 - Error)
+
+Compound assignment operators like `+=`, `-=`, `*=`, etc. are not allowed:
+
+```csharp
+[Projectable]
+public int Foo()
+{
+    Bar += 10;  // ❌ Error: Compound assignment operator '+=' has side effects
+    return Bar;
+}
+```
+
+#### 3. Increment/Decrement Operators (EFP0004 - Error)
+
+Pre and post increment/decrement operators are not allowed:
+
+```csharp
+[Projectable]
+public int Foo()
+{
+    var x = 5;
+    x++;  // ❌ Error: Increment/decrement operator '++' has side effects
+    return x;
+}
+```
+
+#### 4. Non-Projectable Method Calls (EFP0005 - Warning)
+
+Calls to methods not marked with `[Projectable]` may have side effects:
+
+```csharp
+[Projectable]
+public int Foo()
+{
+    Console.WriteLine("test");  // ⚠️ Warning: Method call 'WriteLine' may have side effects
+    return Bar;
+}
+```
+
+### Diagnostic Codes
+
+- **EFP0003**: Unsupported statement in block-bodied method (Warning)
+- **EFP0004**: Statement with side effects in block-bodied method (Error)
+- **EFP0005**: Potential side effect in block-bodied method (Warning)
+
+### Error Message Improvements
+
+Instead of generic error messages, you now get precise, actionable feedback:
+
+**Before:**
+```
+warning EFP0003: Method 'Foo' contains an unsupported statement: Expression statements are not supported
+```
+
+**After:**
+```
+error EFP0004: Property assignment 'Bar' has side effects and cannot be used in projectable methods
+```
+
+The error message points to the exact line with the problematic code, making it much easier to identify and fix issues.
+
