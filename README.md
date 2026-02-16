@@ -191,6 +191,200 @@ Both generate identical SQL. Block-bodied members support:
 
 The generator will also detect and report side effects (assignments, method calls to non-projectable members, etc.) with precise error messages. See [Block-Bodied Members Documentation](docs/BlockBodiedMembers.md) for complete details.
 
+#### Can I use `[Projectable]` on a constructor?
+
+Yes! Constructors can now be marked with `[Projectable]`. The generator will produce a member-init expression (`new T() { Prop = value, … }`) that EF Core can translate to a SQL projection.
+
+**Requirements:**
+- The class must expose an accessible **parameterless constructor** (public, internal, or protected-internal), because the generated code relies on `new T() { … }` syntax.
+- If a parameterless constructor is missing, the generator reports **EFP0008**.
+
+```csharp
+public class Customer
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public bool IsActive { get; set; }
+    public ICollection<Order> Orders { get; set; }
+}
+    
+public class Order
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public class CustomerDto
+{
+    public int Id { get; set; }
+    public string FullName { get; set; }
+    public bool IsActive { get; set; }
+    public int OrderCount { get; set; }
+
+    public CustomerDto() { }   // required parameterless ctor
+
+    [Projectable]
+    public CustomerDto(Customer customer)
+    {
+        Id = customer.Id;
+        FullName = customer.FirstName + " " + customer.LastName;
+        IsActive = customer.IsActive;
+        OrderCount = customer.Orders.Count();
+    }
+}
+
+// Usage — the constructor call is translated directly to SQL
+var customers = dbContext.Customers
+    .Select(c => new CustomerDto(c))
+    .ToList();
+```
+
+The generator produces an expression equivalent to:
+```csharp
+(Customer customer) => new CustomerDto()
+{
+    Id = customer.Id,
+    FullName = customer.FirstName + " " + customer.LastName,
+    IsActive = customer.IsActive,
+    OrderCount = customer.Orders.Count()
+}
+```
+
+**Supported in constructor bodies:**
+- Simple property assignments (`FullName = customer.FirstName + " " + customer.LastName;`)
+- Local variable declarations (inlined at usage points)
+- If/else and chained if/else-if statements (converted to ternary expressions)
+- Switch expressions
+- Base/this initializer chains – the generator recursively inlines the delegated constructor's assignments
+
+The base/this initializer chain is particularly useful when you have a DTO inheritance hierarchy:
+
+```csharp
+public class PersonDto
+{
+    public string FullName { get; set; }
+    public string Email { get; set; }
+
+    public PersonDto() { }
+
+    [Projectable]
+    public PersonDto(Person person)
+    {
+        FullName = person.FirstName + " " + person.LastName;
+        Email = person.Email;
+    }
+}
+
+public class EmployeeDto : PersonDto
+{
+    public string Department { get; set; }
+    public string Grade { get; set; }
+
+    public EmployeeDto() { }
+
+    [Projectable]
+    public EmployeeDto(Employee employee) : base(employee)   // PersonDto assignments are inlined automatically
+    {
+        Department = employee.Department.Name;
+        Grade = employee.YearsOfService >= 10 ? "Senior" : "Junior";
+    }
+}
+
+// Usage
+var employees = dbContext.Employees
+    .Select(e => new EmployeeDto(e))
+    .ToList();
+```
+
+The generated expression inlines both the base constructor and the derived constructor body:
+```csharp
+(Employee employee) => new EmployeeDto()
+{
+    FullName = employee.FirstName + " " + employee.LastName,
+    Email = employee.Email,
+    Department = employee.Department.Name,
+    Grade = employee.YearsOfService >= 10 ? "Senior" : "Junior"
+}
+```
+
+Multiple `[Projectable]` constructors (overloads) per class are fully supported.
+
+> **Note:** If the delegated constructor's source is not available in the current compilation, the generator reports **EFP0009** and skips the projection.
+
+#### Can I use pattern matching in projectable members?
+
+Yes! The generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
+
+**Switch expressions** with the following arm patterns are supported:
+
+| Pattern               | Example                  |
+|-----------------------|--------------------------|
+| Constant              | `1 => "one"`             |
+| Discard / default     | `_ => "other"`           |
+| Type                  | `GroupItem g => …`       |
+| Relational            | `>= 90 => "A"`           |
+| `and` / `or` combined | `>= 80 and < 90 => "B"`  |
+| `when` guard          | `4 when Prop == 12 => …` |
+
+```csharp
+[Projectable]
+public string GetGrade() => Score switch
+{
+    >= 90 => "A",
+    >= 80 => "B",
+    >= 70 => "C",
+    _     => "F",
+};
+```
+
+Generated expression (which EF Core translates to a SQL CASE):
+```csharp
+(@this) => @this.Score >= 90 ? "A" : @this.Score >= 80 ? "B" : @this.Score >= 70 ? "C" : "F"
+```
+
+**`is` patterns** in expression-bodied members are also supported:
+
+```csharp
+// Range check using 'and'
+[Projectable]
+public bool IsInRange => Value is >= 1 and <= 100;
+
+// Alternative-value check using 'or'
+[Projectable]
+public bool IsOutOfRange => Value is 0 or > 100;
+
+// Null check using 'not'
+[Projectable]
+public bool HasName => Name is not null;
+
+// Property pattern
+[Projectable]
+public static bool IsActiveAndPositive(this Entity entity) =>
+    entity is { IsActive: true, Value: > 0 };
+```
+
+These are all rewritten into plain binary/unary expressions that expression trees support:
+```csharp
+// Value is >= 1 and <= 100  →  Value >= 1 && Value <= 100
+// Name is not null          →  !(Name == null)
+// entity is { IsActive: true, Value: > 0 }
+//   → entity != null && entity.IsActive == true && entity.Value > 0
+```
+
+**Type patterns in switch arms** produce a cast + type-check:
+```csharp
+[Projectable]
+public static ItemData ToData(this Item item) =>
+    item switch
+    {
+        GroupItem g    => new GroupData(g.Id, g.Name, g.Description),
+        DocumentItem d => new DocumentData(d.Id, d.Name, d.Priority),
+        _              => null!
+    };
+```
+
+Unsupported patterns (e.g. positional/deconstruct patterns, variable designations outside switch arms) are reported as **EFP0007**.
 
 #### How do I expand enum extension methods?
 When you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
@@ -284,6 +478,7 @@ The `ExpandEnumMethods` feature supports:
 - **Nullable enum types** - wraps the expansion in a null check
 - **Methods with parameters** - parameters are passed through to each enum value call
 - **Enum properties on navigation properties** - works with nested navigation
+
 
 #### How does this relate to [Expressionify](https://github.com/ClaveConsulting/Expressionify)?
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existence, so shame on me. Currently, Expressionify targets a more focused scope of what this project is doing, and thereby it seems to be more limiting in its capabilities. Check them out though!
