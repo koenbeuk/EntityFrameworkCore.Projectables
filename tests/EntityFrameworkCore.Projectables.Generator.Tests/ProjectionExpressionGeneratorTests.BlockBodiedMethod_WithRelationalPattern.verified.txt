@@ -7,11 +7,11 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Foo_Extensions_GetComplexCategory_P0_Foo_Entity
+    static class Foo_Extensions_GetCategory_P0_Foo_Entity
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.Entity, string>> Expression()
         {
-            return (global::Foo.Entity entity) => entity != null && entity.IsActive == true && entity.Value > 100 ? "Active High" : "Other";
+            return (global::Foo.Entity entity) => entity.Value > 100 ? "High" : "Low";
         }
     }
 }

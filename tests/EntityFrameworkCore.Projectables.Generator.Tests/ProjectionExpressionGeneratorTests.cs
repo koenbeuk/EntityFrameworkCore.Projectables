@@ -2645,6 +2645,105 @@ namespace Foo {
         }
 
         [Fact]
+        public Task BlockBodiedMethod_WithRelationalPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable]
+        public static string GetCategory(this Entity entity)
+        {
+            if (entity.Value is > 100)
+            {
+                return ""High"";
+            }
+            return ""Low"";
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithConstantPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public string Status { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable]
+        public static bool IsNull(this Entity entity)
+        {
+            if (entity is null)
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithNotPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public string Name { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable]
+        public static bool IsNotNull(this Entity entity)
+        {
+            if (entity is not null)
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task MethodOverloads_WithDifferentParameterTypes()
         {
             // lang=csharp
