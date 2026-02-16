@@ -26,6 +26,8 @@ namespace EntityFrameworkCore.Projectables.Generator
             _extensionParameterName = extensionParameterName;
         }
 
+        public SemanticModel GetSemanticModel() => _semanticModel;
+
         private SyntaxNode? VisitThisBaseExpression(CSharpSyntaxNode node)
         {
             // Swap out the use of this and base to @this and keep leading and trailing trivias

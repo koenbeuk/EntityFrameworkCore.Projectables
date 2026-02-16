@@ -122,9 +122,21 @@ namespace EntityFrameworkCore.Projectables.Generator
                 return elseBody;
             }
 
-            // If there are any remaining non-if statements, they're not supported
+            // If there are any remaining non-if statements, try to convert them individually
+            // This will provide better error messages for unsupported statements
             if (remainingStatements.Count > 0)
             {
+                // Try converting each remaining statement - this will provide specific error messages
+                foreach (var stmt in remainingStatements)
+                {
+                    var converted = TryConvertStatement(stmt, memberName);
+                    if (converted == null)
+                    {
+                        return null;
+                    }
+                }
+                
+                // If we got here but had non-if statements, they weren't properly handled
                 ReportUnsupportedStatement(remainingStatements[0], memberName, 
                     "Only local variable declarations and if statements without else (with return) are supported before the final return statement");
                 return null;
@@ -186,10 +198,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                     
                     return TryConvertStatements(blockStmt.Statements.ToList(), memberName);
 
-                case ExpressionStatementSyntax:
-                    // Expression statements are generally not useful in expression trees
-                    ReportUnsupportedStatement(statement, memberName, "Expression statements are not supported");
-                    return null;
+                case ExpressionStatementSyntax exprStmt:
+                    // Expression statements may contain side effects - analyze them
+                    return AnalyzeExpressionStatement(exprStmt, memberName);
 
                 case LocalDeclarationStatementSyntax:
                     // Local declarations should be handled before the return statement
@@ -403,6 +414,92 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Use a rewriter to replace local variable references with their initializer expressions
             var rewriter = new LocalVariableReplacer(_localVariables);
             return (ExpressionSyntax)rewriter.Visit(expression);
+        }
+
+        private ExpressionSyntax? AnalyzeExpressionStatement(ExpressionStatementSyntax exprStmt, string memberName)
+        {
+            var expression = exprStmt.Expression;
+            
+            // Check for specific side effects
+            switch (expression)
+            {
+                case AssignmentExpressionSyntax assignment:
+                    ReportSideEffect(assignment, GetAssignmentErrorMessage(assignment));
+                    return null;
+                    
+                case PostfixUnaryExpressionSyntax postfix when 
+                    postfix.IsKind(SyntaxKind.PostIncrementExpression) || 
+                    postfix.IsKind(SyntaxKind.PostDecrementExpression):
+                    ReportSideEffect(postfix, $"Increment/decrement operator '{postfix.OperatorToken.Text}' has side effects and cannot be used in projectable methods");
+                    return null;
+                    
+                case PrefixUnaryExpressionSyntax prefix when 
+                    prefix.IsKind(SyntaxKind.PreIncrementExpression) || 
+                    prefix.IsKind(SyntaxKind.PreDecrementExpression):
+                    ReportSideEffect(prefix, $"Increment/decrement operator '{prefix.OperatorToken.Text}' has side effects and cannot be used in projectable methods");
+                    return null;
+                    
+                case InvocationExpressionSyntax invocation:
+                    // Check if this is a potentially impure method call
+                    var symbolInfo = _expressionRewriter.GetSemanticModel().GetSymbolInfo(invocation);
+                    if (symbolInfo.Symbol is IMethodSymbol methodSymbol)
+                    {
+                        // Check if method has [Projectable] attribute - those are safe
+                        var hasProjectableAttr = methodSymbol.GetAttributes()
+                            .Any(attr => attr.AttributeClass?.Name == "ProjectableAttribute");
+                            
+                        if (!hasProjectableAttr)
+                        {
+                            ReportPotentialSideEffect(invocation, 
+                                $"Method call '{methodSymbol.Name}' may have side effects. Only calls to methods marked with [Projectable] are guaranteed to be safe in projectable methods");
+                            return null;
+                        }
+                    }
+                    break;
+            }
+            
+            // If we got here, it's an expression statement we don't support
+            ReportUnsupportedStatement(exprStmt, memberName, "Expression statements are not supported in projectable methods");
+            return null;
+        }
+        
+        private string GetAssignmentErrorMessage(AssignmentExpressionSyntax assignment)
+        {
+            var operatorText = assignment.OperatorToken.Text;
+            
+            if (assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+            {
+                if (assignment.Left is MemberAccessExpressionSyntax memberAccess)
+                {
+                    return $"Property assignment '{memberAccess.Name}' has side effects and cannot be used in projectable methods";
+                }
+                return $"Assignment operation has side effects and cannot be used in projectable methods";
+            }
+            else
+            {
+                // Compound assignment like +=, -=, etc.
+                return $"Compound assignment operator '{operatorText}' has side effects and cannot be used in projectable methods";
+            }
+        }
+        
+        private void ReportSideEffect(SyntaxNode node, string message)
+        {
+            var diagnostic = Diagnostic.Create(
+                Diagnostics.SideEffectInBlockBody,
+                node.GetLocation(),
+                message
+            );
+            _context.ReportDiagnostic(diagnostic);
+        }
+        
+        private void ReportPotentialSideEffect(SyntaxNode node, string message)
+        {
+            var diagnostic = Diagnostic.Create(
+                Diagnostics.PotentialSideEffectInBlockBody,
+                node.GetLocation(),
+                message
+            );
+            _context.ReportDiagnostic(diagnostic);
         }
 
         private void ReportUnsupportedStatement(StatementSyntax statement, string memberName, string reason)

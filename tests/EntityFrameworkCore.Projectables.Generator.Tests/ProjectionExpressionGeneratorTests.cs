@@ -2493,6 +2493,123 @@ namespace Foo {
         }
 
         [Fact]
+        public Task BlockBodiedMethod_PropertyAssignment_ReportsError()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            Bar = 10;
+            return Bar;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a diagnostic about side effects
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0004");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_CompoundAssignment_ReportsError()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            Bar += 10;
+            return Bar;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a diagnostic about side effects
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0004");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_IncrementOperator_ReportsError()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            var x = 5;
+            x++;
+            return x;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a diagnostic about side effects
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0004");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_NonProjectableMethodCall_ReportsWarning()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo()
+        {
+            Console.WriteLine(""test"");
+            return Bar;
+        }
+    }
+}
+", expectedToCompile: true);
+
+            var result = RunGenerator(compilation);
+
+            // Should have a diagnostic about potential side effects
+            Assert.NotEmpty(result.Diagnostics);
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0005");
+
+            return Verifier.Verify(result.Diagnostics.Select(d => d.ToString()));
+        }
+
+        [Fact]
         public Task MethodOverloads_WithDifferentParameterTypes()
         {
             // lang=csharp

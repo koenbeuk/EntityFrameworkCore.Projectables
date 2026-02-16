@@ -33,5 +33,21 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor SideEffectInBlockBody = new DiagnosticDescriptor(
+            id: "EFP0004",
+            title: "Statement with side effects in block-bodied method",
+            messageFormat: "{0}",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor PotentialSideEffectInBlockBody = new DiagnosticDescriptor(
+            id: "EFP0005",
+            title: "Potential side effect in block-bodied method",
+            messageFormat: "{0}",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
     }
 }
