@@ -87,26 +87,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             // Check if we have a pattern like multiple if statements without else followed by a final return:
-            // if (a) return 1; if (b) return 2; return 3;
+            // var x = ...; if (a) return 1; if (b) return 2; return 3;
             // This can be converted to nested ternaries: a ? 1 : (b ? 2 : 3)
-            // Each if statement must have a body that is a simple return statement
             if (lastStatement is ReturnStatementSyntax finalReturn &&
                 remainingStatements.All(s => s is IfStatementSyntax { Else: null }))
             {
                 // All remaining non-return statements are if statements without else
                 var ifStatements = remainingStatements.Cast<IfStatementSyntax>().ToList();
-                
-                // Validate each if statement has a simple return statement body
-                foreach (var ifStmt in ifStatements)
-                {
-                    if (!IsSimpleReturnBody(ifStmt.Statement))
-                    {
-                        ReportUnsupportedStatement(ifStmt, memberName, 
-                            "Multiple if statements without else clauses require each if body to be a simple return statement. " +
-                            "Complex if bodies are not supported in this pattern.");
-                        return null;
-                    }
-                }
                 
                 // Start with the final return as the base expression
                 var elseBody = TryConvertReturnStatement(finalReturn, memberName);
@@ -157,19 +144,6 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             // Convert the final statement (should be a return)
             return TryConvertStatement(lastStatement, memberName);
-        }
-
-        /// <summary>
-        /// Checks if a statement is a simple return statement or a block containing only a return statement.
-        /// </summary>
-        private static bool IsSimpleReturnBody(StatementSyntax statement)
-        {
-            return statement switch
-            {
-                ReturnStatementSyntax => true,
-                BlockSyntax block => block.Statements.Count == 1 && block.Statements[0] is ReturnStatementSyntax,
-                _ => false
-            };
         }
 
         private bool TryProcessLocalDeclaration(LocalDeclarationStatementSyntax localDecl, string memberName)
@@ -471,12 +445,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                     if (symbolInfo.Symbol is IMethodSymbol methodSymbol)
                     {
                         // Check if method has [Projectable] attribute - those are safe
-                        // Use proper type resolution to avoid false positives
-                        var semanticModel = _expressionRewriter.GetSemanticModel();
-                        var projectableAttributeType = semanticModel.Compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
-                        
                         var hasProjectableAttr = methodSymbol.GetAttributes()
-                            .Any(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, projectableAttributeType));
+                            .Any(attr => attr.AttributeClass?.Name == "ProjectableAttribute");
                             
                         if (!hasProjectableAttr)
                         {
@@ -558,39 +528,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var identifier = node.Identifier.Text;
                 if (_localVariables.TryGetValue(identifier, out var replacement))
                 {
-                    // Replace the identifier with the expression it was initialized with.
-                    // Wrap non-trivial expressions in parentheses to preserve operator precedence.
-                    var replacementWithTrivia = replacement.WithTriviaFrom(node);
-
-                    if (RequiresParentheses(replacementWithTrivia))
-                    {
-                        return SyntaxFactory.ParenthesizedExpression(replacementWithTrivia);
-                    }
-
-                    return replacementWithTrivia;
+                    // Replace the identifier with the expression it was initialized with
+                    return replacement.WithTriviaFrom(node);
                 }
 
                 return base.VisitIdentifierName(node);
-            }
-
-            private static bool RequiresParentheses(ExpressionSyntax replacement)
-            {
-                // Simple expressions do not need parentheses when inlined.
-                if (replacement is IdentifierNameSyntax
-                    or ThisExpressionSyntax
-                    or BaseExpressionSyntax
-                    or LiteralExpressionSyntax
-                    or ParenthesizedExpressionSyntax
-                    or MemberAccessExpressionSyntax
-                    or InvocationExpressionSyntax
-                    or ElementAccessExpressionSyntax)
-                {
-                    return false;
-                }
-
-                // For all other (potentially non-trivial) expressions, use parentheses
-                // to avoid changing semantics due to operator precedence.
-                return true;
             }
         }
     }
