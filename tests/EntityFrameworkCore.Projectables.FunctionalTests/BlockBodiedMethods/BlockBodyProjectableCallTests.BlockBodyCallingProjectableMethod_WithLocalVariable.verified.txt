@@ -1,2 +1,2 @@
-﻿SELECT [e].[Value] * 2 + 84
+﻿SELECT ([e].[Value] * 2 + 42) * 2
 FROM [Entity] AS [e]

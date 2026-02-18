@@ -577,8 +577,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var identifier = node.Identifier.Text;
                 if (_localVariables.TryGetValue(identifier, out var replacement))
                 {
-                    // Replace the identifier with the expression it was initialized with
-                    return replacement.WithTriviaFrom(node);
+                    // Replace the identifier with the expression it was initialized with,
+                    // wrapping in parentheses to preserve operator precedence.
+                    var parenthesized = SyntaxFactory.ParenthesizedExpression(replacement.WithoutTrivia());
+                    return parenthesized.WithTriviaFrom(node);
                 }
 
                 return base.VisitIdentifierName(node);

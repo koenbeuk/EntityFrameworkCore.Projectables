@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.C, int>> Expression()
         {
-            return (global::Foo.C @this) => @this.Bar * 2 + 5 + 10;
+            return (global::Foo.C @this) => ((@this.Bar * 2) + 5) + 10;
         }
     }
 }
