@@ -44,6 +44,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             return TryConvertStatements(block.Statements.ToList(), memberName);
         }
 
+        /// <summary>
+        /// Tries to convert a list of statements into a single expression. This is used for the body of the method or property.
+        /// </summary>
         private ExpressionSyntax? TryConvertStatements(List<StatementSyntax> statements, string memberName)
         {
             if (statements.Count == 0)
@@ -146,6 +149,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             return TryConvertStatement(lastStatement, memberName);
         }
 
+        /// <summary>
+        /// Processes a local variable declaration statement, rewriting the initializer and storing it in the local variables dictionary.
+        /// </summary>
         private bool TryProcessLocalDeclaration(LocalDeclarationStatementSyntax localDecl, string memberName)
         {
             foreach (var variable in localDecl.Declaration.Variables)
@@ -171,6 +177,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             return true;
         }
 
+        /// <summary>
+        /// Tries to convert a single statement into an expression. This is used for return statements, if statements, and switch statements.
+        /// </summary>
         private ExpressionSyntax? TryConvertStatement(StatementSyntax statement, string memberName)
         {
             switch (statement)
@@ -213,6 +222,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
         }
 
+        /// <summary>
+        /// Converts a return statement to its expression, after rewriting it and replacing any local variable references.
+        /// </summary>
         private ExpressionSyntax? TryConvertReturnStatement(ReturnStatementSyntax returnStmt, string memberName)
         {
             if (returnStmt.Expression == null)
@@ -230,6 +242,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             return expression;
         }
 
+        /// <summary>
+        /// Converts an if statement (with optional else) to a conditional expression.
+        /// </summary>
         private ConditionalExpressionSyntax? TryConvertIfStatement(IfStatementSyntax ifStmt, string memberName)
         {
             // Convert if-else to conditional (ternary) expression
@@ -272,12 +287,16 @@ namespace EntityFrameworkCore.Projectables.Generator
             );
         }
 
+        /// <summary>
+        /// Converts a switch statement to nested conditional expressions.
+        /// </summary>
         private ExpressionSyntax? TryConvertSwitchStatement(SwitchStatementSyntax switchStmt, string memberName)
         {
             // Convert switch statement to nested conditional expressions
             // Process sections in reverse order to build from the default case up
             
-            var switchExpression = (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
+            var switchExpression = 
+                (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
             // Replace any local variable references in the switch expression
             switchExpression = ReplaceLocalVariables(switchExpression);
             
@@ -374,10 +393,12 @@ namespace EntityFrameworkCore.Projectables.Generator
             return currentExpression;
         }
         
+        /// <summary>
+        /// Converts a switch section to an expression. This assumes the section has already been validated to only contain supported statements.
+        /// </summary>
         private ExpressionSyntax? ConvertSwitchSection(SwitchSectionSyntax section, string memberName)
         {
             // Convert the statements in the switch section
-            // Most switch sections end with break, return, or throw
             var statements = section.Statements.ToList();
             
             // Remove trailing break statements as they're not needed in expressions
@@ -386,21 +407,18 @@ namespace EntityFrameworkCore.Projectables.Generator
                 statements = statements.Take(statements.Count - 1).ToList();
             }
 
-            if (statements.Count != 0)
+            if (statements.Count > 0)
             {
                 return TryConvertStatements(statements, memberName);
             }
 
-            // Use the section's first label location for error reporting
+            // Empty section - report diagnostic
             var firstLabel = section.Labels.FirstOrDefault();
-            if (firstLabel == null)
-            {
-                return null;
-            }
-
+            var location = firstLabel?.GetLocation() ?? section.GetLocation();
+            
             var diagnostic = Diagnostic.Create(
                 Diagnostics.UnsupportedStatementInBlockBody,
-                firstLabel.GetLocation(),
+                location,
                 memberName,
                 "Switch section must have at least one statement"
             );
@@ -409,60 +427,94 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         }
 
+        /// <summary>
+        /// Replaces references to local variables in the given expression with their initializer expressions.
+        /// </summary>
         private ExpressionSyntax ReplaceLocalVariables(ExpressionSyntax expression)
         {
             // Use a rewriter to replace local variable references with their initializer expressions
             var rewriter = new LocalVariableReplacer(_localVariables);
             return (ExpressionSyntax)rewriter.Visit(expression);
         }
-
+        
+        /// <summary>
+        /// Analyzes an expression statement for side effects. If it has side effects, reports a diagnostic and returns null.
+        /// </summary>
         private ExpressionSyntax? AnalyzeExpressionStatement(ExpressionStatementSyntax exprStmt, string memberName)
         {
             var expression = exprStmt.Expression;
             
-            // Check for specific side effects
-            switch (expression)
+            // Check for specific side effects that are always errors
+            if (HasSideEffects(expression, out var errorMessage))
             {
-                case AssignmentExpressionSyntax assignment:
-                    ReportSideEffect(assignment, GetAssignmentErrorMessage(assignment));
-                    return null;
-                    
-                case PostfixUnaryExpressionSyntax postfix when 
-                    postfix.IsKind(SyntaxKind.PostIncrementExpression) || 
-                    postfix.IsKind(SyntaxKind.PostDecrementExpression):
-                    ReportSideEffect(postfix, $"Increment/decrement operator '{postfix.OperatorToken.Text}' has side effects and cannot be used in projectable methods");
-                    return null;
-                    
-                case PrefixUnaryExpressionSyntax prefix when 
-                    prefix.IsKind(SyntaxKind.PreIncrementExpression) || 
-                    prefix.IsKind(SyntaxKind.PreDecrementExpression):
-                    ReportSideEffect(prefix, $"Increment/decrement operator '{prefix.OperatorToken.Text}' has side effects and cannot be used in projectable methods");
-                    return null;
-                    
-                case InvocationExpressionSyntax invocation:
-                    // Check if this is a potentially impure method call
-                    var symbolInfo = _expressionRewriter.GetSemanticModel().GetSymbolInfo(invocation);
-                    if (symbolInfo.Symbol is IMethodSymbol methodSymbol)
-                    {
-                        // Check if method has [Projectable] attribute - those are safe
-                        var hasProjectableAttr = methodSymbol.GetAttributes()
-                            .Any(attr => attr.AttributeClass?.Name == "ProjectableAttribute");
-                            
-                        if (!hasProjectableAttr)
-                        {
-                            ReportPotentialSideEffect(invocation, 
-                                $"Method call '{methodSymbol.Name}' may have side effects. Only calls to methods marked with [Projectable] are guaranteed to be safe in projectable methods");
-                            return null;
-                        }
-                    }
-                    break;
+                ReportSideEffect(expression, errorMessage);
+                return null;
             }
             
-            // If we got here, it's an expression statement we don't support
-            ReportUnsupportedStatement(exprStmt, memberName, "Expression statements are not supported in projectable methods");
+            // Check for potentially impure method calls
+            if (expression is InvocationExpressionSyntax invocation)
+            {
+                if (!IsProjectableMethodCall(invocation, out var warningMessage))
+                {
+                    ReportPotentialSideEffect(invocation, warningMessage);
+                    return null;
+                }
+            }
+            
+            // Expression statements without side effects are still not supported in the current design
+            ReportUnsupportedStatement(exprStmt, memberName, 
+                "Expression statements are not supported in projectable methods. Consider removing this statement or converting it to a return statement.");
             return null;
         }
+
+        /// <summary>
+        /// Checks if an expression has side effects.
+        /// </summary>
+        private bool HasSideEffects(ExpressionSyntax expression, out string errorMessage)
+        {
+            return expression switch
+            {
+                AssignmentExpressionSyntax assignment => (errorMessage = GetAssignmentErrorMessage(assignment)) != null,
+                
+                PostfixUnaryExpressionSyntax postfix when 
+                    postfix.IsKind(SyntaxKind.PostIncrementExpression) || 
+                    postfix.IsKind(SyntaxKind.PostDecrementExpression)
+                    => (errorMessage = $"Increment/decrement operator '{postfix.OperatorToken.Text}' has side effects and cannot be used in projectable methods") != null,
+                
+                PrefixUnaryExpressionSyntax prefix when 
+                    prefix.IsKind(SyntaxKind.PreIncrementExpression) || 
+                    prefix.IsKind(SyntaxKind.PreDecrementExpression)
+                    => (errorMessage = $"Increment/decrement operator '{prefix.OperatorToken.Text}' has side effects and cannot be used in projectable methods") != null,
+                
+                _ => (errorMessage = string.Empty) == null
+            };
+        }
+
+        /// <summary>
+        /// Checks if a method invocation is to a projectable method.
+        /// </summary>
+        private bool IsProjectableMethodCall(InvocationExpressionSyntax invocation, out string warningMessage)
+        {
+            var symbolInfo = _expressionRewriter.GetSemanticModel().GetSymbolInfo(invocation);
+            if (symbolInfo.Symbol is IMethodSymbol methodSymbol)
+            {
+                var hasProjectableAttr = methodSymbol.GetAttributes()
+                    .Any(attr => attr.AttributeClass?.Name == "ProjectableAttribute");
+                    
+                if (!hasProjectableAttr)
+                {
+                    warningMessage = $"Method call '{methodSymbol.Name}' may have side effects. Only calls to methods marked with [Projectable] are guaranteed to be safe in projectable methods";
+                    return false;
+                }
+            }
+            
+            warningMessage = string.Empty;
+            return true;
+        }
         
+        /// <summary>
+        /// Generates an error message for an assignment expression, indicating that it has side effects and cannot be used in projectable methods.
+        /// </summary>
         private string GetAssignmentErrorMessage(AssignmentExpressionSyntax assignment)
         {
             var operatorText = assignment.OperatorToken.Text;
@@ -473,13 +525,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 {
                     return $"Property assignment '{memberAccess.Name}' has side effects and cannot be used in projectable methods";
                 }
-                return $"Assignment operation has side effects and cannot be used in projectable methods";
+                return "Assignment operation has side effects and cannot be used in projectable methods";
             }
-            else
-            {
-                // Compound assignment like +=, -=, etc.
-                return $"Compound assignment operator '{operatorText}' has side effects and cannot be used in projectable methods";
-            }
+
+            // Compound assignment like +=, -=, etc.
+            return $"Compound assignment operator '{operatorText}' has side effects and cannot be used in projectable methods";
         }
         
         private void ReportSideEffect(SyntaxNode node, string message)
@@ -512,7 +562,6 @@ namespace EntityFrameworkCore.Projectables.Generator
             );
             _context.ReportDiagnostic(diagnostic);
         }
-
 
         private class LocalVariableReplacer : CSharpSyntaxRewriter
         {
