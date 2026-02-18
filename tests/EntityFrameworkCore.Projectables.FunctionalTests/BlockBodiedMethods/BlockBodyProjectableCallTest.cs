@@ -124,19 +124,19 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
     public static class ProjectableCallExtensions
     {
         // Base projectable methods (helper methods)
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetConstant(this BlockBodyProjectableCallTests.Entity entity)
         {
             return 42;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetDoubled(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.Value * 2;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetCategory(this BlockBodyProjectableCallTests.Entity entity)
         {
             if (entity.Value > 100)
@@ -145,7 +145,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
                 return "Low";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetLevel(this BlockBodyProjectableCallTests.Entity entity)
         {
             if (entity.Value > 100) return "Level3";
@@ -153,7 +153,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Level1";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static bool IsHighValue(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.Value > 100;
@@ -161,20 +161,20 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
 
         // Block-bodied methods calling projectable methods
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetAdjustedWithConstant(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.Value + entity.GetConstant();
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetDoubledValue(this BlockBodyProjectableCallTests.Entity entity)
         {
             var doubled = entity.GetDoubled();
             return doubled;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetCategoryBasedOnAdjusted(this BlockBodyProjectableCallTests.Entity entity)
         {
             if (entity.GetDoubled() > 200)
@@ -187,13 +187,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int CombineProjectableMethods(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.GetDoubled() + entity.GetConstant();
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetLabelBasedOnCategory(this BlockBodyProjectableCallTests.Entity entity)
         {
             switch (entity.GetCategory())
@@ -207,7 +207,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetDescriptionByLevel(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.GetLevel() switch
@@ -219,7 +219,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             };
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int CalculateUsingProjectable(this BlockBodyProjectableCallTests.Entity entity)
         {
             var doubled = entity.GetDoubled();
@@ -227,13 +227,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return withConstant * 2;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetNestedProjectableCall(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.GetAdjustedWithConstant() + 10;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetStatusWithProjectableCheck(this BlockBodyProjectableCallTests.Entity entity)
         {
             if (entity.IsHighValue())
@@ -245,13 +245,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Normal";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetConditionalProjectable(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.IsActive ? entity.GetCategory() : "Inactive";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetChainedResult(this BlockBodyProjectableCallTests.Entity entity)
         {
             var doubled = entity.GetDoubled();
@@ -264,7 +264,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return entity.GetLevel();
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static bool IsComplexCondition(this BlockBodyProjectableCallTests.Entity entity)
         {
             return entity.IsActive && entity.IsHighValue() || entity.GetDoubled() > 150;

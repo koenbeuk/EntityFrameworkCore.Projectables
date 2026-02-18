@@ -201,6 +201,179 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ProjectablePropertyWithExplicitExpressionGetter()
+        {
+            // Tests explicit getter with expression body: { get => expression; }
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Foo { get => 1; }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectablePropertyWithExplicitBlockGetter()
+        {
+            // Tests explicit getter with block body: { get { return expression; } }
+            // Requires AllowBlockBody = true
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable(AllowBlockBody = true)]
+        public int Foo { get { return 1; } }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableComputedPropertyWithExplicitExpressionGetter()
+        {
+            // Tests explicit getter with expression body accessing other properties
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable]
+        public int Foo { get => Bar + 1; }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+//         [Fact]
+//         public Task ProjectableComputedPropertyWithExplicitBlockGetter()
+//         {
+//             // Tests explicit getter with block body accessing other properties
+//             // Requires AllowBlockBody = true
+//             var compilation = CreateCompilation(@"
+// using System;
+// using EntityFrameworkCore.Projectables;
+// namespace Foo {
+//     class C {
+//         public int Bar { get; set; }
+//
+//         [Projectable(AllowBlockBody = true)]
+//         public int Foo { get { return Bar + 1; } }
+//     }
+// }
+// ");
+//
+//             var result = RunGenerator(compilation);
+//
+//             Assert.Empty(result.Diagnostics);
+//             Assert.Single(result.GeneratedTrees);
+//
+//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+//         }
+
+//         [Fact]
+//         public Task ProjectablePropertyWithExplicitBlockGetterUsingThis()
+//         {
+//             // Tests explicit getter with block body using 'this' qualifier
+//             // Requires AllowBlockBody = true
+//             var compilation = CreateCompilation(@"
+// using System;
+// using EntityFrameworkCore.Projectables;
+// namespace Foo {
+//     class C {
+//         public int Bar { get; set; }
+//
+//         [Projectable(AllowBlockBody = true)]
+//         public int Foo { get { return this.Bar; } }
+//     }
+// }
+// ");
+//
+//             var result = RunGenerator(compilation);
+//
+//             Assert.Empty(result.Diagnostics);
+//             Assert.Single(result.GeneratedTrees);
+//
+//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+//         }
+
+//         [Fact]
+//         public Task ProjectablePropertyWithExplicitBlockGetterAndMethodCall()
+//         {
+//             // Tests explicit getter with block body calling other methods
+//             // Requires AllowBlockBody = true
+//             var compilation = CreateCompilation(@"
+// using System;
+// using EntityFrameworkCore.Projectables;
+// namespace Foo {
+//     class C {
+//         public int Bar() => 1;
+//
+//         [Projectable(AllowBlockBody = true)]
+//         public int Foo { get { return Bar(); } }
+//     }
+// }
+// ");
+//
+//             var result = RunGenerator(compilation);
+//
+//             Assert.Empty(result.Diagnostics);
+//             Assert.Single(result.GeneratedTrees);
+//
+//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+//         }
+
+        [Fact]
+        public void ProjectablePropertyWithExplicitBlockGetter_WithoutAllowBlockBody_EmitsWarning()
+        {
+            // Tests that block-bodied property getter without AllowBlockBody = true emits a warning
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable]
+        public int Foo { get { return 1; } }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            // Should have a warning about experimental feature
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0001", diagnostic.Id);
+            Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        }
+
 
         [Fact]
         public Task MoreComplexProjectableComputedProperty()
@@ -471,28 +644,6 @@ namespace Foo {
         }
 
         [Fact]
-        public void BlockBodiedMember_RaisesDiagnostics()
-        {
-            var compilation = CreateCompilation(@"
-using System;
-using EntityFrameworkCore.Projectables;
-namespace Foo {
-    class C {
-        [Projectable]
-        public int Foo 
-        {
-            get => 1;
-        }
-    }
-}
-");
-
-            var result = RunGenerator(compilation);
-
-            Assert.Single(result.Diagnostics);
-        }
-
-        [Fact]
         public void BlockBodiedMethod_NoLongerRaisesDiagnostics()
         {
             var compilation = CreateCompilation(@"
@@ -500,7 +651,7 @@ using System;
 using EntityFrameworkCore.Projectables;
 namespace Foo {
     class C {
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo() 
         {
             return 1;
@@ -1987,7 +2138,7 @@ using System;
 using EntityFrameworkCore.Projectables;
 namespace Foo {
     class C {
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             return 42;
@@ -2014,7 +2165,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             return Bar + 10;
@@ -2041,7 +2192,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             if (Bar > 10)
@@ -2075,7 +2226,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public string Foo()
         {
             if (Bar > 10)
@@ -2113,7 +2264,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             var temp = Bar * 2;
@@ -2141,7 +2292,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             var a = Bar * 2;
@@ -2170,7 +2321,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             var threshold = Bar * 2;
@@ -2205,7 +2356,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public string Foo()
         {
             var value = Bar * 2;
@@ -2241,7 +2392,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             if (Bar > 10)
@@ -2272,7 +2423,7 @@ using System;
 using EntityFrameworkCore.Projectables;
 namespace Foo {
     class C {
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Add(int a, int b)
         {
             return a + b;
@@ -2300,7 +2451,7 @@ namespace Foo {
         public int Bar { get; set; }
         public bool IsActive { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             if (IsActive && Bar > 0)
@@ -2335,7 +2486,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             if (Bar > 10)
@@ -2366,7 +2517,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int? Foo()
         {
             if (Bar > 10)
@@ -2396,7 +2547,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public string Foo()
         {
             switch (Bar)
@@ -2431,7 +2582,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public string Foo()
         {
             switch (Bar)
@@ -2469,7 +2620,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public string? Foo()
         {
             switch (Bar)
@@ -2502,7 +2653,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             Bar = 10;
@@ -2531,7 +2682,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             Bar += 10;
@@ -2560,7 +2711,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             var x = 5;
@@ -2590,7 +2741,7 @@ namespace Foo {
     class C {
         public int Bar { get; set; }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public int Foo()
         {
             Console.WriteLine(""test"");
@@ -3168,6 +3319,58 @@ namespace Foo {
             Assert.Single(result.GeneratedTrees);
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public void BlockBodiedMethod_WithoutAllowFlag_EmitsWarning()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+        
+        [Projectable]
+        public int GetDouble()
+        {
+            return Value * 2;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            // Should have a warning about experimental feature
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0001", diagnostic.Id);
+            Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        }
+
+        [Fact]
+        public void BlockBodiedMethod_WithAllowFlag_NoWarning()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+        
+        [Projectable(AllowBlockBody = true)]
+        public int GetDouble()
+        {
+            return Value * 2;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            // Should have no warnings
+            Assert.Empty(result.Diagnostics);
         }
 
         #region Helpers

@@ -80,6 +80,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .Select(x => x.Value.Value is bool b && b)
                 .FirstOrDefault();
 
+            var allowBlockBody = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "AllowBlockBody")
+                .Select(x => x.Value.Value is bool b && b)
+                .FirstOrDefault();
+
             var memberBody = member;
 
             if (useMemberBody is not null)
@@ -124,18 +129,33 @@ namespace EntityFrameworkCore.Projectables.Generator
                         {
                             return true;
                         }
-                        else if (x is PropertyDeclarationSyntax xProperty &&
-                            xProperty.ExpressionBody is not null)
+                        else if (x is PropertyDeclarationSyntax xProperty)
                         {
-                            return true;
+                            // Support expression-bodied properties: int Prop => value;
+                            if (xProperty.ExpressionBody is not null)
+                            {
+                                return true;
+                            }
+
+                            // Support properties with explicit getters: int Prop { get => value; } or { get { return value; } }
+                            if (xProperty.AccessorList is not null)
+                            {
+                                var getter = xProperty.AccessorList.Accessors
+                                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                                if (getter?.ExpressionBody is not null || getter?.Body is not null)
+                                {
+                                    return true;
+                                }
+                            }
                         }
-                        else
-                        {
-                            return false;
-                        }
+                        
+                        return false;
                     });
 
-                if (memberBody is null) return null;
+                if (memberBody is null)
+                {
+                    return null;
+                }
             }
 
             // Check if this member is inside a C# 14 extension block
@@ -300,6 +320,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
 
+            // Projectable methods
             if (memberBody is MethodDeclarationSyntax methodDeclarationSyntax)
             {
                 ExpressionSyntax? bodyExpression = null;
@@ -312,6 +333,14 @@ namespace EntityFrameworkCore.Projectables.Generator
                 else if (methodDeclarationSyntax.Body is not null)
                 {
                     // Block-bodied method (e.g., int Foo() { return 1; })
+                    
+                    // Emit warning if AllowBlockBody is not set to true
+                    if (!allowBlockBody)
+                    {
+                        var diagnostic = Diagnostic.Create(Diagnostics.BlockBodyExperimental, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                        context.ReportDiagnostic(diagnostic);
+                    }
+                    
                     var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
                     bodyExpression = blockConverter.TryConvertBlock(methodDeclarationSyntax.Body, memberSymbol.Name);
 
@@ -325,7 +354,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 else
                 {
-                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
                     return null;
                 }
@@ -360,11 +389,47 @@ namespace EntityFrameworkCore.Projectables.Generator
                         );
                 }
             }
+            
+            // Projectable properties
             else if (memberBody is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
-                if (propertyDeclarationSyntax.ExpressionBody is null)
+                ExpressionSyntax? bodyExpression = null;
+    
+                // Expression-bodied property: int Prop => value;
+                if (propertyDeclarationSyntax.ExpressionBody is not null)
                 {
-                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    
+                    bodyExpression = propertyDeclarationSyntax.ExpressionBody.Expression;
+                }
+                else if (propertyDeclarationSyntax.AccessorList is not null)
+                {
+                    // Property with explicit getter
+                    var getter = propertyDeclarationSyntax.AccessorList.Accessors
+                        .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+            
+                    if (getter?.ExpressionBody is not null)
+                    {
+                        // get => expression;
+                        bodyExpression = getter.ExpressionBody.Expression;
+                    }
+                    else if (getter?.Body is not null)
+                    {
+                        // get { return expression; }
+                        // Emit warning if AllowBlockBody is not set to true
+                        if (!allowBlockBody)
+                        {
+                            var diagnostic = Diagnostic.Create(Diagnostics.BlockBodyExperimental, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                            context.ReportDiagnostic(diagnostic);
+                        }
+                        
+                        var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
+                        bodyExpression = blockConverter.TryConvertBlock(getter.Body, memberSymbol.Name);
+                    }
+                }
+    
+                if (bodyExpression is null)
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresBodyDefinition, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
                     return null;
                 }
@@ -372,7 +437,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
+                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
             }
             else
             {

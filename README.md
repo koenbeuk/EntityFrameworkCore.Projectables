@@ -159,8 +159,9 @@ GROUP BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ```
 
-#### Can I use block-bodied methods instead of expression-bodied methods?
-Yes! As of version 6.x, you can now use traditional block-bodied methods with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
+#### Can I use block-bodied members instead of expression-bodied members?
+
+Yes! As of version 6.x, you can now use traditional block-bodied members with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
 
 ```csharp
 // Expression-bodied (still supported)
@@ -168,7 +169,7 @@ Yes! As of version 6.x, you can now use traditional block-bodied methods with `[
 public string Level() => Value > 100 ? "High" : Value > 50 ? "Medium" : "Low";
 
 // Block-bodied (now also supported!)
-[Projectable]
+[Projectable(AllowBlockBody = true)] // Note: AllowBlockBody is required to remove the warning for experimental feature usage
 public string Level()
 {
     if (Value > 100)
@@ -180,13 +181,15 @@ public string Level()
 }
 ```
 
-Both generate identical SQL. Block-bodied methods support:
+> This is an experimental feature and may have some limitations. Please refer to the documentation for details.
+
+Both generate identical SQL. Block-bodied members support:
 - If-else statements (converted to ternary/CASE expressions)
 - Switch statements
 - Local variables (automatically inlined)
 - Simple return statements
 
-The generator will also detect and report side effects (assignments, method calls to non-projectable methods, etc.) with precise error messages. See [Block-Bodied Methods Documentation](docs/BlockBodiedMethods.md) for complete details.
+The generator will also detect and report side effects (assignments, method calls to non-projectable members, etc.) with precise error messages. See [Block-Bodied Members Documentation](docs/BlockBodiedMembers.md) for complete details.
 
 
 #### How do I expand enum extension methods?

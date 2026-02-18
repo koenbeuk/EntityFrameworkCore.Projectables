@@ -1,6 +1,33 @@
 # Block-Bodied Methods Support
 
-As of this version, EntityFrameworkCore.Projectables now supports "classic" block-bodied methods decorated with `[Projectable]`, in addition to expression-bodied methods.
+EntityFrameworkCore.Projectables now supports "classic" block-bodied members (methods and properties) decorated with `[Projectable]`, in addition to expression-bodied members.
+
+## ⚠️ Experimental Feature
+
+Block-bodied members support is currently **experimental**. By default, using a block-bodied member with `[Projectable]` will emit a warning:
+
+```
+EFP0001: Block-bodied member 'MethodName' is using an experimental feature. Set AllowBlockBody = true on the Projectable attribute to suppress this warning.
+```
+
+To acknowledge that you're using an experimental feature and suppress the warning, set `AllowBlockBody = true`:
+
+```csharp
+[Projectable(AllowBlockBody = true)]
+public string GetCategory()
+{
+    if (Value > 100)
+    {
+        return "High";
+    }
+    else
+    {
+        return "Low";
+    }
+}
+```
+
+This requirement will be removed in a future version once the feature is considered stable.
 
 ## What's Supported
 

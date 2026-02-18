@@ -1,4 +1,4 @@
-using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
+﻿using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Threading.Tasks;
@@ -340,19 +340,19 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
 
     public static class EntityExtensions
     {
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetConstant(this BlockBodiedMethodTests.Entity entity)
         {
             return 42;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetValuePlusTen(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Value + 10;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetCategory(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.Value > 100)
@@ -365,7 +365,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetLevel(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.Value > 100)
@@ -382,14 +382,14 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int CalculateDouble(this BlockBodiedMethodTests.Entity entity)
         {
             var doubled = entity.Value * 2;
             return doubled + 5;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetAdjustedValue(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive && entity.Value > 0)
@@ -402,13 +402,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int Add(this BlockBodiedMethodTests.Entity entity, int a, int b)
         {
             return a + b;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int? GetPremiumIfActive(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive)
@@ -418,7 +418,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return null;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetStatus(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive)
@@ -428,7 +428,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Inactive";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetValueLabel(this BlockBodiedMethodTests.Entity entity)
         {
             switch (entity.Value)
@@ -444,7 +444,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetPriority(this BlockBodiedMethodTests.Entity entity)
         {
             switch (entity.Value)
@@ -465,7 +465,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetValueCategory(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.Value > 100)
@@ -486,19 +486,19 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Low";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetNameOrDefault(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Name ?? "Unknown";
         }
 
-        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]
+        [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite, AllowBlockBody = true)]
         public static int? GetNameLength(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Name?.Length;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetValueLabelModern(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Value switch
@@ -510,7 +510,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             };
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetPriorityModern(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Value switch
@@ -522,7 +522,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             };
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int CalculateComplex(this BlockBodiedMethodTests.Entity entity)
         {
             var doubled = entity.Value * 2;
@@ -531,7 +531,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return sum + 10;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetComplexCategory(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive && entity.Value > 100)
@@ -552,7 +552,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Other";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int GetGuardedValue(this BlockBodiedMethodTests.Entity entity)
         {
             if (!entity.IsActive)
@@ -568,7 +568,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return entity.Value * 2;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetCombinedLogic(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive)
@@ -587,19 +587,19 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Inactive";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetValueUsingTernary(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.IsActive ? "Active" : "Inactive";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetNestedTernary(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Value > 100 ? "High" : entity.Value > 50 ? "Medium" : "Low";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetComplexMix(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.IsActive)
@@ -615,7 +615,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return "Inactive";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetValueWithCondition(this BlockBodiedMethodTests.Entity entity)
         {
             return entity.Value switch
@@ -627,14 +627,14 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             };
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static int CalculateWithReuse(this BlockBodiedMethodTests.Entity entity)
         {
             var doubled = entity.Value * 2;
             return doubled + doubled;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static bool IsHighValue(this BlockBodiedMethodTests.Entity entity)
         {
             if (entity.Value > 100)
@@ -644,7 +644,7 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             return false;
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetInactiveStatus(this BlockBodiedMethodTests.Entity entity)
         {
             if (!entity.IsActive)
@@ -657,13 +657,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.BlockBodiedMethods
             }
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static string GetFormattedValue(this BlockBodiedMethodTests.Entity entity)
         {
             return $"Value: {entity.Value}";
         }
 
-        [Projectable]
+        [Projectable(AllowBlockBody = true)]
         public static double CalculatePercentage(this BlockBodiedMethodTests.Entity entity)
         {
             return (double)entity.Value / 100.0 * 50.0;
