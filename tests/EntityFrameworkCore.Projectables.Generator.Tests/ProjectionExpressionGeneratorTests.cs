@@ -273,83 +273,83 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
-//         [Fact]
-//         public Task ProjectableComputedPropertyWithExplicitBlockGetter()
-//         {
-//             // Tests explicit getter with block body accessing other properties
-//             // Requires AllowBlockBody = true
-//             var compilation = CreateCompilation(@"
-// using System;
-// using EntityFrameworkCore.Projectables;
-// namespace Foo {
-//     class C {
-//         public int Bar { get; set; }
-//
-//         [Projectable(AllowBlockBody = true)]
-//         public int Foo { get { return Bar + 1; } }
-//     }
-// }
-// ");
-//
-//             var result = RunGenerator(compilation);
-//
-//             Assert.Empty(result.Diagnostics);
-//             Assert.Single(result.GeneratedTrees);
-//
-//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
-//         }
+        [Fact]
+        public Task ProjectableComputedPropertyWithExplicitBlockGetter()
+        {
+            // Tests explicit getter with block body accessing other properties
+            // Requires AllowBlockBody = true
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
 
-//         [Fact]
-//         public Task ProjectablePropertyWithExplicitBlockGetterUsingThis()
-//         {
-//             // Tests explicit getter with block body using 'this' qualifier
-//             // Requires AllowBlockBody = true
-//             var compilation = CreateCompilation(@"
-// using System;
-// using EntityFrameworkCore.Projectables;
-// namespace Foo {
-//     class C {
-//         public int Bar { get; set; }
-//
-//         [Projectable(AllowBlockBody = true)]
-//         public int Foo { get { return this.Bar; } }
-//     }
-// }
-// ");
-//
-//             var result = RunGenerator(compilation);
-//
-//             Assert.Empty(result.Diagnostics);
-//             Assert.Single(result.GeneratedTrees);
-//
-//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
-//         }
+        [Projectable(AllowBlockBody = true)]
+        public int Foo { get { return Bar + 1; } }
+    }
+}
+");
 
-//         [Fact]
-//         public Task ProjectablePropertyWithExplicitBlockGetterAndMethodCall()
-//         {
-//             // Tests explicit getter with block body calling other methods
-//             // Requires AllowBlockBody = true
-//             var compilation = CreateCompilation(@"
-// using System;
-// using EntityFrameworkCore.Projectables;
-// namespace Foo {
-//     class C {
-//         public int Bar() => 1;
-//
-//         [Projectable(AllowBlockBody = true)]
-//         public int Foo { get { return Bar(); } }
-//     }
-// }
-// ");
-//
-//             var result = RunGenerator(compilation);
-//
-//             Assert.Empty(result.Diagnostics);
-//             Assert.Single(result.GeneratedTrees);
-//
-//             return Verifier.Verify(result.GeneratedTrees[0].ToString());
-//         }
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectablePropertyWithExplicitBlockGetterUsingThis()
+        {
+            // Tests explicit getter with block body using 'this' qualifier
+            // Requires AllowBlockBody = true
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar { get; set; }
+
+        [Projectable(AllowBlockBody = true)]
+        public int Foo { get { return this.Bar; } }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectablePropertyWithExplicitBlockGetterAndMethodCall()
+        {
+            // Tests explicit getter with block body calling other methods
+            // Requires AllowBlockBody = true
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Bar() => 1;
+
+        [Projectable(AllowBlockBody = true)]
+        public int Foo { get { return Bar(); } }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
 
         [Fact]
         public void ProjectablePropertyWithExplicitBlockGetter_WithoutAllowBlockBody_EmitsWarning()

@@ -394,11 +394,11 @@ namespace EntityFrameworkCore.Projectables.Generator
             else if (memberBody is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
                 ExpressionSyntax? bodyExpression = null;
+                var isBlockBodiedGetter = false;
     
                 // Expression-bodied property: int Prop => value;
                 if (propertyDeclarationSyntax.ExpressionBody is not null)
                 {
-                    
                     bodyExpression = propertyDeclarationSyntax.ExpressionBody.Expression;
                 }
                 else if (propertyDeclarationSyntax.AccessorList is not null)
@@ -424,6 +424,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                         
                         var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
                         bodyExpression = blockConverter.TryConvertBlock(getter.Body, memberSymbol.Name);
+                        isBlockBodiedGetter = true;
+                        
+                        if (bodyExpression is null)
+                        {
+                            // Diagnostics already reported by BlockStatementConverter
+                            return null;
+                        }
+                        
+                        // The expression has already been rewritten by BlockStatementConverter, so we don't rewrite it again
                     }
                 }
     
@@ -437,7 +446,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
+                
+                // Only rewrite expression-bodied properties, block-bodied getters are already rewritten
+                descriptor.ExpressionBody = isBlockBodiedGetter 
+                    ? bodyExpression
+                    : (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
             }
             else
             {
