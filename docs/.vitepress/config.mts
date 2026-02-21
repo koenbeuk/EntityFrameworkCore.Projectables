@@ -4,6 +4,13 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "EF Core Projectables",
   description: "Flexible projection magic for EF Core — use properties and methods directly in your LINQ queries",
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    ['meta', { property: 'og:image', content: 'https://projectables.github.io/social.svg' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: 'https://projectables.github.io/social.svg' }],
+  ],
   themeConfig: {
     logo: '/logo.svg',
     nav: [

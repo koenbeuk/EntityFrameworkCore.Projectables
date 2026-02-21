@@ -11,39 +11,39 @@ Understanding the internals of EF Core Projectables helps you use it effectively
 │  Your C# code with [Projectable] members                │
 │            │                                            │
 │            ▼                                            │
-│  ┌─────────────────────────────┐                        │
-│  │  Roslyn Source Generator     │                       │
-│  │  (ProjectionExpressionGenerator)                     │
-│  │  - Scans for [Projectable]   │                       │
-│  │  - Parses member bodies      │                       │
-│  │  - Generates Expression<>    │                       │
-│  │    companion classes         │                       │
-│  └─────────────────────────────┘                        │
+│  ┌───────────────────────────────────┐                  │
+│  │  Roslyn Source Generator          │                  │
+│  │  (ProjectionExpressionGenerator)  │                  │
+│  │  - Scans for [Projectable]        │                  │
+│  │  - Parses member bodies           │                  │
+│  │  - Generates Expression<>         │                  │
+│  │    companion classes              │                  │
+│  └───────────────────────────────────┘                  │
 │            │                                            │
 │            ▼                                            │
 │  Auto-generated *.g.cs files with Expression<> trees    │
 └─────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────┐
-│                   RUNTIME                               │
-│                                                         │
-│  LINQ query using projectable member                    │
-│            │                                            │
-│            ▼                                            │
-│  ┌─────────────────────────────┐                        │
-│  │  ProjectableExpressionReplacer (ExpressionVisitor)  │
-│  │  - Walks the LINQ expression tree                    │
-│  │  - Detects calls to [Projectable] members            │
-│  │  - Loads generated Expression<> via reflection       │
-│  │  - Substitutes the call with the expression          │
-│  └─────────────────────────────┘                        │
-│            │                                            │
-│            ▼                                            │
-│  Expanded expression tree (no [Projectable] calls)      │
-│            │                                            │
-│            ▼                                            │
-│  Standard EF Core SQL translation → SQL query           │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                   RUNTIME                                 │
+│                                                           │
+│  LINQ query using projectable member                      │
+│            │                                              │
+│            ▼                                              │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │  ProjectableExpressionReplacer (ExpressionVisitor)  │  │
+│  │  - Walks the LINQ expression tree                   │  │
+│  │  - Detects calls to [Projectable] members           │  │
+│  │  - Loads generated Expression<> via reflection      │  │
+│  │  - Substitutes the call with the expression         │  │
+│  └─────────────────────────────────────────────────────┘  │
+│            │                                              │
+│            ▼                                              │
+│  Expanded expression tree (no [Projectable] calls)        │
+│            │                                              │
+│            ▼                                              │
+│  Standard EF Core SQL translation → SQL query             │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ## Build Time: The Source Generator
@@ -70,22 +70,22 @@ Reads the attribute arguments, resolves the member's type information (namespace
 
 Converts block-bodied method statements into expression-tree-compatible forms:
 
-| Statement | Converted to |
-|---|---|
-| `if (cond) return A; else return B;` | `cond ? A : B` |
-| `switch (x) { case 1: return "a"; }` | `x == 1 ? "a" : ...` |
-| `var v = expr; return v + 1;` | Inline substitution: `expr + 1` |
-| Multiple early `return` | Nested ternary chain |
+| Statement                            | Converted to                    |
+|--------------------------------------|---------------------------------|
+| `if (cond) return A; else return B;` | `cond ? A : B`                  |
+| `switch (x) { case 1: return "a"; }` | `x == 1 ? "a" : ...`            |
+| `var v = expr; return v + 1;`        | Inline substitution: `expr + 1` |
+| Multiple early `return`              | Nested ternary chain            |
 
 ### Expression Rewriters
 
 After the body is extracted, several rewriters transform the expression syntax:
 
-| Rewriter | Purpose |
-|---|---|
-| `ExpressionSyntaxRewriter` | Rewrites `?.` operators based on `NullConditionalRewriteSupport` |
-| `DeclarationSyntaxRewriter` | Adjusts member declarations for the generated class |
-| `VariableReplacementRewriter` | Inlines local variables into the return expression |
+| Rewriter                      | Purpose                                                          |
+|-------------------------------|------------------------------------------------------------------|
+| `ExpressionSyntaxRewriter`    | Rewrites `?.` operators based on `NullConditionalRewriteSupport` |
+| `DeclarationSyntaxRewriter`   | Adjusts member declarations for the generated class              |
+| `VariableReplacementRewriter` | Inlines local variables into the return expression               |
 
 ### Generated Code
 
@@ -162,15 +162,15 @@ The replacer also manages EF Core's tracking behavior. When a projectable member
 
 ## Summary
 
-| Phase | Component | Responsibility |
-|---|---|---|
-| Build | `ProjectionExpressionGenerator` | Source gen entry point, orchestration |
-| Build | `ProjectableInterpreter` | Extract descriptor from attribute + syntax |
-| Build | `BlockStatementConverter` | Block body → expression conversion |
-| Build | `ExpressionSyntaxRewriter` | `?.` handling, null-conditional rewrite |
-| Runtime | `CustomQueryCompiler` | Full mode: expand before EF Core |
+| Phase   | Component                            | Responsibility                               |
+|---------|--------------------------------------|----------------------------------------------|
+| Build   | `ProjectionExpressionGenerator`      | Source gen entry point, orchestration        |
+| Build   | `ProjectableInterpreter`             | Extract descriptor from attribute + syntax   |
+| Build   | `BlockStatementConverter`            | Block body → expression conversion           |
+| Build   | `ExpressionSyntaxRewriter`           | `?.` handling, null-conditional rewrite      |
+| Runtime | `CustomQueryCompiler`                | Full mode: expand before EF Core             |
 | Runtime | `CustomQueryTranslationPreprocessor` | Limited mode: expand inside EF Core pipeline |
-| Runtime | `ProjectableExpressionReplacer` | Walk and replace projectable calls |
-| Runtime | `ProjectionExpressionResolver` | Locate generated expression via reflection |
-| Runtime | `ExpressionArgumentReplacer` | Substitute parameters in lambda |
+| Runtime | `ProjectableExpressionReplacer`      | Walk and replace projectable calls           |
+| Runtime | `ProjectionExpressionResolver`       | Locate generated expression via reflection   |
+| Runtime | `ExpressionArgumentReplacer`         | Substitute parameters in lambda              |
 

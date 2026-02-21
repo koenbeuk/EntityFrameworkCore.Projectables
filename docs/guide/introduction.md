@@ -68,24 +68,24 @@ LINQ query
 
 ## Comparison with Similar Libraries
 
-| Feature | Projectables | Expressionify | LinqKit |
-|---|---|---|---|
-| Source generator based | ✅ | ✅ | ❌ |
-| Works with entity methods | ✅ | ✅ | Partial |
-| Works with extension methods | ✅ | ✅ | ✅ |
-| Composable projectables | ✅ | ❌ | Partial |
-| Block-bodied members | ✅ (experimental) | ❌ | ❌ |
-| Enum method expansion | ✅ | ❌ | ❌ |
-| Null-conditional rewriting | ✅ | ❌ | ❌ |
-| Limited/cached mode | ✅ | ❌ | ❌ |
+| Feature                      | Projectables     | Expressionify | LinqKit |
+|------------------------------|------------------|---------------|---------|
+| Source generator based       | ✅                | ✅             | ❌       |
+| Works with entity methods    | ✅                | ✅             | Partial |
+| Works with extension methods | ✅                | ✅             | ✅       |
+| Composable projectables      | ✅                | ❌             | Partial |
+| Block-bodied members         | ✅ (experimental) | ❌             | ❌       |
+| Enum method expansion        | ✅                | ❌             | ❌       |
+| Null-conditional rewriting   | ✅                | ❌             | ❌       |
+| Limited/cached mode          | ✅                | ❌             | ❌       |
 
 ## EF Core Version Compatibility
 
-| Library Version | EF Core Version |
-|---|---|
-| v1.x | EF Core 3.1, 5 |
-| v2.x, v3.x | EF Core 6, 7 |
-| v6.x+ | EF Core 6+ (block-bodied members added) |
+| Library Version | EF Core Version                         |
+|-----------------|-----------------------------------------|
+| v1.x            | EF Core 3.1, 5                          |
+| v2.x, v3.x      | EF Core 6, 7                            |
+| v6.x+           | EF Core 6+ (block-bodied members added) |
 
 ## Next Steps
 

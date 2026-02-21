@@ -302,11 +302,11 @@ public int SumItems() => Items.Sum(i => i.Price);
 
 The generator actively detects statements with side effects and reports them as errors (EFP0004) or warnings (EFP0005). See [Diagnostics](/reference/diagnostics) for the full list.
 
-| Code | Diagnostic |
-|---|---|
-| `Bar = 10;` | ❌ EFP0004 — property assignment |
-| `Bar += 10;` | ❌ EFP0004 — compound assignment |
-| `Bar++;` | ❌ EFP0004 — increment/decrement |
+| Code                      | Diagnostic                               |
+|---------------------------|------------------------------------------|
+| `Bar = 10;`               | ❌ EFP0004 — property assignment          |
+| `Bar += 10;`              | ❌ EFP0004 — compound assignment          |
+| `Bar++;`                  | ❌ EFP0004 — increment/decrement          |
 | `Console.WriteLine("x");` | ⚠️ EFP0005 — non-projectable method call |
 
 ## How the Conversion Works

@@ -45,13 +45,19 @@ features:
 ## At a Glance
 
 ```csharp
-class Order {
+class Order
+{
     public decimal TaxRate { get; set; }
     public ICollection<OrderItem> Items { get; set; }
 
-    [Projectable] public decimal Subtotal => Items.Sum(item => item.Product.ListPrice * item.Quantity);
-    [Projectable] public decimal Tax => Subtotal * TaxRate;
-    [Projectable] public decimal GrandTotal => Subtotal + Tax;
+    [Projectable] 
+    public decimal Subtotal => Items.Sum(item => item.Product.ListPrice * item.Quantity);
+    
+    [Projectable]
+    public decimal Tax => Subtotal * TaxRate;
+    
+    [Projectable]
+    public decimal GrandTotal => Subtotal + Tax;
 }
 
 // Use it anywhere in your queries — translated to SQL automatically
@@ -65,8 +71,8 @@ The properties are **inlined into the SQL** — no client-side evaluation, no N+
 
 ## NuGet Packages
 
-| Package | Description |
-|---|---|
+| Package                                                                                                                          | Description                                        |
+|----------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
 | [`EntityFrameworkCore.Projectables.Abstractions`](https://www.nuget.org/packages/EntityFrameworkCore.Projectables.Abstractions/) | The `[Projectable]` attribute and source generator |
-| [`EntityFrameworkCore.Projectables`](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/) | The EF Core runtime extension |
+| [`EntityFrameworkCore.Projectables`](https://www.nuget.org/packages/EntityFrameworkCore.Projectables/)                           | The EF Core runtime extension                      |
 
