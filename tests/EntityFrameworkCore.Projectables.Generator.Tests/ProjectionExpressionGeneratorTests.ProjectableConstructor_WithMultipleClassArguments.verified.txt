@@ -10,7 +10,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.NamePart, global::Foo.NamePart, global::Foo.PersonDto>> Expression()
         {
-            return (global::Foo.NamePart first, global::Foo.NamePart last) => new global::Foo.PersonDto(first, last)
+            return (global::Foo.NamePart first, global::Foo.NamePart last) => new global::Foo.PersonDto()
             {
                 FirstName = first.Value,
                 LastName = last.Value

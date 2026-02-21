@@ -533,19 +533,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                // Always pass the constructor's own parameters as ctor call args.
-                // The base/this initializer is handled transparently at runtime when the constructor is invoked.
-                // Using own params ensures the generated expression compiles for every constructor signature.
-                var selfArgs = constructorDeclarationSyntax.ParameterList.Parameters
-                    .Select(p => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(p.Identifier)))
-                    .ToList();
-                var initializerArgs = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(selfArgs));
+                // Use a parameterless constructor call + object initializer.
+                // This ensures EF Core only projects columns that are explicitly assigned
+                // in the constructor body — properties not listed here won't appear in SQL.
+                // Requirement: the DTO must expose a parameterless constructor (or init-only setters).
+                var emptyArgs = SyntaxFactory.ArgumentList();
 
-                // new ClassName(initializerArgs) { MemberInit }
+                // new ClassName() { MemberInit }
                 descriptor.ExpressionBody = SyntaxFactory.ObjectCreationExpression(
                     SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                     SyntaxFactory.ParseTypeName(fullTypeName),
-                    initializerArgs,
+                    emptyArgs,
                     memberInit
                 );
             }

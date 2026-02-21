@@ -10,7 +10,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<int, int, global::Foo.PointDto>> Expression()
         {
-            return (int x, int y) => new global::Foo.PointDto(x, y)
+            return (int x, int y) => new global::Foo.PointDto()
             {
                 X = x,
                 Y = y
