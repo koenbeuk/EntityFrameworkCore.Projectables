@@ -12,6 +12,7 @@ namespace EntityFrameworkCore.Projectables.Generated
         {
             return (int id, string name) => new global::Foo.Child()
             {
+                Id = id,
                 Name = name
             };
         }
