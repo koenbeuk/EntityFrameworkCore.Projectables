@@ -188,19 +188,24 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ? memberSymbol.ContainingType.ContainingType
                 : memberSymbol.ContainingType;
 
+            var methodSymbol = memberSymbol as IMethodSymbol;
+
+            // Sanitize constructor name (.ctor / .cctor are not valid C# identifiers, use _ctor)
+            var memberName = methodSymbol?.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor
+                ? "_ctor"
+                : memberSymbol.Name;
+
             var descriptor = new ProjectableDescriptor
             {
                 UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
                 ClassName = classForNaming.Name,
                 ClassNamespace = classForNaming.ContainingNamespace.IsGlobalNamespace ? null : classForNaming.ContainingNamespace.ToDisplayString(),
-                MemberName = memberSymbol.Name,
+                MemberName = memberName,
                 NestedInClassNames = isExtensionMember 
                     ? GetNestedInClassPathForExtensionMember(memberSymbol.ContainingType)
                     : GetNestedInClassPath(memberSymbol.ContainingType),
                 ParametersList = SyntaxFactory.ParameterList()
             };
-            
-            var methodSymbol = memberSymbol as IMethodSymbol;
 
             // Collect parameter type names for method overload disambiguation
             if (methodSymbol is not null)
@@ -288,7 +293,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     )
                 );
             }
-            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
+            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword) && member is not ConstructorDeclarationSyntax)
             {
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
@@ -451,6 +456,98 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.ExpressionBody = isBlockBodiedGetter 
                     ? bodyExpression
                     : (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
+            }
+            // Projectable constructors
+            else if (memberBody is ConstructorDeclarationSyntax constructorDeclarationSyntax)
+            {
+                var containingType = memberSymbol.ContainingType;
+                var fullTypeName = containingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                descriptor.ReturnTypeName = fullTypeName;
+
+                // Add the constructor's own parameters to the lambda parameter list
+                foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(constructorDeclarationSyntax.ParameterList)).Parameters)
+                {
+                    descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
+                }
+
+
+                // Build member-initializer list from block-body assignments (this.X = y)
+                InitializerExpressionSyntax? memberInit = null;
+                if (constructorDeclarationSyntax.Body is { } body && body.Statements.Count > 0)
+                {
+                    var initExpressions = new List<ExpressionSyntax>();
+                    foreach (var statement in body.Statements)
+                    {
+                        if (statement is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+                            && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+                        {
+                            // Accept: this.X = y  or  X = y
+                            var targetMember = assignment.Left switch
+                            {
+                                MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax, Name: var name } => name,
+                                IdentifierNameSyntax ident => ident,
+                                _ => null
+                            };
+
+                            if (targetMember is null)
+                            {
+                                var diag = Diagnostic.Create(Diagnostics.UnsupportedStatementInBlockBody,
+                                    statement.GetLocation(), memberSymbol.Name, statement.ToString());
+                                context.ReportDiagnostic(diag);
+                                return null;
+                            }
+
+                            var rewrittenRight = (ExpressionSyntax)expressionSyntaxRewriter.Visit(assignment.Right);
+                            initExpressions.Add(
+                                SyntaxFactory.AssignmentExpression(
+                                    SyntaxKind.SimpleAssignmentExpression,
+                                    targetMember,
+                                    rewrittenRight
+                                )
+                            );
+                        }
+                        else
+                        {
+                            var diag = Diagnostic.Create(Diagnostics.UnsupportedStatementInBlockBody,
+                                statement.GetLocation(), memberSymbol.Name, statement.ToString());
+                            context.ReportDiagnostic(diag);
+                            return null;
+                        }
+                    }
+
+                    if (initExpressions.Count > 0)
+                    {
+                        memberInit = SyntaxFactory.InitializerExpression(
+                            SyntaxKind.ObjectInitializerExpression,
+                            SyntaxFactory.SeparatedList(initExpressions)
+                        );
+                    }
+                }
+
+                if (memberInit is null)
+                {
+                    var diag = Diagnostic.Create(Diagnostics.RequiresBodyDefinition,
+                        constructorDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    context.ReportDiagnostic(diag);
+                    return null;
+                }
+
+                // Always pass the constructor's own parameters as ctor call args.
+                // The base/this initializer is handled transparently at runtime when the constructor is invoked.
+                // Using own params ensures the generated expression compiles for every constructor signature.
+                var selfArgs = constructorDeclarationSyntax.ParameterList.Parameters
+                    .Select(p => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(p.Identifier)))
+                    .ToList();
+                var initializerArgs = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(selfArgs));
+
+                // new ClassName(initializerArgs) { MemberInit }
+                descriptor.ExpressionBody = SyntaxFactory.ObjectCreationExpression(
+                    SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                    SyntaxFactory.ParseTypeName(fullTypeName),
+                    initializerArgs,
+                    memberInit
+                );
             }
             else
             {

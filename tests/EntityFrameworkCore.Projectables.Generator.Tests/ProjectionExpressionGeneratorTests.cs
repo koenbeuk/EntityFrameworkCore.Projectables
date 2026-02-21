@@ -3373,6 +3373,159 @@ namespace Foo {
             Assert.Empty(result.Diagnostics);
         }
 
+        [Fact]
+        public Task ProjectableConstructor_BodyAssignments()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PointDto {
+        public int X { get; set; }
+        public int Y { get; set; }
+
+        [Projectable]
+        public PointDto(int x, int y) {
+            X = x;
+            Y = y;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializer()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) { Id = id; }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        [Projectable]
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_Overloads()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        [Projectable]
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fullName) {
+            FirstName = fullName;
+            LastName = string.Empty;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithClassArgument()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class SourceEntity {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    class PersonDto {
+        public int Id { get; set; }
+        public string Name { get; set; }
+
+        [Projectable]
+        public PersonDto(SourceEntity source) {
+            Id = source.Id;
+            Name = source.Name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithMultipleClassArguments()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class NamePart {
+        public string Value { get; set; }
+    }
+
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        [Projectable]
+        public PersonDto(NamePart first, NamePart last) {
+            FirstName = first.Value;
+            LastName = last.Value;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
