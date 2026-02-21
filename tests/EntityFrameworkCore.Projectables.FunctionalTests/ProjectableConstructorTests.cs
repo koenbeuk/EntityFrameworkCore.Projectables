@@ -71,14 +71,11 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             public DerivedDto() { }            // required: EF Core uses the parameterless ctor
 
             /// <summary>
-            /// Note: <c>Id</c> must be explicitly assigned here (not just via <c>: base(id)</c>)
-            /// because the generated projection uses a parameterless constructor + member-init;
-            /// the base-ctor call is invisible to EF Core.
+            /// <c>Id</c> is automatically included from <c>: base(id)</c> — no need to repeat it here.
             /// </summary>
             [Projectable]
             public DerivedDto(int id, string firstName, string lastName) : base(id)
             {
-                Id = id;           // explicit assignment so EF Core selects this column
                 FullName = firstName + " " + lastName;
             }
         }

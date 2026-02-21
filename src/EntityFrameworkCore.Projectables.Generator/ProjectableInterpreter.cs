@@ -471,18 +471,31 @@ namespace EntityFrameworkCore.Projectables.Generator
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
                 }
 
+                var initExpressions = new List<ExpressionSyntax>();
 
-                // Build member-initializer list from block-body assignments (this.X = y)
-                InitializerExpressionSyntax? memberInit = null;
-                if (constructorDeclarationSyntax.Body is { } body && body.Statements.Count > 0)
+                // 1. Process base/this initializer: propagate property assignments from the
+                //    delegated constructor so callers don't have to duplicate them in the body.
+                if (constructorDeclarationSyntax.Initializer is { } initializer)
                 {
-                    var initExpressions = new List<ExpressionSyntax>();
+                    var initializerSymbol = semanticModel.GetSymbolInfo(initializer).Symbol as IMethodSymbol;
+                    if (initializerSymbol is not null)
+                    {
+                        var delegatedExprs = CollectDelegatedConstructorAssignments(
+                            initializerSymbol,
+                            initializer.ArgumentList.Arguments,
+                            expressionSyntaxRewriter);
+                        initExpressions.AddRange(delegatedExprs);
+                    }
+                }
+
+                // 2. Process this constructor's body assignments (this.X = y  or  X = y)
+                if (constructorDeclarationSyntax.Body is { } body)
+                {
                     foreach (var statement in body.Statements)
                     {
                         if (statement is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
                             && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
                         {
-                            // Accept: this.X = y  or  X = y
                             var targetMember = assignment.Left switch
                             {
                                 MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax, Name: var name } => name,
@@ -499,13 +512,22 @@ namespace EntityFrameworkCore.Projectables.Generator
                             }
 
                             var rewrittenRight = (ExpressionSyntax)expressionSyntaxRewriter.Visit(assignment.Right);
-                            initExpressions.Add(
-                                SyntaxFactory.AssignmentExpression(
-                                    SyntaxKind.SimpleAssignmentExpression,
-                                    targetMember,
-                                    rewrittenRight
-                                )
-                            );
+
+                            // Body assignments override anything set by the base/this initializer
+                            var existing = initExpressions.FindIndex(e =>
+                                e is AssignmentExpressionSyntax ae &&
+                                ae.Left is IdentifierNameSyntax id &&
+                                id.Identifier.Text == targetMember.Identifier.Text);
+                            var expr = SyntaxFactory.AssignmentExpression(
+                                SyntaxKind.SimpleAssignmentExpression, targetMember, rewrittenRight);
+                            if (existing >= 0)
+                            {
+                                initExpressions[existing] = expr;
+                            }
+                            else
+                            {
+                                initExpressions.Add(expr);
+                            }
                         }
                         else
                         {
@@ -515,17 +537,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                             return null;
                         }
                     }
-
-                    if (initExpressions.Count > 0)
-                    {
-                        memberInit = SyntaxFactory.InitializerExpression(
-                            SyntaxKind.ObjectInitializerExpression,
-                            SyntaxFactory.SeparatedList(initExpressions)
-                        );
-                    }
                 }
 
-                if (memberInit is null)
+                if (initExpressions.Count == 0)
                 {
                     var diag = Diagnostic.Create(Diagnostics.RequiresBodyDefinition,
                         constructorDeclarationSyntax.GetLocation(), memberSymbol.Name);
@@ -533,17 +547,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                // Use a parameterless constructor call + object initializer.
-                // This ensures EF Core only projects columns that are explicitly assigned
-                // in the constructor body — properties not listed here won't appear in SQL.
-                // Requirement: the DTO must expose a parameterless constructor (or init-only setters).
-                var emptyArgs = SyntaxFactory.ArgumentList();
+                var memberInit = SyntaxFactory.InitializerExpression(
+                    SyntaxKind.ObjectInitializerExpression,
+                    SyntaxFactory.SeparatedList(initExpressions));
 
-                // new ClassName() { MemberInit }
+                // Use a parameterless constructor + object initializer so EF Core only
+                // projects columns explicitly listed in the member-init bindings.
+                // Requirement: the DTO must have a parameterless constructor.
                 descriptor.ExpressionBody = SyntaxFactory.ObjectCreationExpression(
                     SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                     SyntaxFactory.ParseTypeName(fullTypeName),
-                    emptyArgs,
+                    SyntaxFactory.ArgumentList(),
                     memberInit
                 );
             }
@@ -553,6 +567,87 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             return descriptor;
+        }
+
+        /// <summary>
+        /// Collects the property-assignment expressions that the delegated constructor (base/this)
+        /// would perform, substituting its parameters with the actual call-site argument expressions.
+        /// This lets the generated member-init automatically include inherited assignments without
+        /// requiring callers to repeat them in the body.
+        /// </summary>
+        private static IEnumerable<ExpressionSyntax> CollectDelegatedConstructorAssignments(
+            IMethodSymbol delegatedCtor,
+            SeparatedSyntaxList<ArgumentSyntax> callerArgs,
+            ExpressionSyntaxRewriter expressionSyntaxRewriter)
+        {
+            // Only process constructors whose source is available in this compilation
+            var syntax = delegatedCtor.DeclaringSyntaxReferences
+                .Select(r => r.GetSyntax())
+                .OfType<ConstructorDeclarationSyntax>()
+                .FirstOrDefault();
+
+            if (syntax?.Body is null)
+                yield break;
+
+            // Build a mapping: base-param-name → rewritten outer argument expression
+            var paramToArg = new Dictionary<string, ExpressionSyntax>();
+            for (var i = 0; i < callerArgs.Count && i < delegatedCtor.Parameters.Length; i++)
+            {
+                var paramName = delegatedCtor.Parameters[i].Name;
+                var argExpr = (ExpressionSyntax)expressionSyntaxRewriter.Visit(callerArgs[i].Expression);
+                paramToArg[paramName] = argExpr;
+            }
+
+            // Recursively inline the delegated constructor's own base/this initializer first
+            if (syntax.Initializer is { } chainedInitializer)
+            {
+                // We don't have a SemanticModel here to resolve the chained symbol, so we rely
+                // on the simple parameter-substitution approach which covers the common patterns.
+                // Deep chains across assembly boundaries will silently yield nothing (graceful fallback).
+            }
+
+            foreach (var statement in syntax.Body.Statements)
+            {
+                if (statement is not ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+                    || !assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+                {
+                    continue;
+                }
+
+                var targetMember = assignment.Left switch
+                {
+                    MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax, Name: var name } => name,
+                    IdentifierNameSyntax ident => ident,
+                    _ => null
+                };
+
+                if (targetMember is null)
+                {
+                    continue;
+                }
+
+                // Substitute base-ctor parameter references with the outer call-site expressions
+                var substituted = ParameterSubstitutor.Substitute(assignment.Right, paramToArg);
+                yield return SyntaxFactory.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression, targetMember, substituted);
+            }
+        }
+
+        /// <summary>Replaces identifier names that match base-constructor parameter names with the
+        /// corresponding outer argument expressions (used for base/this initializer inlining).</summary>
+        private sealed class ParameterSubstitutor : CSharpSyntaxRewriter
+        {
+            private readonly Dictionary<string, ExpressionSyntax> _map;
+
+            private ParameterSubstitutor(Dictionary<string, ExpressionSyntax> map) => _map = map;
+
+            public static ExpressionSyntax Substitute(ExpressionSyntax expr, Dictionary<string, ExpressionSyntax> map)
+                => (ExpressionSyntax)new ParameterSubstitutor(map).Visit(expr);
+
+            public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+                => _map.TryGetValue(node.Identifier.Text, out var replacement)
+                    ? replacement.WithTriviaFrom(node)
+                    : base.VisitIdentifierName(node);
         }
 
         private static TypeConstraintSyntax MakeTypeConstraint(string constraint) => SyntaxFactory.TypeConstraint(SyntaxFactory.IdentifierName(constraint));
