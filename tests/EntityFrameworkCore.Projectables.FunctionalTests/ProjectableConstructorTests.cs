@@ -270,6 +270,103 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             }
         }
 
+        // ── this() overload – simple delegation ───────────────────────────────────
+
+        public class PersonThisSimpleDto
+        {
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+
+            public PersonThisSimpleDto() { }
+
+            public PersonThisSimpleDto(string firstName, string lastName)
+            {
+                FirstName = firstName;
+                LastName = lastName;
+            }
+
+            /// <summary>Delegates to the 2-arg ctor using a split on the full name.</summary>
+            [Projectable]
+            public PersonThisSimpleDto(string fullName) : this(fullName, "")
+            {
+            }
+        }
+
+        // ── this() overload – with additional body after delegation ───────────────
+
+        public class PersonThisBodyAfterDto
+        {
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public string FullName { get; set; }
+
+            public PersonThisBodyAfterDto() { }
+
+            public PersonThisBodyAfterDto(string firstName, string lastName)
+            {
+                FirstName = firstName;
+                LastName = lastName;
+            }
+
+            [Projectable]
+            public PersonThisBodyAfterDto(string firstName, string lastName, bool upper) : this(firstName, lastName)
+            {
+                FullName = upper ? (FirstName + " " + LastName).ToUpper() : FirstName + " " + LastName;
+            }
+        }
+
+        // ── this() overload – if/else logic in the delegated constructor ──────────
+
+        public class PersonThisIfElseDto
+        {
+            public string Grade { get; set; }
+            public int Score { get; set; }
+
+            public PersonThisIfElseDto() { }
+
+            public PersonThisIfElseDto(int score)
+            {
+                Score = score;
+                if (score >= 90)
+                    Grade = "A";
+                else
+                    Grade = "B";
+            }
+
+            [Projectable]
+            public PersonThisIfElseDto(int score, string prefix) : this(score)
+            {
+                Grade = prefix + Grade;
+            }
+        }
+
+        // ── this() → base() chain ─────────────────────────────────────────────────
+
+        public class PersonChainBase
+        {
+            public int Id { get; set; }
+            public PersonChainBase() { }
+            public PersonChainBase(int id) { Id = id; }
+        }
+
+        public class PersonChainChild : PersonChainBase
+        {
+            public string Name { get; set; }
+
+            public PersonChainChild() { }
+
+            public PersonChainChild(int id, string name) : base(id)
+            {
+                Name = name;
+            }
+
+            [Projectable]
+            public PersonChainChild(int id, string name, string suffix) : this(id, name)
+            {
+                Name = Name + suffix;
+            }
+        }
+
         [Fact]
         public Task Select_ScalarFieldsToDto()
         {
@@ -418,6 +515,50 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             var query = dbContext.Set<PersonEntity>()
                 .Select(p => new PersonWithConstSeparatorDto(p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ThisOverload_SimpleDelegate()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonThisSimpleDto(p.FirstName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ThisOverload_WithBodyAfterDelegation()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonThisBodyAfterDto(p.FirstName, p.LastName, false));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ThisOverload_WithIfElseInDelegated()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonThisIfElseDto(p.Score, "Grade:"));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ThisOverload_ChainedThisAndBase()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonChainChild(p.Id, p.FirstName, "-" + p.LastName));
 
             return Verifier.Verify(query.ToQueryString());
         }

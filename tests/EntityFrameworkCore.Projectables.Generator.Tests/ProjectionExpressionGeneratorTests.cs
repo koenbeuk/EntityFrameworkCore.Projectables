@@ -3796,6 +3796,179 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_SimpleOverload()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fullName) : this(fullName.Split(' ')[0], fullName.Split(' ')[1]) {
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_WithBodyAfter()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fn, string ln, bool upper) : this(fn, ln) {
+            FullName = upper ? (FirstName + "" "" + LastName).ToUpper() : FirstName + "" "" + LastName;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_WithIfElseInDelegated()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+        public int Score { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(int score) {
+            Score = score;
+            if (score >= 90) {
+                Label = ""A"";
+            } else {
+                Label = ""B"";
+            }
+        }
+
+        [Projectable]
+        public PersonDto(int score, string prefix) : this(score) {
+            Label = prefix + Label;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_ChainedThisAndBase()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) { Id = id; }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        public Child() : base(0) { }
+
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+
+        [Projectable]
+        public Child(int id, string name, string suffix) : this(id, name) {
+            Name = Name + suffix;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_ReferencingPreviouslyAssignedProperty()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+            FullName = FirstName + "" "" + LastName;
+        }
+
+        [Projectable]
+        public PersonDto(string firstName) : this(firstName, ""Doe"") {
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
