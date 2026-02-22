@@ -3526,6 +3526,157 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ProjectableConstructor_WithIfElseLogic()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+        public int Score { get; set; }
+
+        [Projectable]
+        public PersonDto(int score) {
+            Score = score;
+            if (score >= 90) {
+                Label = ""A"";
+            } else {
+                Label = ""B"";
+            }
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithLocalVariable()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FullName { get; set; }
+
+        [Projectable]
+        public PersonDto(string first, string last) {
+            var full = first + "" "" + last;
+            FullName = full;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializerExpression()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public string Code { get; set; }
+        public Base(string code) { Code = code; }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        [Projectable]
+        public Child(string name, string rawCode) : base(rawCode.ToUpper()) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializerAndIfElse()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) {
+            if (id < 0) {
+                Id = 0;
+            } else {
+                Id = id;
+            }
+        }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        [Projectable]
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithIfNoElse()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+
+        [Projectable]
+        public PersonDto(int score) {
+            Label = ""none"";
+            if (score >= 90) {
+                Label = ""A"";
+            }
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)

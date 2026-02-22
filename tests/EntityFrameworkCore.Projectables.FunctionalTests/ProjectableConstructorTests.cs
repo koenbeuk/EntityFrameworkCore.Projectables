@@ -12,15 +12,13 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
     [UsesVerify]
     public class ProjectableConstructorTests
     {
-        // ── Entity ──────────────────────────────────────────────────────────────
         public class PersonEntity
         {
             public int Id { get; set; }
             public string FirstName { get; set; }
             public string LastName { get; set; }
+            public int Score { get; set; }
         }
-
-        // ── DTOs ─────────────────────────────────────────────────────────────────
 
         /// <summary>DTO built from scalar entity fields.</summary>
         public class PersonSummaryDto
@@ -54,8 +52,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             }
         }
 
-        // ── Base / derived DTO ────────────────────────────────────────────────────
-
         public class BaseDto
         {
             public int Id { get; set; }
@@ -79,8 +75,6 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
                 FullName = firstName + " " + lastName;
             }
         }
-
-        // ── Overloaded constructors ───────────────────────────────────────────────
 
         public class PersonOverloadedDto
         {
@@ -128,7 +122,95 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             }
         }
 
-        // ── Tests ─────────────────────────────────────────────────────────────────
+        /// <summary>DTO with if/else logic in the constructor body.</summary>
+        public class PersonGradeDto
+        {
+            public int Id { get; set; }
+            public string Grade { get; set; }
+
+            public PersonGradeDto() { }
+
+            [Projectable]
+            public PersonGradeDto(int id, int score)
+            {
+                Id = id;
+                if (score >= 90)
+                {
+                    Grade = "A";
+                }
+                else
+                {
+                    Grade = "B";
+                }
+            }
+        }
+
+        /// <summary>DTO using a local variable in the constructor body.</summary>
+        public class PersonLocalVarDto
+        {
+            public string FullName { get; set; }
+
+            public PersonLocalVarDto() { }
+
+            [Projectable]
+            public PersonLocalVarDto(string first, string last)
+            {
+                var full = first + " " + last;
+                FullName = full;
+            }
+        }
+
+        public class PersonBaseWithExprDto
+        {
+            public string Code { get; set; }
+
+            public PersonBaseWithExprDto() { }
+            public PersonBaseWithExprDto(string code) { Code = code; }
+        }
+
+        public class PersonDerivedWithExprDto : PersonBaseWithExprDto
+        {
+            public string Name { get; set; }
+
+            public PersonDerivedWithExprDto() { }
+
+            [Projectable]
+            public PersonDerivedWithExprDto(string name, string rawCode) : base(rawCode.ToUpper())
+            {
+                Name = name;
+            }
+        }
+
+        public class PersonBaseWithLogicDto
+        {
+            public int Id { get; set; }
+
+            public PersonBaseWithLogicDto() { }
+            public PersonBaseWithLogicDto(int id)
+            {
+                if (id < 0)
+                {
+                    Id = 0;
+                }
+                else
+                {
+                    Id = id;
+                }
+            }
+        }
+
+        public class PersonDerivedWithBaseLogicDto : PersonBaseWithLogicDto
+        {
+            public string FullName { get; set; }
+
+            public PersonDerivedWithBaseLogicDto() { }
+
+            [Projectable]
+            public PersonDerivedWithBaseLogicDto(int id, string firstName, string lastName) : base(id)
+            {
+                FullName = firstName + " " + lastName;
+            }
+        }
 
         [Fact]
         public Task Select_ScalarFieldsToDto()
@@ -203,6 +285,50 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             Assert.DoesNotContain("Nickname", sql, System.StringComparison.OrdinalIgnoreCase);
 
             return Verifier.Verify(sql);
+        }
+
+        [Fact]
+        public Task Select_ConstructorWithIfElseLogic()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonGradeDto(p.Id, p.Score));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorWithLocalVariable()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonLocalVarDto(p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorWithBaseInitializerExpression()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonDerivedWithExprDto(p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorWithBaseInitializerAndIfElse()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonDerivedWithBaseLogicDto(p.Id, p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
         }
     }
 }
