@@ -500,11 +500,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                     }
                 }
 
-                // 2. Process this constructor's body (supports assignments, locals, if/else)
+                // 2. Process this constructor's body (supports assignments, locals, if/else).
+                // Pass the already-accumulated base/this initializer assignments as the initial
+                // visible context so that references to those properties are correctly inlined.
                 if (constructorDeclarationSyntax.Body is { } body)
                 {
                     var bodyConverter = new ConstructorBodyConverter(context, expressionSyntaxRewriter);
-                    var bodyAssignments = bodyConverter.TryConvertBody(body.Statements, memberSymbol.Name);
+                    IReadOnlyDictionary<string, ExpressionSyntax>? initialCtx =
+                        accumulatedAssignments.Count > 0 ? accumulatedAssignments : null;
+                    var bodyAssignments = bodyConverter.TryConvertBody(body.Statements, memberSymbol.Name, initialCtx);
 
                     if (bodyAssignments is null)
                     {

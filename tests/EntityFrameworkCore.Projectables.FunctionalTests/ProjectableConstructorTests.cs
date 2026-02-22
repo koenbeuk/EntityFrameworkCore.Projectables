@@ -212,6 +212,64 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             }
         }
 
+        // ── Referencing previously-assigned property ──────────────────────────────
+
+        public class PersonWithCompositeDto
+        {
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public string FullName { get; set; }
+
+            public PersonWithCompositeDto() { }
+
+            [Projectable]
+            public PersonWithCompositeDto(string firstName, string lastName)
+            {
+                FirstName = firstName;
+                LastName = lastName;
+                FullName = FirstName + " " + LastName;   // references previously-assigned props
+            }
+        }
+
+        // ── Referencing base property in derived body ─────────────────────────────
+
+        public class PersonBaseCodeDto
+        {
+            public string Code { get; set; }
+            public PersonBaseCodeDto() { }
+            public PersonBaseCodeDto(string code) { Code = code; }
+        }
+
+        public class PersonDerivedLabelDto : PersonBaseCodeDto
+        {
+            public string Label { get; set; }
+
+            public PersonDerivedLabelDto() { }
+
+            [Projectable]
+            public PersonDerivedLabelDto(string code) : base(code)
+            {
+                Label = "[" + Code + "]";   // Code was set by base ctor → should inline it
+            }
+        }
+
+        // ── Static / const member ─────────────────────────────────────────────────
+
+        public class PersonWithConstSeparatorDto
+        {
+            internal const string Separator = " - ";
+
+            public string FullName { get; set; }
+
+            public PersonWithConstSeparatorDto() { }
+
+            [Projectable]
+            public PersonWithConstSeparatorDto(string firstName, string lastName)
+            {
+                FullName = firstName + Separator + lastName;
+            }
+        }
+
         [Fact]
         public Task Select_ScalarFieldsToDto()
         {
@@ -327,6 +385,39 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             var query = dbContext.Set<PersonEntity>()
                 .Select(p => new PersonDerivedWithBaseLogicDto(p.Id, p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorReferencingPreviouslyAssignedProperty()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonWithCompositeDto(p.FirstName, p.LastName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorReferencingBasePropertyInDerivedBody()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonDerivedLabelDto(p.FirstName));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task Select_ConstructorReferencingStaticConstMember()
+        {
+            using var dbContext = new SampleDbContext<PersonEntity>();
+
+            var query = dbContext.Set<PersonEntity>()
+                .Select(p => new PersonWithConstSeparatorDto(p.FirstName, p.LastName));
 
             return Verifier.Verify(query.ToQueryString());
         }

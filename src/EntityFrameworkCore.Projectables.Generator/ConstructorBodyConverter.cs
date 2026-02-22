@@ -11,33 +11,17 @@ namespace EntityFrameworkCore.Projectables.Generator
     /// Converts constructor body statements into a dictionary of property-name → expression
     /// pairs that are used to build a member-init expression for EF Core projections.
     /// Supports simple assignments, local variable declarations, and if/else statements.
+    /// Previously-assigned properties (including those from a delegated base/this ctor) are
+    /// inlined when referenced in subsequent assignments.
     /// </summary>
     public class ConstructorBodyConverter
     {
         private readonly SourceProductionContext _context;
-
-        /// <summary>
-        /// Expression-level rewriter applied to every RHS/condition expression.
-        /// For the main constructor body this is the <see cref="ExpressionSyntaxRewriter"/>;
-        /// for a delegated (base/this) constructor body it is the identity function because
-        /// the syntax belongs to a different compilation context and only parameter substitution
-        /// is needed.
-        /// </summary>
         private readonly Func<ExpressionSyntax, ExpressionSyntax> _rewrite;
-
-        /// <summary>
-        /// Maps base/this constructor parameter names to the rewritten argument expressions
-        /// supplied at the call site. Empty when processing the main constructor body.
-        /// </summary>
         private readonly Dictionary<string, ExpressionSyntax> _paramSubstitutions;
-
-        /// <summary>Local variable name → already-rewritten initializer expression.</summary>
         private readonly Dictionary<string, ExpressionSyntax> _localVariables = new();
 
-        /// <summary>
-        /// Creates a converter for the <em>main</em> constructor body.
-        /// The <paramref name="expressionRewriter"/> is applied to every expression encountered.
-        /// </summary>
+        /// <summary>Creates a converter for the <em>main</em> constructor body.</summary>
         public ConstructorBodyConverter(
             SourceProductionContext context,
             ExpressionSyntaxRewriter expressionRewriter)
@@ -47,58 +31,68 @@ namespace EntityFrameworkCore.Projectables.Generator
             _paramSubstitutions = new Dictionary<string, ExpressionSyntax>();
         }
 
-        /// <summary>
-        /// Creates a converter for a <em>delegated</em> (base/this) constructor body.
-        /// No expression-level rewriter is applied; only <paramref name="paramSubstitutions"/>
-        /// are substituted (parameter name → call-site argument expression).
-        /// </summary>
+        /// <summary>Creates a converter for a <em>delegated</em> (base/this) constructor body.</summary>
         public ConstructorBodyConverter(
             SourceProductionContext context,
             Dictionary<string, ExpressionSyntax> paramSubstitutions)
         {
             _context = context;
-            _rewrite = expr => expr; // identity – base-ctor syntax lives in its own context
+            _rewrite = expr => expr;
             _paramSubstitutions = paramSubstitutions;
         }
-
-        /// <summary>
-        /// Tries to convert <paramref name="statements"/> into a property-name → expression map.
-        /// Returns <c>null</c> if conversion fails (diagnostics are reported on the context).
-        /// </summary>
+        
         public Dictionary<string, ExpressionSyntax>? TryConvertBody(
             IEnumerable<StatementSyntax> statements,
-            string memberName)
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? initialContext = null)
         {
             var assignments = new Dictionary<string, ExpressionSyntax>();
+            if (!TryProcessBlock(statements, assignments, memberName, outerContext: initialContext))
+            {
+                return null;
+            }
+
+            return assignments;
+        }
+
+        private bool TryProcessBlock(
+            IEnumerable<StatementSyntax> statements,
+            Dictionary<string, ExpressionSyntax> assignments,
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? outerContext)
+        {
             foreach (var statement in statements)
             {
-                if (!TryProcessStatement(statement, assignments, memberName))
+                // Everything accumulated so far (from outer scope + this block) is visible.
+                var visible = BuildVisible(outerContext, assignments);
+                if (!TryProcessStatement(statement, assignments, memberName, visible))
                 {
-                    return null;
+                    return false;
                 }
             }
-            return assignments;
+            return true;
         }
 
         private bool TryProcessStatement(
             StatementSyntax statement,
             Dictionary<string, ExpressionSyntax> assignments,
-            string memberName)
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
         {
             switch (statement)
             {
                 case LocalDeclarationStatementSyntax localDecl:
-                    return TryProcessLocalDeclaration(localDecl, memberName);
+                    return TryProcessLocalDeclaration(localDecl, memberName, visibleContext);
 
                 case ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
                     when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression):
-                    return TryProcessAssignment(assignment, assignments, memberName);
+                    return TryProcessAssignment(assignment, assignments, memberName, visibleContext);
 
                 case IfStatementSyntax ifStmt:
-                    return TryProcessIfStatement(ifStmt, assignments, memberName);
+                    return TryProcessIfStatement(ifStmt, assignments, memberName, visibleContext);
 
                 case BlockSyntax block:
-                    return TryProcessBlock(block.Statements, assignments, memberName);
+                    return TryProcessBlock(block.Statements, assignments, memberName, visibleContext);
 
                 default:
                     ReportUnsupported(statement, memberName,
@@ -108,7 +102,10 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
         }
 
-        private bool TryProcessLocalDeclaration(LocalDeclarationStatementSyntax localDecl, string memberName)
+        private bool TryProcessLocalDeclaration(
+            LocalDeclarationStatementSyntax localDecl,
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
         {
             foreach (var variable in localDecl.Declaration.Variables)
             {
@@ -119,7 +116,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
 
                 var rewritten = _rewrite(variable.Initializer.Value);
-                rewritten = ApplySubstitutions(rewritten);
+                rewritten = ApplySubstitutions(rewritten, visibleContext);
                 _localVariables[variable.Identifier.Text] = rewritten;
             }
             return true;
@@ -128,7 +125,8 @@ namespace EntityFrameworkCore.Projectables.Generator
         private bool TryProcessAssignment(
             AssignmentExpressionSyntax assignment,
             Dictionary<string, ExpressionSyntax> assignments,
-            string memberName)
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
         {
             var targetMember = GetTargetMember(assignment.Left);
             if (targetMember is null)
@@ -140,7 +138,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             var rewritten = _rewrite(assignment.Right);
-            rewritten = ApplySubstitutions(rewritten);
+            rewritten = ApplySubstitutions(rewritten, visibleContext);
             assignments[targetMember.Identifier.Text] = rewritten;
             return true;
         }
@@ -148,27 +146,28 @@ namespace EntityFrameworkCore.Projectables.Generator
         private bool TryProcessIfStatement(
             IfStatementSyntax ifStmt,
             Dictionary<string, ExpressionSyntax> assignments,
-            string memberName)
+            string memberName,
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
         {
-            // Rewrite and substitute the condition
             var condition = _rewrite(ifStmt.Condition);
-            condition = ApplySubstitutions(condition);
+            condition = ApplySubstitutions(condition, visibleContext);
 
-            // Process then-branch
+            // Each branch starts empty but can see the pre-if accumulated props (visibleContext).
             var thenAssignments = new Dictionary<string, ExpressionSyntax>();
-            if (!TryProcessBlock(GetStatements(ifStmt.Statement), thenAssignments, memberName))
+            if (!TryProcessBlock(GetStatements(ifStmt.Statement), thenAssignments, memberName, visibleContext))
+            {
                 return false;
+            }
 
-            // Process else-branch (may be absent)
             var elseAssignments = new Dictionary<string, ExpressionSyntax>();
             if (ifStmt.Else != null)
             {
-                if (!TryProcessBlock(GetStatements(ifStmt.Else.Statement), elseAssignments, memberName))
+                if (!TryProcessBlock(GetStatements(ifStmt.Else.Statement), elseAssignments, memberName, visibleContext))
+                {
                     return false;
+                }
             }
 
-            // Merge: for each property assigned in the then-branch create a ternary that
-            // falls back to the else-branch value, the already-accumulated value, or default.
             foreach (var thenKvp in thenAssignments)
             {
                 var prop = thenKvp.Key;
@@ -181,7 +180,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 else if (assignments.TryGetValue(prop, out var existing))
                 {
-                    // The else-branch doesn't touch this property – keep the pre-if value.
                     elseExpr = existing;
                 }
                 else
@@ -192,14 +190,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                 assignments[prop] = SyntaxFactory.ConditionalExpression(condition, thenExpr, elseExpr);
             }
 
-            // For properties only in the else-branch
             foreach (var elseKvp in elseAssignments)
             {
                 var prop = elseKvp.Key;
                 var elseExpr = elseKvp.Value;
 
                 if (thenAssignments.ContainsKey(prop))
-                    continue; // already handled above
+                {
+                    continue;
+                }
 
                 ExpressionSyntax thenExpr;
                 if (assignments.TryGetValue(prop, out var existing))
@@ -217,19 +216,6 @@ namespace EntityFrameworkCore.Projectables.Generator
             return true;
         }
 
-        private bool TryProcessBlock(
-            IEnumerable<StatementSyntax> statements,
-            Dictionary<string, ExpressionSyntax> assignments,
-            string memberName)
-        {
-            foreach (var statement in statements)
-            {
-                if (!TryProcessStatement(statement, assignments, memberName))
-                    return false;
-            }
-            return true;
-        }
-
         private static IEnumerable<StatementSyntax> GetStatements(StatementSyntax statement) =>
             statement is BlockSyntax block
                 ? block.Statements
@@ -243,12 +229,67 @@ namespace EntityFrameworkCore.Projectables.Generator
                 _ => null
             };
 
-        private ExpressionSyntax ApplySubstitutions(ExpressionSyntax expr)
+        /// <summary>
+        /// Merges outer (parent scope) and local (current block) accumulated dictionaries
+        /// into a single read-only view for use as a substitution context.
+        /// Local entries take priority over outer entries.
+        /// Returns <c>null</c> when both are empty (avoids unnecessary allocations).
+        /// </summary>
+        private static IReadOnlyDictionary<string, ExpressionSyntax>? BuildVisible(
+            IReadOnlyDictionary<string, ExpressionSyntax>? outer,
+            Dictionary<string, ExpressionSyntax> local)
+        {
+            bool outerEmpty = outer == null || outer.Count == 0;
+            var localEmpty = local.Count == 0;
+
+            if (outerEmpty && localEmpty)
+            {
+                return null;
+            }
+
+            if (outerEmpty)
+            {
+                return local;
+            }
+
+            if (localEmpty)
+            {
+                return outer;
+            }
+
+            var merged = new Dictionary<string, ExpressionSyntax>();
+            foreach (var kvp in outer!)
+            {
+                merged[kvp.Key] = kvp.Value;
+            }
+
+            foreach (var kvp in local)
+            {
+                merged[kvp.Key] = kvp.Value;
+            }
+
+            return merged;
+        }
+
+        private ExpressionSyntax ApplySubstitutions(
+            ExpressionSyntax expr,
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
         {
             if (_paramSubstitutions.Count > 0)
+            {
                 expr = ParameterSubstitutor.Substitute(expr, _paramSubstitutions);
+            }
+
             if (_localVariables.Count > 0)
+            {
                 expr = LocalVariableSubstitutor.Substitute(expr, _localVariables);
+            }
+
+            if (visibleContext != null && visibleContext.Count > 0)
+            {
+                expr = AssignedPropertySubstitutor.Substitute(expr, visibleContext);
+            }
+
             return expr;
         }
 
@@ -267,13 +308,12 @@ namespace EntityFrameworkCore.Projectables.Generator
         }
 
         /// <summary>
-        /// Replaces identifier names that match base/this-constructor parameter names with the
-        /// corresponding outer argument expressions.
+        /// Replaces parameter-name identifier references with call-site argument expressions
+        /// (used when inlining a delegated base/this constructor body).
         /// </summary>
         internal sealed class ParameterSubstitutor : CSharpSyntaxRewriter
         {
             private readonly Dictionary<string, ExpressionSyntax> _map;
-
             private ParameterSubstitutor(Dictionary<string, ExpressionSyntax> map) => _map = map;
 
             public static ExpressionSyntax Substitute(ExpressionSyntax expr, Dictionary<string, ExpressionSyntax> map)
@@ -286,13 +326,12 @@ namespace EntityFrameworkCore.Projectables.Generator
         }
 
         /// <summary>
-        /// Replaces local-variable identifier references with their already-rewritten
-        /// initializer expressions (parenthesised to preserve operator precedence).
+        /// Replaces local-variable identifier references with their inlined (parenthesised)
+        /// initializer expressions.
         /// </summary>
         private sealed class LocalVariableSubstitutor : CSharpSyntaxRewriter
         {
             private readonly Dictionary<string, ExpressionSyntax> _locals;
-
             private LocalVariableSubstitutor(Dictionary<string, ExpressionSyntax> locals) => _locals = locals;
 
             public static ExpressionSyntax Substitute(ExpressionSyntax expr, Dictionary<string, ExpressionSyntax> locals)
@@ -303,8 +342,67 @@ namespace EntityFrameworkCore.Projectables.Generator
                     ? SyntaxFactory.ParenthesizedExpression(replacement.WithoutTrivia()).WithTriviaFrom(node)
                     : base.VisitIdentifierName(node);
         }
+
+        /// <summary>
+        /// Replaces references to previously-assigned properties with the expression that was
+        /// assigned to them, so that EF Core sees a fully-inlined projection.
+        /// <para>
+        /// Handles two syntactic forms:
+        /// <list type="bullet">
+        ///   <item><c>@this.PropName</c> — produced by <see cref="ExpressionSyntaxRewriter"/> for
+        ///   instance-member references in the main constructor body.</item>
+        ///   <item>Bare <c>PropName</c> identifier — appears in delegated (base/this) constructor
+        ///   bodies where the identity rewriter is used.</item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        private sealed class AssignedPropertySubstitutor : CSharpSyntaxRewriter
+        {
+            private readonly IReadOnlyDictionary<string, ExpressionSyntax> _accumulated;
+
+            private AssignedPropertySubstitutor(IReadOnlyDictionary<string, ExpressionSyntax> accumulated)
+                => _accumulated = accumulated;
+
+            public static ExpressionSyntax Substitute(
+                ExpressionSyntax expr,
+                IReadOnlyDictionary<string, ExpressionSyntax> accumulated)
+                => (ExpressionSyntax)new AssignedPropertySubstitutor(accumulated).Visit(expr);
+
+            // Catches @this.PropName → inline the accumulated expression for PropName.
+            public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+            {
+                if (node.Expression is IdentifierNameSyntax thisRef &&
+                    (thisRef.Identifier.Text == "@this" || thisRef.Identifier.ValueText == "this") &&
+                    node.Name is IdentifierNameSyntax propName &&
+                    _accumulated.TryGetValue(propName.Identifier.Text, out var replacement))
+                {
+                    return SyntaxFactory.ParenthesizedExpression(replacement.WithoutTrivia())
+                        .WithTriviaFrom(node);
+                }
+
+                return base.VisitMemberAccessExpression(node);
+            }
+
+            // Catches bare PropName → inline accumulated expression (delegated ctor case).
+            // Params and locals have already been substituted before this runs, so any remaining
+            // bare identifier that matches an accumulated property key is a property reference.
+            public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+            {
+                // Do not substitute special identifiers (@this, type keywords, etc.)
+                var text = node.Identifier.Text;
+                if (text.StartsWith("@") || text == "default" || text == "null" || text == "true" || text == "false")
+                {
+                    return base.VisitIdentifierName(node);
+                }
+
+                if (_accumulated.TryGetValue(text, out var replacement))
+                {
+                    return SyntaxFactory.ParenthesizedExpression(replacement.WithoutTrivia())
+                        .WithTriviaFrom(node);
+                }
+
+                return base.VisitIdentifierName(node);
+            }
+        }
     }
 }
-
-
-

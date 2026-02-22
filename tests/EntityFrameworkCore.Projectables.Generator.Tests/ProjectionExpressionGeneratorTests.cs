@@ -3677,6 +3677,125 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ProjectableConstructor_ReferencingPreviouslyAssignedProperty()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        [Projectable]
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+            FullName = FirstName + "" "" + LastName;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingBasePropertyInDerivedBody()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public string Code { get; set; }
+        public Base(string code) { Code = code; }
+    }
+
+    class Child : Base {
+        public string Label { get; set; }
+
+        [Projectable]
+        public Child(string code) : base(code) {
+            Label = ""[""  + Code + ""]"";
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingStaticConstMember()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        internal const string Separator = "" - "";
+        public string FullName { get; set; }
+
+        [Projectable]
+        public PersonDto(string first, string last) {
+            FullName = first + Separator + last;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingPreviouslyAssignedInBaseCtor()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public Base(int x, int y) {
+            X = x;
+            Y = x + y; // Y depends on X's assigned value (x)
+        }
+    }
+
+    class Child : Base {
+        public int Sum { get; set; }
+
+        [Projectable]
+        public Child(int a, int b) : base(a, b) {
+            Sum = X + Y;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation(string source, bool expectedToCompile = true)
