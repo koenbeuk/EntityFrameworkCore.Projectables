@@ -3384,6 +3384,8 @@ namespace Foo {
         public int X { get; set; }
         public int Y { get; set; }
 
+        public PointDto() { }
+
         [Projectable]
         public PointDto(int x, int y) {
             X = x;
@@ -3410,10 +3412,14 @@ namespace Foo {
     class Base {
         public int Id { get; set; }
         public Base(int id) { Id = id; }
+
+        protected Base() { }
     }
 
     class Child : Base {
         public string Name { get; set; }
+
+        public Child() { }
 
         [Projectable]
         public Child(int id, string name) : base(id) {
@@ -3440,6 +3446,8 @@ namespace Foo {
     class PersonDto {
         public string FirstName { get; set; }
         public string LastName { get; set; }
+
+        public PersonDto() { }
 
         [Projectable]
         public PersonDto(string firstName, string lastName) {
@@ -3479,6 +3487,8 @@ namespace Foo {
         public int Id { get; set; }
         public string Name { get; set; }
 
+        public PersonDto() { }
+
         [Projectable]
         public PersonDto(SourceEntity source) {
             Id = source.Id;
@@ -3510,6 +3520,8 @@ namespace Foo {
         public string FirstName { get; set; }
         public string LastName { get; set; }
 
+        public PersonDto() { }
+
         [Projectable]
         public PersonDto(NamePart first, NamePart last) {
             FirstName = first.Value;
@@ -3536,6 +3548,8 @@ namespace Foo {
     class PersonDto {
         public string Label { get; set; }
         public int Score { get; set; }
+
+        public PersonDto() { }
 
         [Projectable]
         public PersonDto(int score) {
@@ -3567,6 +3581,8 @@ namespace Foo {
     class PersonDto {
         public string FullName { get; set; }
 
+        public PersonDto() { }
+
         [Projectable]
         public PersonDto(string first, string last) {
             var full = first + "" "" + last;
@@ -3593,10 +3609,14 @@ namespace Foo {
     class Base {
         public string Code { get; set; }
         public Base(string code) { Code = code; }
+
+        protected Base() { }
     }
 
     class Child : Base {
         public string Name { get; set; }
+
+        public Child() { }
 
         [Projectable]
         public Child(string name, string rawCode) : base(rawCode.ToUpper()) {
@@ -3629,10 +3649,14 @@ namespace Foo {
                 Id = id;
             }
         }
+
+        protected Base() { }
     }
 
     class Child : Base {
         public string Name { get; set; }
+
+        public Child() { }
 
         [Projectable]
         public Child(int id, string name) : base(id) {
@@ -3658,6 +3682,8 @@ using EntityFrameworkCore.Projectables;
 namespace Foo {
     class PersonDto {
         public string Label { get; set; }
+
+        public PersonDto() { }
 
         [Projectable]
         public PersonDto(int score) {
@@ -3689,6 +3715,8 @@ namespace Foo {
         public string LastName { get; set; }
         public string FullName { get; set; }
 
+        public PersonDto() { }
+
         [Projectable]
         public PersonDto(string firstName, string lastName) {
             FirstName = firstName;
@@ -3716,10 +3744,14 @@ namespace Foo {
     class Base {
         public string Code { get; set; }
         public Base(string code) { Code = code; }
+
+        protected Base() { }
     }
 
     class Child : Base {
         public string Label { get; set; }
+
+        public Child() { }
 
         [Projectable]
         public Child(string code) : base(code) {
@@ -3746,6 +3778,8 @@ namespace Foo {
     class PersonDto {
         internal const string Separator = "" - "";
         public string FullName { get; set; }
+
+        public PersonDto() { }
 
         [Projectable]
         public PersonDto(string first, string last) {
@@ -3776,10 +3810,14 @@ namespace Foo {
             X = x;
             Y = x + y; // Y depends on X's assigned value (x)
         }
+
+        protected Base() { }
     }
 
     class Child : Base {
         public int Sum { get; set; }
+
+        public Child() { }
 
         [Projectable]
         public Child(int a, int b) : base(a, b) {
@@ -3957,6 +3995,64 @@ namespace Foo {
 
         [Projectable]
         public PersonDto(string firstName) : this(firstName, ""Doe"") {
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public void ProjectableConstructor_WithoutParameterlessConstructor_EmitsDiagnostic()
+        {
+            // A class that only exposes a parameterized constructor (no parameterless one).
+            // The generator must emit EFP0007 and produce no code because the object-initializer
+            // pattern requires a parameterless constructor.
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Name { get; set; }
+
+        // No parameterless constructor – only the one marked [Projectable].
+        [Projectable]
+        public PersonDto(string name) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0007", diagnostic.Id);
+            Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Empty(result.GeneratedTrees);
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithExplicitParameterlessConstructor_Succeeds()
+        {
+            // A class that explicitly defines a parameterless constructor alongside the
+            // [Projectable] one – the generator should succeed and produce code.
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Name { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string name) {
+            Name = name;
         }
     }
 }

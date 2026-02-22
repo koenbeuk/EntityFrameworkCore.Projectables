@@ -530,6 +530,23 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
+                // Verify the containing type has a parameterless (instance) constructor.
+                // The generated projection is: new T() { Prop = ... }, which requires one.
+                // INamedTypeSymbol.Constructors covers all partial declarations and also
+                // the implicit parameterless constructor that the compiler synthesizes when
+                // no constructors are explicitly defined.
+                var hasParameterlessConstructor = containingType.Constructors
+                    .Any(c => !c.IsStatic && c.Parameters.IsEmpty);
+
+                if (!hasParameterlessConstructor)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.MissingParameterlessConstructor,
+                        constructorDeclarationSyntax.GetLocation(),
+                        containingType.Name));
+                    return null;
+                }
+
                 var initExpressions = accumulatedAssignments
                     .Select(kvp => (ExpressionSyntax)SyntaxFactory.AssignmentExpression(
                         SyntaxKind.SimpleAssignmentExpression,
@@ -543,7 +560,6 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 // Use a parameterless constructor + object initializer so EF Core only
                 // projects columns explicitly listed in the member-init bindings.
-                // Requirement: the DTO must have a parameterless constructor.
                 descriptor.ExpressionBody = SyntaxFactory.ObjectCreationExpression(
                     SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                     SyntaxFactory.ParseTypeName(fullTypeName),
