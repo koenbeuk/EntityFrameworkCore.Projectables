@@ -52,6 +52,11 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             public DateTime RecordDate { get; set; }
         } 
+        
+        public class GenericObject<T>
+        {
+            public T Id { get; set; }
+        } 
 
         [Fact]
         public Task ProjectOverNavigationProperty()
@@ -96,6 +101,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
                 .SelectMany(x => x.Last2Orders)
                 .Select(x => x.RecordDate);
 
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ProjectOverGenericType()
+        {
+            using var dbContext = new SampleDbContext<GenericObject<int>>();
+            
+            var query = dbContext.Set<GenericObject<int>>()
+                .Select(x => x.Id);
+            
             return Verifier.Verify(query.ToQueryString());
         }
     }

@@ -1,0 +1,8 @@
+﻿SELECT [o].[Id], [o].[CustomerId], [o].[Priority], [o].[Status]
+FROM [Order] AS [o]
+WHERE CASE
+    WHEN [o].[Status] = 0 THEN CAST(0 AS bit)
+    WHEN [o].[Status] = 1 THEN CAST(1 AS bit)
+    WHEN [o].[Status] = 2 THEN CAST(0 AS bit)
+    ELSE CAST(0 AS bit)
+END = CAST(1 AS bit)

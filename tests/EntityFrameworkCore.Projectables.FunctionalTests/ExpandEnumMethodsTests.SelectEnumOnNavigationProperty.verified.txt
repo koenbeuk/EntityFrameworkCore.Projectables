@@ -1,0 +1,8 @@
+﻿SELECT CASE
+    WHEN [c].[PreferredPriority] = 0 THEN N'Low Priority'
+    WHEN [c].[PreferredPriority] = 1 THEN N'Medium Priority'
+    WHEN [c].[PreferredPriority] = 2 THEN N'High Priority'
+    ELSE NULL
+END
+FROM [OrderWithNavigation] AS [o]
+LEFT JOIN [Customer] AS [c] ON [o].[CustomerId] = [c].[Id]

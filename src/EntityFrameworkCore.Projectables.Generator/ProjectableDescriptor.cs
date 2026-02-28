@@ -33,6 +33,8 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public ParameterListSyntax? ParametersList { get; set; }
 
+        public IEnumerable<string>? ParameterTypeNames { get; set; }
+
         public TypeParameterListSyntax? TypeParameterList { get; set; }
         
         public SyntaxList<TypeParameterConstraintClauseSyntax>? ConstraintClauses { get; set; }

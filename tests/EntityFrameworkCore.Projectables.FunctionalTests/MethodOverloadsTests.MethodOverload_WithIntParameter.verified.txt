@@ -1,0 +1,2 @@
+﻿SELECT [e].[Id], [e].[Id] + 10 AS [Result]
+FROM [Entity] AS [e]

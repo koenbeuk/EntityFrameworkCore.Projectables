@@ -1,0 +1,7 @@
+﻿SELECT CASE
+    WHEN [o].[Status] = 0 THEN CAST(0 AS bit)
+    WHEN [o].[Status] = 1 THEN CAST(1 AS bit)
+    WHEN [o].[Status] = 2 THEN CAST(0 AS bit)
+    ELSE CAST(0 AS bit)
+END
+FROM [Order] AS [o]

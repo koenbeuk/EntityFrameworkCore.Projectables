@@ -9,7 +9,7 @@ using Foo;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Foo_EntityExtensions_GetFirstName
+    static class Foo_EntityExtensions_GetFirstName_P0_Foo_EntityExtensions_Entity
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.EntityExtensions.Entity, string>> Expression()
         {

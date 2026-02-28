@@ -159,6 +159,99 @@ GROUP BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ```
 
+#### How do I expand enum extension methods?
+When you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
+
+```csharp
+public enum OrderStatus
+{
+    [Display(Name = "Pending Review")]
+    Pending,
+    
+    [Display(Name = "Approved")]
+    Approved,
+    
+    [Display(Name = "Rejected")]
+    Rejected
+}
+
+public static class EnumExtensions
+{
+    public static string GetDisplayName(this OrderStatus value)
+    {
+        // Your implementation here
+        return value.ToString();
+    }
+    
+    public static bool IsApproved(this OrderStatus value)
+    {
+        return value == OrderStatus.Approved;
+    }
+    
+    public static int GetSortOrder(this OrderStatus value)
+    {
+        return (int)value;
+    }
+    
+    public static string Format(this OrderStatus value, string prefix)
+    {
+        return prefix + value.ToString();
+    }
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public OrderStatus Status { get; set; }
+    
+    [Projectable(ExpandEnumMethods = true)]
+    public string StatusName => Status.GetDisplayName();
+    
+    [Projectable(ExpandEnumMethods = true)]
+    public bool IsStatusApproved => Status.IsApproved();
+    
+    [Projectable(ExpandEnumMethods = true)]
+    public int StatusOrder => Status.GetSortOrder();
+    
+    [Projectable(ExpandEnumMethods = true)]
+    public string FormattedStatus => Status.Format("Status: ");
+}
+```
+
+This generates expression trees equivalent to:
+```csharp
+// For StatusName
+@this.Status == OrderStatus.Pending ? GetDisplayName(OrderStatus.Pending) 
+    : @this.Status == OrderStatus.Approved ? GetDisplayName(OrderStatus.Approved) 
+    : @this.Status == OrderStatus.Rejected ? GetDisplayName(OrderStatus.Rejected) 
+    : null
+
+// For IsStatusApproved (boolean)
+@this.Status == OrderStatus.Pending ? false 
+    : @this.Status == OrderStatus.Approved ? true 
+    : @this.Status == OrderStatus.Rejected ? false 
+    : default(bool)
+```
+
+Which EF Core translates to SQL CASE expressions:
+```sql
+SELECT CASE
+    WHEN [o].[Status] = 0 THEN N'Pending Review'
+    WHEN [o].[Status] = 1 THEN N'Approved'
+    WHEN [o].[Status] = 2 THEN N'Rejected'
+END AS [StatusName]
+FROM [Orders] AS [o]
+```
+
+The `ExpandEnumMethods` feature supports:
+- **String return types** - returns `null` as the default fallback
+- **Boolean return types** - returns `default(bool)` (false) as the default fallback
+- **Integer return types** - returns `default(int)` (0) as the default fallback
+- **Other value types** - returns `default(T)` as the default fallback
+- **Nullable enum types** - wraps the expansion in a null check
+- **Methods with parameters** - parameters are passed through to each enum value call
+- **Enum properties on navigation properties** - works with nested navigation
+
 #### How does this relate to [Expressionify](https://github.com/ClaveConsulting/Expressionify)?
 Expressionify is a project that was launched before this project. It has some overlapping features and uses similar approaches. When I first published this project, I was not aware of its existence, so shame on me. Currently, Expressionify targets a more focused scope of what this project is doing, and thereby it seems to be more limiting in its capabilities. Check them out though!
 
