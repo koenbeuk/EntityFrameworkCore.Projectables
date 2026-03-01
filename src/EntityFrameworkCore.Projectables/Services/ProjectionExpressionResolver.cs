@@ -77,6 +77,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 // Use the same format as Roslyn's SymbolDisplayFormat.FullyQualifiedFormat
                 // which uses C# keywords for primitive types (int, string, etc.)
                 string[]? parameterTypeNames = null;
+                string memberLookupName = projectableMemberInfo.Name;
                 if (projectableMemberInfo is MethodInfo method)
                 {
                     // For generic methods, use the generic definition to get parameter types
@@ -87,8 +88,16 @@ namespace EntityFrameworkCore.Projectables.Services
                         .Select(p => GetFullTypeName(p.ParameterType))
                         .ToArray();
                 }
+                else if (projectableMemberInfo is ConstructorInfo ctor)
+                {
+                    // Constructors are stored under the synthetic name "_ctor"
+                    memberLookupName = "_ctor";
+                    parameterTypeNames = ctor.GetParameters()
+                        .Select(p => GetFullTypeName(p.ParameterType))
+                        .ToArray();
+                }
                 
-                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name, parameterTypeNames);
+                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), memberLookupName, parameterTypeNames);
 
                 var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
 

@@ -3327,6 +3327,698 @@ namespace Foo {
         }
 
         [Fact]
+        public Task ProjectableConstructor_BodyAssignments()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PointDto {
+        public int X { get; set; }
+        public int Y { get; set; }
+
+        public PointDto() { }
+
+        [Projectable]
+        public PointDto(int x, int y) {
+            X = x;
+            Y = y;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializer()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) { Id = id; }
+
+        protected Base() { }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        public Child() { }
+
+        [Projectable]
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_Overloads()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fullName) {
+            FirstName = fullName;
+            LastName = string.Empty;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Equal(2, result.GeneratedTrees.Length);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithClassArgument()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class SourceEntity {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+
+    class PersonDto {
+        public int Id { get; set; }
+        public string Name { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(SourceEntity source) {
+            Id = source.Id;
+            Name = source.Name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithMultipleClassArguments()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class NamePart {
+        public string Value { get; set; }
+    }
+
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(NamePart first, NamePart last) {
+            FirstName = first.Value;
+            LastName = last.Value;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithIfElseLogic()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+        public int Score { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(int score) {
+            Score = score;
+            if (score >= 90) {
+                Label = ""A"";
+            } else {
+                Label = ""B"";
+            }
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithLocalVariable()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string first, string last) {
+            var full = first + "" "" + last;
+            FullName = full;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializerExpression()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public string Code { get; set; }
+        public Base(string code) { Code = code; }
+
+        protected Base() { }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        public Child() { }
+
+        [Projectable]
+        public Child(string name, string rawCode) : base(rawCode.ToUpper()) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithBaseInitializerAndIfElse()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) {
+            if (id < 0) {
+                Id = 0;
+            } else {
+                Id = id;
+            }
+        }
+
+        protected Base() { }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        public Child() { }
+
+        [Projectable]
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithIfNoElse()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(int score) {
+            Label = ""none"";
+            if (score >= 90) {
+                Label = ""A"";
+            }
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingPreviouslyAssignedProperty()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+            FullName = FirstName + "" "" + LastName;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingBasePropertyInDerivedBody()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public string Code { get; set; }
+        public Base(string code) { Code = code; }
+
+        protected Base() { }
+    }
+
+    class Child : Base {
+        public string Label { get; set; }
+
+        public Child() { }
+
+        [Projectable]
+        public Child(string code) : base(code) {
+            Label = ""[""  + Code + ""]"";
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingStaticConstMember()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        internal const string Separator = "" - "";
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string first, string last) {
+            FullName = first + Separator + last;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ReferencingPreviouslyAssignedInBaseCtor()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public Base(int x, int y) {
+            X = x;
+            Y = x + y; // Y depends on X's assigned value (x)
+        }
+
+        protected Base() { }
+    }
+
+    class Child : Base {
+        public int Sum { get; set; }
+
+        public Child() { }
+
+        [Projectable]
+        public Child(int a, int b) : base(a, b) {
+            Sum = X + Y;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_SimpleOverload()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fullName) : this(fullName.Split(' ')[0], fullName.Split(' ')[1]) {
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_WithBodyAfter()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+        }
+
+        [Projectable]
+        public PersonDto(string fn, string ln, bool upper) : this(fn, ln) {
+            FullName = upper ? (FirstName + "" "" + LastName).ToUpper() : FirstName + "" "" + LastName;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_WithIfElseInDelegated()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Label { get; set; }
+        public int Score { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(int score) {
+            Score = score;
+            if (score >= 90) {
+                Label = ""A"";
+            } else {
+                Label = ""B"";
+            }
+        }
+
+        [Projectable]
+        public PersonDto(int score, string prefix) : this(score) {
+            Label = prefix + Label;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_ChainedThisAndBase()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Base {
+        public int Id { get; set; }
+        public Base(int id) { Id = id; }
+    }
+
+    class Child : Base {
+        public string Name { get; set; }
+
+        public Child() : base(0) { }
+
+        public Child(int id, string name) : base(id) {
+            Name = name;
+        }
+
+        [Projectable]
+        public Child(int id, string name, string suffix) : this(id, name) {
+            Name = Name + suffix;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_ThisInitializer_ReferencingPreviouslyAssignedProperty()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string FullName { get; set; }
+
+        public PersonDto() { }
+
+        public PersonDto(string firstName, string lastName) {
+            FirstName = firstName;
+            LastName = lastName;
+            FullName = FirstName + "" "" + LastName;
+        }
+
+        [Projectable]
+        public PersonDto(string firstName) : this(firstName, ""Doe"") {
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public void ProjectableConstructor_WithoutParameterlessConstructor_EmitsDiagnostic()
+        {
+            // A class that only exposes a parameterized constructor (no parameterless one).
+            // The generator must emit EFP0007 and produce no code because the object-initializer
+            // pattern requires a parameterless constructor.
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Name { get; set; }
+
+        // No parameterless constructor – only the one marked [Projectable].
+        [Projectable]
+        public PersonDto(string name) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("EFP0007", diagnostic.Id);
+            Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Empty(result.GeneratedTrees);
+        }
+
+        [Fact]
+        public Task ProjectableConstructor_WithExplicitParameterlessConstructor_Succeeds()
+        {
+            // A class that explicitly defines a parameterless constructor alongside the
+            // [Projectable] one – the generator should succeed and produce code.
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class PersonDto {
+        public string Name { get; set; }
+
+        public PersonDto() { }
+
+        [Projectable]
+        public PersonDto(string name) {
+            Name = name;
+        }
+    }
+}
+");
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task ExplicitInterfaceMember()
         {
             var compilation = CreateCompilation(

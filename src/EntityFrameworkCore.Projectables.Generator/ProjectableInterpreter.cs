@@ -188,19 +188,24 @@ namespace EntityFrameworkCore.Projectables.Generator
                 ? memberSymbol.ContainingType.ContainingType
                 : memberSymbol.ContainingType;
 
+            var methodSymbol = memberSymbol as IMethodSymbol;
+
+            // Sanitize constructor name (.ctor / .cctor are not valid C# identifiers, use _ctor)
+            var memberName = methodSymbol?.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor
+                ? "_ctor"
+                : memberSymbol.Name;
+
             var descriptor = new ProjectableDescriptor
             {
                 UsingDirectives = member.SyntaxTree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>(),                    
                 ClassName = classForNaming.Name,
                 ClassNamespace = classForNaming.ContainingNamespace.IsGlobalNamespace ? null : classForNaming.ContainingNamespace.ToDisplayString(),
-                MemberName = memberSymbol.Name,
+                MemberName = memberName,
                 NestedInClassNames = isExtensionMember 
                     ? GetNestedInClassPathForExtensionMember(memberSymbol.ContainingType)
                     : GetNestedInClassPath(memberSymbol.ContainingType),
                 ParametersList = SyntaxFactory.ParameterList()
             };
-            
-            var methodSymbol = memberSymbol as IMethodSymbol;
 
             // Collect parameter type names for method overload disambiguation
             if (methodSymbol is not null)
@@ -288,7 +293,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     )
                 );
             }
-            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword))
+            else if (!member.Modifiers.Any(SyntaxKind.StaticKeyword) && member is not ConstructorDeclarationSyntax)
             {
                 descriptor.ParametersList = descriptor.ParametersList.AddParameters(
                     SyntaxFactory.Parameter(
@@ -452,12 +457,239 @@ namespace EntityFrameworkCore.Projectables.Generator
                     ? bodyExpression
                     : (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
             }
+            // Projectable constructors
+            else if (memberBody is ConstructorDeclarationSyntax constructorDeclarationSyntax)
+            {
+                var containingType = memberSymbol.ContainingType;
+                var fullTypeName = containingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                descriptor.ReturnTypeName = fullTypeName;
+
+                // Add the constructor's own parameters to the lambda parameter list
+                foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(constructorDeclarationSyntax.ParameterList)).Parameters)
+                {
+                    descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
+                }
+
+                // Accumulated property-name → expression map (later converted to member-init)
+                var accumulatedAssignments = new Dictionary<string, ExpressionSyntax>();
+
+                // 1. Process base/this initializer: propagate property assignments from the
+                //    delegated constructor so callers don't have to duplicate them in the body.
+                if (constructorDeclarationSyntax.Initializer is { } initializer)
+                {
+                    var initializerSymbol = semanticModel.GetSymbolInfo(initializer).Symbol as IMethodSymbol;
+                    if (initializerSymbol is not null)
+                    {
+                        var delegatedAssignments = CollectDelegatedConstructorAssignments(
+                            initializerSymbol,
+                            initializer.ArgumentList.Arguments,
+                            expressionSyntaxRewriter,
+                            context,
+                            memberSymbol.Name);
+
+                        if (delegatedAssignments is null)
+                        {
+                            return null;
+                        }
+
+                        foreach (var kvp in delegatedAssignments)
+                        {
+                            accumulatedAssignments[kvp.Key] = kvp.Value;
+                        }
+                    }
+                }
+
+                // 2. Process this constructor's body (supports assignments, locals, if/else).
+                // Pass the already-accumulated base/this initializer assignments as the initial
+                // visible context so that references to those properties are correctly inlined.
+                if (constructorDeclarationSyntax.Body is { } body)
+                {
+                    var bodyConverter = new ConstructorBodyConverter(context, expressionSyntaxRewriter);
+                    IReadOnlyDictionary<string, ExpressionSyntax>? initialCtx =
+                        accumulatedAssignments.Count > 0 ? accumulatedAssignments : null;
+                    var bodyAssignments = bodyConverter.TryConvertBody(body.Statements, memberSymbol.Name, initialCtx);
+
+                    if (bodyAssignments is null)
+                    {
+                        return null;
+                    }
+
+                    // Body assignments override anything set by the base/this initializer
+                    foreach (var kvp in bodyAssignments)
+                    {
+                        accumulatedAssignments[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (accumulatedAssignments.Count == 0)
+                {
+                    var diag = Diagnostic.Create(Diagnostics.RequiresBodyDefinition,
+                        constructorDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    context.ReportDiagnostic(diag);
+                    return null;
+                }
+
+                // Verify the containing type has a parameterless (instance) constructor.
+                // The generated projection is: new T() { Prop = ... }, which requires one.
+                // INamedTypeSymbol.Constructors covers all partial declarations and also
+                // the implicit parameterless constructor that the compiler synthesizes when
+                // no constructors are explicitly defined.
+                var hasParameterlessConstructor = containingType.Constructors
+                    .Any(c => !c.IsStatic && c.Parameters.IsEmpty);
+
+                if (!hasParameterlessConstructor)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.MissingParameterlessConstructor,
+                        constructorDeclarationSyntax.GetLocation(),
+                        containingType.Name));
+                    return null;
+                }
+
+                var initExpressions = accumulatedAssignments
+                    .Select(kvp => (ExpressionSyntax)SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(kvp.Key),
+                        kvp.Value))
+                    .ToList();
+
+                var memberInit = SyntaxFactory.InitializerExpression(
+                    SyntaxKind.ObjectInitializerExpression,
+                    SyntaxFactory.SeparatedList(initExpressions));
+
+                // Use a parameterless constructor + object initializer so EF Core only
+                // projects columns explicitly listed in the member-init bindings.
+                descriptor.ExpressionBody = SyntaxFactory.ObjectCreationExpression(
+                    SyntaxFactory.Token(SyntaxKind.NewKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                    SyntaxFactory.ParseTypeName(fullTypeName),
+                    SyntaxFactory.ArgumentList(),
+                    memberInit
+                );
+            }
             else
             {
                 return null;
             }
 
             return descriptor;
+        }
+
+        /// <summary>
+        /// Collects the property-assignment expressions that the delegated constructor (base/this)
+        /// would perform, substituting its parameters with the actual call-site argument expressions.
+        /// Supports if/else logic inside the delegated constructor body, and follows the chain of
+        /// base/this initializers recursively.
+        /// Returns <c>null</c> when an unsupported statement is encountered (diagnostics reported).
+        /// </summary>
+        private static Dictionary<string, ExpressionSyntax>? CollectDelegatedConstructorAssignments(
+            IMethodSymbol delegatedCtor,
+            SeparatedSyntaxList<ArgumentSyntax> callerArgs,
+            ExpressionSyntaxRewriter expressionSyntaxRewriter,
+            SourceProductionContext context,
+            string memberName,
+            bool argsAlreadyRewritten = false)
+        {
+            // Only process constructors whose source is available in this compilation
+            var syntax = delegatedCtor.DeclaringSyntaxReferences
+                .Select(r => r.GetSyntax())
+                .OfType<ConstructorDeclarationSyntax>()
+                .FirstOrDefault();
+
+            if (syntax is null)
+            {
+                return new Dictionary<string, ExpressionSyntax>();
+            }
+
+            // Build a mapping: delegated-param-name → caller argument expression.
+            // First-level args come from the original syntax tree and must be visited by the
+            // ExpressionSyntaxRewriter. Recursive-level args are already-substituted detached
+            // nodes and must NOT be visited (doing so throws "node not in syntax tree").
+            var paramToArg = new Dictionary<string, ExpressionSyntax>();
+            for (var i = 0; i < callerArgs.Count && i < delegatedCtor.Parameters.Length; i++)
+            {
+                var paramName = delegatedCtor.Parameters[i].Name;
+                var argExpr = argsAlreadyRewritten
+                    ? callerArgs[i].Expression
+                    : (ExpressionSyntax)expressionSyntaxRewriter.Visit(callerArgs[i].Expression);
+                paramToArg[paramName] = argExpr;
+            }
+
+            // The accumulated assignments start from the delegated ctor's own initializer (if any),
+            // so that base/this chains are followed recursively.
+            var accumulated = new Dictionary<string, ExpressionSyntax>();
+
+            if (syntax.Initializer is { } delegatedInitializer)
+            {
+                // The delegated ctor's initializer is part of the original syntax tree,
+                // so we can safely use the semantic model to resolve its symbol.
+                var semanticModel = expressionSyntaxRewriter.GetSemanticModel();
+                var delegatedInitializerSymbol =
+                    semanticModel.GetSymbolInfo(delegatedInitializer).Symbol as IMethodSymbol;
+
+                if (delegatedInitializerSymbol is not null)
+                {
+                    // Substitute the delegated ctor's initializer arguments using our paramToArg map,
+                    // so that e.g. `: base(id)` becomes `: base(<caller's expression for id>)`.
+                    var substitutedInitArgs = SubstituteArguments(
+                        delegatedInitializer.ArgumentList.Arguments, paramToArg);
+
+                    var chainedAssignments = CollectDelegatedConstructorAssignments(
+                        delegatedInitializerSymbol,
+                        substitutedInitArgs,
+                        expressionSyntaxRewriter,
+                        context,
+                        memberName,
+                        argsAlreadyRewritten: true); // args are now detached substituted nodes
+
+                    if (chainedAssignments is null)
+                        return null;
+
+                    foreach (var kvp in chainedAssignments)
+                        accumulated[kvp.Key] = kvp.Value;
+                }
+            }
+
+            if (syntax.Body is null)
+                return accumulated;
+
+            // Use ConstructorBodyConverter (identity rewriter + param substitutions) so that
+            // if/else, local variables and simple assignments in the delegated ctor are all handled.
+            // Pass the already-accumulated chained assignments as the initial visible context.
+            IReadOnlyDictionary<string, ExpressionSyntax>? initialCtx =
+                accumulated.Count > 0 ? accumulated : null;
+            var converter = new ConstructorBodyConverter(context, paramToArg);
+            var bodyAssignments = converter.TryConvertBody(syntax.Body.Statements, memberName, initialCtx);
+
+            if (bodyAssignments is null)
+                return null;
+
+            foreach (var kvp in bodyAssignments)
+                accumulated[kvp.Key] = kvp.Value;
+
+            return accumulated;
+        }
+
+        /// <summary>
+        /// Substitutes identifiers in <paramref name="args"/> using the <paramref name="paramToArg"/>
+        /// mapping. This is used to forward the outer caller's arguments through a chain of
+        /// base/this initializer calls.
+        /// </summary>
+        private static SeparatedSyntaxList<ArgumentSyntax> SubstituteArguments(
+            SeparatedSyntaxList<ArgumentSyntax> args,
+            Dictionary<string, ExpressionSyntax> paramToArg)
+        {
+            if (paramToArg.Count == 0)
+                return args;
+
+            var result = new List<ArgumentSyntax>();
+            foreach (var arg in args)
+            {
+                var substituted = ConstructorBodyConverter.ParameterSubstitutor.Substitute(
+                    arg.Expression, paramToArg);
+                result.Add(arg.WithExpression(substituted));
+            }
+            return SyntaxFactory.SeparatedList(result);
         }
 
         private static TypeConstraintSyntax MakeTypeConstraint(string constraint) => SyntaxFactory.TypeConstraint(SyntaxFactory.IdentifierName(constraint));
