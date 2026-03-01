@@ -1,4 +1,4 @@
-﻿﻿﻿using EntityFrameworkCore.Projectables.Services;
+﻿using EntityFrameworkCore.Projectables.Services;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
