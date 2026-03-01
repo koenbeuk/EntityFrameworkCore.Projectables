@@ -676,5 +676,128 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             return expression;
         }
+        
+        public override SyntaxNode? VisitIsPatternExpression(IsPatternExpressionSyntax node)
+        {
+            // Pattern matching is not supported in expression trees (CS8122)
+            // We need to convert patterns into equivalent expressions
+            var expression = (ExpressionSyntax)Visit(node.Expression);
+            
+            return ConvertPatternToExpression(node.Pattern, expression);
+        }
+
+        private ExpressionSyntax ConvertPatternToExpression(PatternSyntax pattern, ExpressionSyntax expression)
+        {
+            switch (pattern)
+            {
+                case RecursivePatternSyntax recursivePattern:
+                    return ConvertRecursivePattern(recursivePattern, expression);
+                    
+                case ConstantPatternSyntax constantPattern:
+                    // e is null or e is 5
+                    return SyntaxFactory.BinaryExpression(
+                        SyntaxKind.EqualsExpression,
+                        expression,
+                        (ExpressionSyntax)Visit(constantPattern.Expression)
+                    );
+                    
+                case DeclarationPatternSyntax declarationPattern:
+                    // e is string s -> e is string (type check)
+                    return SyntaxFactory.BinaryExpression(
+                        SyntaxKind.IsExpression,
+                        expression,
+                        declarationPattern.Type
+                    );
+                    
+                case RelationalPatternSyntax relationalPattern:
+                    // e is > 100
+                    var binaryKind = relationalPattern.OperatorToken.Kind() switch
+                    {
+                        SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
+                        SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
+                        SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
+                        SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
+                        _ => throw new NotSupportedException($"Relational operator {relationalPattern.OperatorToken} not supported")
+                    };
+                    
+                    return SyntaxFactory.BinaryExpression(
+                        binaryKind,
+                        expression,
+                        (ExpressionSyntax)Visit(relationalPattern.Expression)
+                    );
+                    
+                case BinaryPatternSyntax binaryPattern:
+                    // e is > 10 and < 100
+                    var left = ConvertPatternToExpression(binaryPattern.Left, expression);
+                    var right = ConvertPatternToExpression(binaryPattern.Right, expression);
+                    
+                    var logicalKind = binaryPattern.OperatorToken.Kind() switch
+                    {
+                        SyntaxKind.AndKeyword => SyntaxKind.LogicalAndExpression,
+                        SyntaxKind.OrKeyword => SyntaxKind.LogicalOrExpression,
+                        _ => throw new NotSupportedException($"Binary pattern operator {binaryPattern.OperatorToken} not supported")
+                    };
+                    
+                    return SyntaxFactory.BinaryExpression(logicalKind, left, right);
+                    
+                case UnaryPatternSyntax unaryPattern when unaryPattern.OperatorToken.IsKind(SyntaxKind.NotKeyword):
+                    // e is not null
+                    var innerPattern = ConvertPatternToExpression(unaryPattern.Pattern, expression);
+                    return SyntaxFactory.PrefixUnaryExpression(
+                        SyntaxKind.LogicalNotExpression,
+                        SyntaxFactory.ParenthesizedExpression(innerPattern)
+                    );
+                    
+                default:
+                    throw new NotSupportedException($"Pattern type {pattern.GetType().Name} is not yet supported in projectable methods");
+            }
+        }
+
+        private ExpressionSyntax ConvertRecursivePattern(RecursivePatternSyntax recursivePattern, ExpressionSyntax expression)
+        {
+            // entity is { IsActive: true, Value: > 100 }
+            // Convert to: entity != null && entity.IsActive == true && entity.Value > 100
+            
+            var conditions = new List<ExpressionSyntax>();
+            
+            // Add null check first (unless pattern explicitly includes null)
+            var nullCheck = SyntaxFactory.BinaryExpression(
+                SyntaxKind.NotEqualsExpression,
+                expression,
+                SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+            );
+            conditions.Add(nullCheck);
+            
+            // Handle property patterns
+            if (recursivePattern.PropertyPatternClause != null)
+            {
+                foreach (var subpattern in recursivePattern.PropertyPatternClause.Subpatterns)
+                {
+                    var memberAccess = subpattern.NameColon != null
+                        ? SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            expression,
+                            SyntaxFactory.IdentifierName(subpattern.NameColon.Name.Identifier)
+                        )
+                        : expression;
+                    
+                    var condition = ConvertPatternToExpression(subpattern.Pattern, memberAccess);
+                    conditions.Add(condition);
+                }
+            }
+            
+            // Combine all conditions with &&
+            var result = conditions[0];
+            for (var i = 1; i < conditions.Count; i++)
+            {
+                result = SyntaxFactory.BinaryExpression(
+                    SyntaxKind.LogicalAndExpression,
+                    result,
+                    conditions[i]
+                );
+            }
+            
+            return result;
+        }
     }
 }
