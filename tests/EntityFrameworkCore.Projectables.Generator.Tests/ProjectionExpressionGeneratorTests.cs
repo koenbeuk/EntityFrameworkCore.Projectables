@@ -3782,7 +3782,7 @@ namespace Foo {
             Assert.Empty(result.Diagnostics);
             Assert.Equal(2, result.GeneratedTrees.Length);
 
-            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+            return Verifier.Verify(result.GeneratedTrees.OrderBy(t => t.FilePath).Select(t => t.ToString()));
         }
 
         [Fact]

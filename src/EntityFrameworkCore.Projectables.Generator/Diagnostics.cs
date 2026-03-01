@@ -68,5 +68,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor NoSourceAvailableForDelegatedConstructor = new DiagnosticDescriptor(
+            id: "EFP0009",
+            title: "Delegated constructor cannot be analyzed for projection",
+            messageFormat: "The delegated constructor '{0}' in type '{1}' has no source available and cannot be analyzed. Base/this initializer in member '{2}' will not be projected.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
     }
 }

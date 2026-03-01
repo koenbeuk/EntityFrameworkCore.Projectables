@@ -607,7 +607,18 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             if (syntax is null)
             {
-                return new Dictionary<string, ExpressionSyntax>();
+                // The delegated constructor is not available in source, so we cannot analyze
+                // its body or any assignments it performs. Treat this as an unsupported
+                // initializer: report a diagnostic and return null so callers can react.
+                var location = delegatedCtor.Locations.FirstOrDefault() ?? Location.None;
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        Diagnostics.NoSourceAvailableForDelegatedConstructor,
+                        location,
+                        delegatedCtor.ToDisplayString(),
+                        delegatedCtor.ContainingType?.ToDisplayString() ?? "<unknown>",
+                        memberName));
+                return null;
             }
 
             // Build a mapping: delegated-param-name → caller argument expression.
