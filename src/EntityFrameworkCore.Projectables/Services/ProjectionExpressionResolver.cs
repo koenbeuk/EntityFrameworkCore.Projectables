@@ -88,9 +88,17 @@ namespace EntityFrameworkCore.Projectables.Services
                         .ToArray();
                 }
                 
-                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name, parameterTypeNames);
+                var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name, parameterTypeNames);
+                var generatedContainingTypeName = $"{ProjectionExpressionClassNameGenerator.Namespace}.{generatedClassName}";
 
                 var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
+
+                if (expressionFactoryType is null)
+                {
+                    // When the containing class is partial, the generated Expression class is a nested
+                    // type inside the declaring type rather than in the Generated namespace.
+                    expressionFactoryType = originalDeclaringType.GetNestedType(generatedClassName, BindingFlags.NonPublic | BindingFlags.Public);
+                }
 
                 if (expressionFactoryType is not null)
                 {

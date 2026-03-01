@@ -1,0 +1,2 @@
+﻿SELECT [i].[Value] * 2
+FROM [InternalHelperEntity] AS [i]

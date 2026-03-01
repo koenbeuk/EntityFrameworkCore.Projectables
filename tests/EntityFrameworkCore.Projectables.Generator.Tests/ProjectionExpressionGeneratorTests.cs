@@ -3507,6 +3507,158 @@ namespace Foo {
             Assert.Empty(result.Diagnostics);
         }
 
+        [Fact]
+        public Task PartialClass_PrivateProperty_GeneratesNestedClass()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class C {
+        private int _bar = 5;
+
+        [Projectable]
+        public int Bar => _bar;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task PartialClass_PrivateMethod_GeneratesNestedClass()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class C {
+        private int Sum(int a, int b) => a + b;
+
+        [Projectable]
+        public int Add(int x, int y) => Sum(x, y);
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task PartialClass_ProtectedProperty_GeneratesNestedClass()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class C {
+        protected int Value { get; set; }
+
+        [Projectable]
+        public int DoubleValue => Value * 2;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public void NonPartialClass_WithPrivateAccess_ProducesWarning()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        private int _bar = 5;
+
+        [Projectable]
+        public int Bar => _bar;
+    }
+}
+");
+
+            // Run the generator directly (without the compilation check from RunGenerator,
+            // since the generated code would fail to compile due to private member access)
+            var subject = new ProjectionExpressionGenerator();
+            var driver = CSharpGeneratorDriver
+                .Create(subject)
+                .RunGeneratorsAndUpdateCompilation(compilation, out _, out _);
+            var result = driver.GetRunResult();
+
+            // Should warn about private/protected access in non-partial class
+            Assert.Contains(result.Diagnostics, d => d.Id == "EFP0007");
+        }
+
+        [Fact]
+        public Task PartialClass_NestedInPartialClass_GeneratesDoublyNestedClass()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class Outer {
+        partial class Inner {
+            private int _value = 42;
+
+            [Projectable]
+            public int Value => _value;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task PartialClass_InternalProperty_NoWarning()
+        {
+            // internal members are accessible from the same assembly; no warning and no nested class
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        internal int Value { get; set; }
+
+        [Projectable]
+        public int DoubleValue => Value * 2;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            // Should NOT warn about internal access (same assembly)
+            Assert.DoesNotContain(result.Diagnostics, d => d.Id == "EFP0007");
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation([StringSyntax("csharp")] string source)
