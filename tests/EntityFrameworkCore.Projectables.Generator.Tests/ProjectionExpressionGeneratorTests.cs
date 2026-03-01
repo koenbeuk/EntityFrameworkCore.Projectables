@@ -2012,6 +2012,236 @@ public static class ItemMapper
         }
         
         [Fact]
+        public Task SwitchExpression_WithRelationalPattern()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Score { get; set; }
+
+        [Projectable]
+        public string GetGrade() => Score switch
+        {
+            >= 90 => ""A"",
+            >= 80 => ""B"",
+            >= 70 => ""C"",
+            _ => ""F"",
+        };
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task SwitchExpression_WithRelationalPattern_OnExtensionMethod()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Order {
+        public decimal Amount { get; set; }
+    }
+
+    static class OrderExtensions {
+        [Projectable]
+        public static string GetTier(this Order order) => order.Amount switch
+        {
+            >= 1000 => ""Platinum"",
+            >= 500  => ""Gold"",
+            >= 100  => ""Silver"",
+            _       => ""Bronze"",
+        };
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpressionBodied_IsPattern_WithAndPattern()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+
+        [Projectable]
+        public bool IsInRange => Value is >= 1 and <= 100;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpressionBodied_IsPattern_WithOrPattern()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+
+        [Projectable]
+        public bool IsOutOfRange => Value is 0 or > 100;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpressionBodied_IsPattern_WithPropertyPattern()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public bool IsActive { get; set; }
+        public int Value { get; set; }
+    }
+
+    static class Extensions {
+        [Projectable]
+        public static bool IsActiveAndPositive(this Entity entity) =>
+            entity is { IsActive: true, Value: > 0 };
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExpressionBodied_IsPattern_WithNotNullPattern()
+        {
+            var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public string? Name { get; set; }
+
+        [Projectable]
+        public bool HasName => Name is not null;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithAndPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+    }
+
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static bool IsInRange(this Entity entity)
+        {
+            if (entity.Value is >= 1 and <= 100)
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithOrPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public string Status { get; set; }
+    }
+
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static bool IsTerminal(this Entity entity)
+        {
+            if (entity.Status is ""Cancelled"" or ""Completed"")
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public Task GenericTypes()
         {
             // issue: https://github.com/koenbeuk/EntityFrameworkCore.Projectables/issues/48
@@ -2967,6 +3197,137 @@ namespace Foo {
 
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
+
+        [Fact]
+        public Task ExtensionMemberWithBlockBody()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable(AllowBlockBody = true)]
+            public string GetStatus()
+            {
+                if (e.IsActive && e.Value > 0)
+                {
+                    return ""Active"";
+                }
+                return ""Inactive"";
+            }
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberWithSwitchExpression()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Score { get; set; }
+    }
+
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public string GetGrade() => e.Score switch
+            {
+                >= 90 => ""A"",
+                >= 80 => ""B"",
+                >= 70 => ""C"",
+                _ => ""F"",
+            };
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberOnInterface()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    interface IEntity {
+        int Id { get; }
+        string Name { get; }
+    }
+
+    static class IEntityExtensions {
+        extension(IEntity e) {
+            [Projectable]
+            public string Label => e.Id + "": "" + e.Name;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExtensionMemberWithIsPatternExpression()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+    }
+
+    static class EntityExtensions {
+        extension(Entity e) {
+            [Projectable]
+            public bool IsHighValue => e.Value is > 100;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
 #endif
 
         [Fact]
@@ -3505,6 +3866,140 @@ namespace Foo {
 
             // Should have no warnings
             Assert.Empty(result.Diagnostics);
+        }
+        
+        [Fact]
+        public Task BlockBodiedMethod_WithPatternMatching()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public bool IsActive { get; set; }
+        public int Value { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static string GetComplexCategory(this Entity entity)
+        {
+            if (entity is { IsActive: true, Value: > 100 })
+            {
+                return ""Active High"";
+            }
+            return ""Other"";
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            // The generator should not crash and should handle pattern matching
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+        
+               [Fact]
+        public Task BlockBodiedMethod_WithRelationalPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public int Value { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static string GetCategory(this Entity entity)
+        {
+            if (entity.Value is > 100)
+            {
+                return ""High"";
+            }
+            return ""Low"";
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithConstantPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public string Status { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static bool IsNull(this Entity entity)
+        {
+            if (entity is null)
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task BlockBodiedMethod_WithNotPattern()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity {
+        public string Name { get; set; }
+    }
+    
+    static class Extensions {
+        [Projectable(AllowBlockBody = true)]
+        public static bool IsNotNull(this Entity entity)
+        {
+            if (entity is not null)
+            {
+                return true;
+            }
+            return false;
+        }
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
         #region Helpers
