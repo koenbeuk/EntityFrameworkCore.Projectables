@@ -45,9 +45,9 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         /// <summary>
         /// Converts a list of statements into a single expression by processing them right-to-left.
-        /// Local declarations are separated out first and inlined at their use sites.
-        /// Each remaining statement receives the accumulated result as its implicit "fallthrough"
-        /// (i.e. the else/default branch when no explicit one exists).
+        /// Local declarations must appear before any non-local statement; they are inlined at their
+        /// use sites. Each remaining statement receives the accumulated result as its implicit
+        /// "fallthrough" (i.e. the else/default branch when no explicit one exists).
         /// </summary>
         private ExpressionSyntax? TryConvertStatements(List<StatementSyntax> statements, string memberName)
         {
@@ -57,11 +57,23 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             // Process local declarations in order, collecting the remaining code statements.
+            // Enforce that all local declarations appear before any non-local statement so that
+            // hoisting is well-defined and the diagnostic in TryConvertStatementWithFallthrough
+            // is reachable only as a defensive fallback.
             var codeStatements = new List<StatementSyntax>();
+            var seenNonLocal = false;
             foreach (var stmt in statements)
             {
                 if (stmt is LocalDeclarationStatementSyntax localDecl)
                 {
+                    if (seenNonLocal)
+                    {
+                        // Local declaration appears after executable code — ordering violation.
+                        ReportUnsupportedStatement(localDecl, memberName,
+                            "Local variable declarations must appear before any other statements (return, if, switch, …)");
+                        return null;
+                    }
+
                     if (!TryProcessLocalDeclaration(localDecl, memberName))
                     {
                         return null;
@@ -69,6 +81,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 else
                 {
+                    seenNonLocal = true;
                     codeStatements.Add(stmt);
                 }
             }
@@ -159,8 +172,12 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return AnalyzeExpressionStatement(exprStmt, memberName);
 
                 case LocalDeclarationStatementSyntax:
+                    // Defensive guard: TryConvertStatements already enforces that locals appear
+                    // before any non-local statement and reports EFP0003 for ordering violations.
+                    // This branch is reached only if a local declaration somehow reaches
+                    // TryConvertStatementWithFallthrough directly (e.g. future call-sites).
                     ReportUnsupportedStatement(statement, memberName,
-                        "Local declarations must appear before the return statement");
+                        "Local variable declarations must appear before any other statements (return, if, switch, …)");
                     return null;
 
                 default:

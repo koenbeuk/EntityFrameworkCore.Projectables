@@ -1,4 +1,4 @@
-# Block-Bodied Methods Support
+# Block-Bodied Members Support
 
 EntityFrameworkCore.Projectables now supports "classic" block-bodied members (methods and properties) decorated with `[Projectable]`, in addition to expression-bodied members.
 
@@ -31,7 +31,7 @@ This requirement will be removed in a future version once the feature is conside
 
 ## What's Supported
 
-Block-bodied methods can now be transformed into expression trees when they contain:
+Block-bodied members can now be transformed into expression trees when they contain:
 
 ### 1. Simple Return Statements
 ```csharp
