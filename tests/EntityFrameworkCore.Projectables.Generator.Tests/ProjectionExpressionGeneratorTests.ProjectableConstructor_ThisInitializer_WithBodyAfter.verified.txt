@@ -14,6 +14,13 @@ namespace EntityFrameworkCore.Projectables.Generated
     ///     FullName = upper ? (FirstName + " " + LastName).ToUpper() : FirstName + " " + LastName;
     /// }
     /// </code>
+    /// <code>
+    /// public PersonDto(string firstName, string lastName)
+    /// {
+    ///     FirstName = firstName;
+    ///     LastName = lastName;
+    /// }
+    /// </code>
     /// </summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     static class Foo_PersonDto__ctor_P0_string_P1_string_P2_bool

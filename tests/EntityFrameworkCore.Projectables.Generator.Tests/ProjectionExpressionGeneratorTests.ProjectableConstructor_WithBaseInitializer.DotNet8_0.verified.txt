@@ -14,6 +14,12 @@ namespace EntityFrameworkCore.Projectables.Generated
     ///     Name = name;
     /// }
     /// </code>
+    /// <code>
+    /// public Base(int id)
+    /// {
+    ///     Id = id;
+    /// }
+    /// </code>
     /// </summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     static class Foo_Child__ctor_P0_int_P1_string

@@ -14,6 +14,20 @@ namespace EntityFrameworkCore.Projectables.Generated
     ///     Label = prefix + Label;
     /// }
     /// </code>
+    /// <code>
+    /// public PersonDto(int score)
+    /// {
+    ///     Score = score;
+    ///     if (score &gt;= 90)
+    ///     {
+    ///         Label = "A";
+    ///     }
+    ///     else
+    ///     {
+    ///         Label = "B";
+    ///     }
+    /// }
+    /// </code>
     /// </summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     static class Foo_PersonDto__ctor_P0_int_P1_string

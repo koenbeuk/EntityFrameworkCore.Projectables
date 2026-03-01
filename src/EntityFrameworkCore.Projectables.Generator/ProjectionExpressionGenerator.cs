@@ -1,4 +1,4 @@
-﻿﻿using EntityFrameworkCore.Projectables.Services;
+﻿﻿﻿using EntityFrameworkCore.Projectables.Services;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -49,8 +49,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                 static (spc, source) => Execute(source.Item1, source.Item2, spc));
         }
 
-        static SyntaxTriviaList BuildSourceDocComment(MemberDeclarationSyntax member)
+        static SyntaxTriviaList BuildSourceDocComment(ConstructorDeclarationSyntax ctor, Compilation compilation)
         {
+            var chain = CollectConstructorChain(ctor, compilation);
+
             var lines = new List<SyntaxTrivia>();
 
             void AddLine(string text)
@@ -61,22 +63,59 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             AddLine("/// <summary>");
             AddLine("/// <para>Generated from:</para>");
-            AddLine("/// <code>");
 
-            var originalSource = member.NormalizeWhitespace().ToFullString();
-            foreach (var rawLine in originalSource.Split('\n'))
+            foreach (var ctorSyntax in chain)
             {
-                var lineText = rawLine.TrimEnd('\r')
-                    .Replace("&", "&amp;")
-                    .Replace("<", "&lt;")
-                    .Replace(">", "&gt;");
-                AddLine($"/// {lineText}");
+                AddLine("/// <code>");
+                var originalSource = ctorSyntax.NormalizeWhitespace().ToFullString();
+                foreach (var rawLine in originalSource.Split('\n'))
+                {
+                    var lineText = rawLine.TrimEnd('\r')
+                        .Replace("&", "&amp;")
+                        .Replace("<", "&lt;")
+                        .Replace(">", "&gt;");
+                    AddLine($"/// {lineText}");
+                }
+                AddLine("/// </code>");
             }
 
-            AddLine("/// </code>");
             AddLine("/// </summary>");
 
             return TriviaList(lines);
+        }
+
+        /// <summary>
+        /// Collects the constructor and every constructor it delegates to via <c>this(...)</c> or
+        /// <c>base(...)</c>, in declaration order (annotated constructor first, then its delegate,
+        /// then its delegate's delegate, …). Stops when a delegated constructor has no source
+        /// available in the compilation (e.g. a compiler-synthesised parameterless constructor).
+        /// </summary>
+        static IReadOnlyList<ConstructorDeclarationSyntax> CollectConstructorChain(
+            ConstructorDeclarationSyntax ctor, Compilation compilation)
+        {
+            var result = new List<ConstructorDeclarationSyntax> { ctor };
+            var visited = new HashSet<SyntaxNode>() { ctor };
+
+            var current = ctor;
+            while (current.Initializer is { } initializer)
+            {
+                var semanticModel = compilation.GetSemanticModel(current.SyntaxTree);
+                if (semanticModel.GetSymbolInfo(initializer).Symbol is not IMethodSymbol delegated)
+                    break;
+
+                var delegatedSyntax = delegated.DeclaringSyntaxReferences
+                    .Select(r => r.GetSyntax())
+                    .OfType<ConstructorDeclarationSyntax>()
+                    .FirstOrDefault();
+
+                if (delegatedSyntax is null || !visited.Add(delegatedSyntax))
+                    break;
+
+                result.Add(delegatedSyntax);
+                current = delegatedSyntax;
+            }
+
+            return result;
         }
 
         static void Execute(MemberDeclarationSyntax member, Compilation compilation, SourceProductionContext context)
@@ -104,7 +143,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     AttributeList()
                         .AddAttributes(_editorBrowsableAttribute)
                 )
-                .WithLeadingTrivia(member is ConstructorDeclarationSyntax ? BuildSourceDocComment(member) : TriviaList())
+                .WithLeadingTrivia(member is ConstructorDeclarationSyntax ctor ? BuildSourceDocComment(ctor, compilation) : TriviaList())
                 .AddMembers(
                     MethodDeclaration(
                         GenericName(

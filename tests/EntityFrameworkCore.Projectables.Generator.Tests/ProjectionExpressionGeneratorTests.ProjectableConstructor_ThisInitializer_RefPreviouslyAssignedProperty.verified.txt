@@ -13,6 +13,14 @@ namespace EntityFrameworkCore.Projectables.Generated
     /// {
     /// }
     /// </code>
+    /// <code>
+    /// public PersonDto(string firstName, string lastName)
+    /// {
+    ///     FirstName = firstName;
+    ///     LastName = lastName;
+    ///     FullName = FirstName + " " + LastName;
+    /// }
+    /// </code>
     /// </summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     static class Foo_PersonDto__ctor_P0_string
