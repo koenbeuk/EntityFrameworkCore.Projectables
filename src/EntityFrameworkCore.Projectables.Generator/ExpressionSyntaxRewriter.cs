@@ -610,20 +610,21 @@ namespace EntityFrameworkCore.Projectables.Generator
             var expression = (ExpressionSyntax)Visit(node.Expression);
 
             // ConvertPatternToExpression returns null when the pattern cannot be rewritten and has
-            // already reported a diagnostic (EFP0007).  Fall back to the original is-pattern node
-            // so the output is semantically identical to the source and the compiler's own CS8122
-            // points directly at the offending pattern — no misleading placeholder value is emitted.
-            return ConvertPatternToExpression(node.Pattern, expression) ?? node;
+            // already reported a diagnostic (EFP0007).  Return a 'false' literal placeholder so
+            // the generated lambda stays syntactically valid and no additional CS8122 errors are
+            // triggered by leaving raw pattern-matching syntax inside an expression tree.
+            return ConvertPatternToExpression(node.Pattern, expression)
+                ?? SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression);
         }
 
         /// <summary>
-        /// Returns true when <paramref name="expression"/> has a type that can be compared to null
-        /// (i.e. reference types and nullable value types). Returns false for plain value types
-        /// (struct / record struct) where <c>x != null</c> would not compile.
+        /// Returns true when <paramref name="type"/> can be compared to null.
+        /// Accepts a pre-resolved symbol so synthesized (unbound) expression nodes can bypass
+        /// semantic-model lookup, which would return <c>null</c> for synthesized nodes and cause
+        /// the method to conservatively (and incorrectly) emit a null-check for value-type properties.
         /// </summary>
-        private bool TypeRequiresNullCheck(ExpressionSyntax expression)
+        private static bool TypeRequiresNullCheck(ITypeSymbol? type)
         {
-            var type = _semanticModel.GetTypeInfo(expression).Type;
             if (type is null)
             {
                 return true; // conservative: unknown type → assume nullable
@@ -644,12 +645,19 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// inside an expression tree.  Returns <c>null</c> and reports a diagnostic when the pattern
         /// cannot be rewritten.
         /// </summary>
-        private ExpressionSyntax? ConvertPatternToExpression(PatternSyntax pattern, ExpressionSyntax expression)
+        /// <param name="pattern">The pattern syntax to convert.</param>
+        /// <param name="expression">The expression being tested against the pattern.</param>
+        /// <param name="expressionType">
+        /// Pre-resolved type of <paramref name="expression"/>. When the expression is a synthesized
+        /// node (not present in the original source) Roslyn cannot bind it, so callers that know the
+        /// type should pass it here to avoid falling back to the conservative "assume nullable" path.
+        /// </param>
+        private ExpressionSyntax? ConvertPatternToExpression(PatternSyntax pattern, ExpressionSyntax expression, ITypeSymbol? expressionType = null)
         {
             switch (pattern)
             {
                 case RecursivePatternSyntax recursivePattern:
-                    return ConvertRecursivePattern(recursivePattern, expression);
+                    return ConvertRecursivePattern(recursivePattern, expression, expressionType);
 
                 case ConstantPatternSyntax constantPattern:
                     // e is null  /  e is 5
@@ -761,7 +769,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
         }
 
-        private ExpressionSyntax? ConvertRecursivePattern(RecursivePatternSyntax recursivePattern, ExpressionSyntax expression)
+        private ExpressionSyntax? ConvertRecursivePattern(RecursivePatternSyntax recursivePattern, ExpressionSyntax expression, ITypeSymbol? expressionType = null)
         {
             // Positional / deconstruct patterns (e.g. obj is Point(1, 2)) cannot be rewritten
             // into a plain expression tree.  Report a diagnostic and bail out.
@@ -778,7 +786,10 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             // Null check: only legal (and only necessary) for reference types and nullable value types.
             // Emitting "x != null" for a plain struct / record struct would not compile.
-            if (TypeRequiresNullCheck(expression))
+            // Use the pre-resolved expressionType when available so synthesized nodes (which Roslyn
+            // cannot bind) are handled correctly instead of falling back to the conservative path.
+            var typeForNullCheck = expressionType ?? _semanticModel.GetTypeInfo(expression).Type;
+            if (TypeRequiresNullCheck(typeForNullCheck))
             {
                 conditions.Add(SyntaxFactory.BinaryExpression(
                     SyntaxKind.NotEqualsExpression,
@@ -791,7 +802,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             TypeSyntax? visitedType = null;
             if (recursivePattern.Type != null)
             {
-                visitedType = (TypeSyntax)(Visit(recursivePattern.Type) ?? recursivePattern.Type);
+                visitedType = (TypeSyntax)Visit(recursivePattern.Type);
                 conditions.Add(SyntaxFactory.BinaryExpression(
                     SyntaxKind.IsExpression,
                     expression,
@@ -811,14 +822,35 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 foreach (var subpattern in recursivePattern.PropertyPatternClause.Subpatterns)
                 {
-                    var propExpression = subpattern.NameColon != null
-                        ? SyntaxFactory.MemberAccessExpression(
+                    ExpressionSyntax propExpression;
+                    ITypeSymbol? propType = null;
+
+                    if (subpattern.NameColon != null)
+                    {
+                        // Look up the property/field type from the original source binding so that
+                        // when the recursive ConvertPatternToExpression call checks TypeRequiresNullCheck
+                        // on the synthesized propExpression it receives the real symbol instead of null.
+                        var memberSymbol = _semanticModel.GetSymbolInfo(subpattern.NameColon.Name).Symbol;
+                        propType = memberSymbol switch
+                        {
+                            IPropertySymbol prop  => prop.Type,
+                            IFieldSymbol    field => field.Type,
+                            _                     => null
+                        };
+
+                        propExpression = SyntaxFactory.MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
                             memberBase,
-                            SyntaxFactory.IdentifierName(subpattern.NameColon.Name.Identifier))
-                        : memberBase;
+                            SyntaxFactory.IdentifierName(subpattern.NameColon.Name.Identifier));
+                    }
+                    else
+                    {
+                        propExpression = memberBase;
+                    }
 
-                    var condition = ConvertPatternToExpression(subpattern.Pattern, propExpression);
+                    // Pass propType so nested recursive patterns don't misidentify value-type
+                    // properties as nullable when Roslyn can't bind the synthesized node.
+                    var condition = ConvertPatternToExpression(subpattern.Pattern, propExpression, propType);
                     if (condition is null)
                     {
                         return null; // diagnostic already emitted
