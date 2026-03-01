@@ -1,0 +1,5 @@
+SELECT [p].[Id], CASE
+    WHEN [p].[Score] >= 90 THEN N'A'
+    ELSE N'B'
+END AS [Grade]
+FROM [PersonEntity] AS [p]

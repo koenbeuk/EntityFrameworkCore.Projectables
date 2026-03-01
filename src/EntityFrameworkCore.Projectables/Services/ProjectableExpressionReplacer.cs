@@ -15,6 +15,7 @@ namespace EntityFrameworkCore.Projectables.Services
         private readonly IProjectionExpressionResolver _resolver;
         private readonly ExpressionArgumentReplacer _expressionArgumentReplacer = new();
         private readonly Dictionary<MemberInfo, LambdaExpression?> _projectableMemberCache = new();
+        private readonly HashSet<ConstructorInfo> _expandingConstructors = new();
         private IQueryProvider? _currentQueryProvider;
         private bool _disableRootRewrite = false;
         private readonly bool _trackingByDefault;
@@ -201,6 +202,38 @@ namespace EntityFrameworkCore.Projectables.Services
             }
 
             return base.VisitMethodCall(node);
+        }
+
+        protected override Expression VisitNew(NewExpression node)
+        {
+            var constructor = node.Constructor;
+            if (constructor is not null &&
+                !_expandingConstructors.Contains(constructor) &&
+                TryGetReflectedExpression(constructor, out var reflectedExpression))
+            {
+                _expandingConstructors.Add(constructor);
+                try
+                {
+                    for (var parameterIndex = 0; parameterIndex < reflectedExpression.Parameters.Count; parameterIndex++)
+                    {
+                        var parameterExpression = reflectedExpression.Parameters[parameterIndex];
+                        if (parameterIndex < node.Arguments.Count)
+                        {
+                            _expressionArgumentReplacer.ParameterArgumentMapping.Add(parameterExpression, node.Arguments[parameterIndex]);
+                        }
+                    }
+
+                    var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
+                    return base.Visit(updatedBody);
+                }
+                finally
+                {
+                    _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
+                    _expandingConstructors.Remove(constructor);
+                }
+            }
+
+            return base.VisitNew(node);
         }
 
         protected override Expression VisitMember(MemberExpression node)
