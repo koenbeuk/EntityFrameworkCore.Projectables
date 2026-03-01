@@ -224,12 +224,11 @@ namespace EntityFrameworkCore.Projectables.Services
                     }
 
                     var updatedBody = _expressionArgumentReplacer.Visit(reflectedExpression.Body);
-                    _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
-
                     return base.Visit(updatedBody);
                 }
                 finally
                 {
+                    _expressionArgumentReplacer.ParameterArgumentMapping.Clear();
                     _expandingConstructors.Remove(constructor);
                 }
             }

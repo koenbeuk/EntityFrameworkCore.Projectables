@@ -63,7 +63,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         public static readonly DiagnosticDescriptor MissingParameterlessConstructor = new DiagnosticDescriptor(
             id: "EFP0008",
             title: "Target class is missing a parameterless constructor",
-            messageFormat: "Class '{0}' must have a parameterless constructor to be used with a [Projectable] constructor. The generated projection uses 'new {0}() {{ ... }}' (object-initializer syntax), which requires a publicly accessible parameterless constructor.",
+            messageFormat: "Class '{0}' must have a parameterless constructor to be used with a [Projectable] constructor. The generated projection uses 'new {0}() {{ ... }}' (object-initializer syntax), which requires an accessible parameterless constructor.",
             category: "Design",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
