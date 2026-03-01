@@ -1,4 +1,4 @@
-﻿using EntityFrameworkCore.Projectables.Services;
+﻿﻿using EntityFrameworkCore.Projectables.Services;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -49,6 +49,36 @@ namespace EntityFrameworkCore.Projectables.Generator
                 static (spc, source) => Execute(source.Item1, source.Item2, spc));
         }
 
+        static SyntaxTriviaList BuildSourceDocComment(MemberDeclarationSyntax member)
+        {
+            var lines = new List<SyntaxTrivia>();
+
+            void AddLine(string text)
+            {
+                lines.Add(Comment(text));
+                lines.Add(CarriageReturnLineFeed);
+            }
+
+            AddLine("/// <summary>");
+            AddLine("/// <para>Generated from:</para>");
+            AddLine("/// <code>");
+
+            var originalSource = member.NormalizeWhitespace().ToFullString();
+            foreach (var rawLine in originalSource.Split('\n'))
+            {
+                var lineText = rawLine.TrimEnd('\r')
+                    .Replace("&", "&amp;")
+                    .Replace("<", "&lt;")
+                    .Replace(">", "&gt;");
+                AddLine($"/// {lineText}");
+            }
+
+            AddLine("/// </code>");
+            AddLine("/// </summary>");
+
+            return TriviaList(lines);
+        }
+
         static void Execute(MemberDeclarationSyntax member, Compilation compilation, SourceProductionContext context)
         {
             var projectable = ProjectableInterpreter.GetDescriptor(compilation, member, context);
@@ -74,6 +104,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     AttributeList()
                         .AddAttributes(_editorBrowsableAttribute)
                 )
+                .WithLeadingTrivia(member is ConstructorDeclarationSyntax ? BuildSourceDocComment(member) : TriviaList())
                 .AddMembers(
                     MethodDeclaration(
                         GenericName(

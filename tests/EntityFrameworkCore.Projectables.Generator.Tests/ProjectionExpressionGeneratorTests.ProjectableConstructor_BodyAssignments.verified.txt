@@ -5,6 +5,17 @@ using Foo;
 
 namespace EntityFrameworkCore.Projectables.Generated
 {
+    /// <summary>
+    /// <para>Generated from:</para>
+    /// <code>
+    /// [Projectable]
+    /// public PointDto(int x, int y)
+    /// {
+    ///     X = x;
+    ///     Y = y;
+    /// }
+    /// </code>
+    /// </summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     static class Foo_PointDto__ctor_P0_int_P1_int
     {
