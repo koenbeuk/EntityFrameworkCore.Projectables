@@ -52,5 +52,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor InaccessibleMemberInNonPartialClass = new DiagnosticDescriptor(
+            id: "EFP0007",
+            title: "Projectable member accesses private or protected members",
+            messageFormat: "Projectable member '{0}' accesses private or protected members of '{1}'. Consider marking '{1}' and all its containing types as partial to allow the generated expression to access these members.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true);
+
     }
 }

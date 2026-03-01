@@ -40,6 +40,76 @@ namespace EntityFrameworkCore.Projectables.Generator
             return [];
         }
 
+        /// <summary>
+        /// Returns the chain of containing TypeDeclarationSyntax nodes (outermost first) for the member.
+        /// Returns an empty list if the member is not inside any type.
+        /// </summary>
+        static IReadOnlyList<TypeDeclarationSyntax> GetContainingTypeChain(MemberDeclarationSyntax member)
+        {
+            var result = new List<TypeDeclarationSyntax>();
+            var current = member.Parent;
+            while (current is TypeDeclarationSyntax typeDecl)
+            {
+                result.Insert(0, typeDecl);
+                current = current.Parent;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Checks whether any identifier in the expression resolves to a private or protected member
+        /// of the given containing type (or one of its base types).
+        /// </summary>
+        static bool HasPrivateOrProtectedMemberAccess(
+            ExpressionSyntax expression,
+            INamedTypeSymbol containingType,
+            SemanticModel semanticModel)
+        {
+            foreach (var node in expression.DescendantNodesAndSelf())
+            {
+                // Skip lambda and anonymous function expressions themselves.
+                // Their symbols are compiler-synthesized private methods, not actual member accesses.
+                if (node is AnonymousFunctionExpressionSyntax)
+                    continue;
+
+                var symbol = semanticModel.GetSymbolInfo(node).Symbol;
+                if (symbol is IFieldSymbol or IPropertySymbol or IMethodSymbol or IEventSymbol)
+                {
+                    // Skip compiler-generated / implicitly declared symbols
+                    if (symbol.IsImplicitlyDeclared)
+                        continue;
+
+                    // Only warn for accessibility levels that are NOT accessible from a standalone
+                    // generated class in the same assembly:
+                    //   - Private: only within the declaring class → NOT accessible
+                    //   - Protected (ProtectedAndInternal = private protected): requires derived + same assembly → NOT accessible
+                    //   - Protected: requires derived class → NOT accessible
+                    // Excluded: ProtectedOrInternal (protected internal) and Internal are accessible
+                    // from the same assembly, so the generated class CAN access them without partial support.
+                    if (symbol.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal)
+                    {
+                        // Check that the member belongs to the containing type (or a base type).
+                        // Don't walk up to System.Object to avoid false positives from
+                        // system-defined protected members (e.g., MemberwiseClone, Finalize).
+                        var ownerType = symbol.ContainingType;
+                        if (ownerType?.SpecialType == SpecialType.System_Object)
+                            continue;
+
+                        var current = (INamedTypeSymbol?)containingType;
+                        while (current is not null && current.SpecialType != SpecialType.System_Object)
+                        {
+                            if (SymbolEqualityComparer.Default.Equals(current, ownerType))
+                            {
+                                return true;
+                            }
+                            current = current.BaseType;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         public static ProjectableDescriptor? GetDescriptor(Compilation compilation, MemberDeclarationSyntax member, SourceProductionContext context)
         {
             var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
@@ -168,6 +238,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                 extensionParameter = extensionType.ExtensionParameter;
                 extensionReceiverType = extensionParameter?.Type;
             }
+
+            // Check if all containing types are partial (only for class members, not extension members)
+            var containingTypeChain = !isExtensionMember
+                ? GetContainingTypeChain(member)
+                : (IReadOnlyList<TypeDeclarationSyntax>)Array.Empty<TypeDeclarationSyntax>();
+            var isContainingClassPartial = containingTypeChain.Count > 0 &&
+                containingTypeChain.All(t => t.Modifiers.Any(SyntaxKind.PartialKeyword));
 
             // For extension members, use the extension receiver type for rewriting
             var targetTypeForRewriting = isExtensionMember && extensionReceiverType is INamedTypeSymbol receiverNamedType
@@ -329,6 +406,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                 {
                     // Expression-bodied method (e.g., int Foo() => 1;)
                     bodyExpression = methodDeclarationSyntax.ExpressionBody.Expression;
+
+                    // Warn if a private/protected member is accessed and the class is not partial
+                    if (!isContainingClassPartial && !isExtensionMember &&
+                        HasPrivateOrProtectedMemberAccess(bodyExpression, memberSymbol.ContainingType, semanticModel))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.InaccessibleMemberInNonPartialClass,
+                            methodDeclarationSyntax.GetLocation(),
+                            memberSymbol.Name,
+                            memberSymbol.ContainingType.Name));
+                    }
                 }
                 else if (methodDeclarationSyntax.Body is not null)
                 {
@@ -400,6 +488,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (propertyDeclarationSyntax.ExpressionBody is not null)
                 {
                     bodyExpression = propertyDeclarationSyntax.ExpressionBody.Expression;
+
+                    // Warn if a private/protected member is accessed and the class is not partial
+                    if (!isContainingClassPartial && !isExtensionMember &&
+                        HasPrivateOrProtectedMemberAccess(bodyExpression, memberSymbol.ContainingType, semanticModel))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.InaccessibleMemberInNonPartialClass,
+                            propertyDeclarationSyntax.GetLocation(),
+                            memberSymbol.Name,
+                            memberSymbol.ContainingType.Name));
+                    }
                 }
                 else if (propertyDeclarationSyntax.AccessorList is not null)
                 {
@@ -411,6 +510,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                     {
                         // get => expression;
                         bodyExpression = getter.ExpressionBody.Expression;
+
+                        // Warn if a private/protected member is accessed and the class is not partial
+                        if (!isContainingClassPartial && !isExtensionMember &&
+                            HasPrivateOrProtectedMemberAccess(bodyExpression, memberSymbol.ContainingType, semanticModel))
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(
+                                Diagnostics.InaccessibleMemberInNonPartialClass,
+                                propertyDeclarationSyntax.GetLocation(),
+                                memberSymbol.Name,
+                                memberSymbol.ContainingType.Name));
+                        }
                     }
                     else if (getter?.Body is not null)
                     {
@@ -455,6 +565,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             else
             {
                 return null;
+            }
+
+            // Set partial class info if all containing types are partial
+            if (isContainingClassPartial)
+            {
+                descriptor.IsContainingClassPartial = true;
+                descriptor.ContainingTypeChain = containingTypeChain;
             }
 
             return descriptor;

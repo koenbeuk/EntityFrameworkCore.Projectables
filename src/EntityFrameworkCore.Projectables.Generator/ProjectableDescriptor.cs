@@ -40,5 +40,18 @@ namespace EntityFrameworkCore.Projectables.Generator
         public SyntaxList<TypeParameterConstraintClauseSyntax>? ConstraintClauses { get; set; }
 
         public ExpressionSyntax? ExpressionBody { get; set; }
+
+        /// <summary>
+        /// Whether all containing types of the projectable member are declared as partial.
+        /// When true, the generated expression class will be nested inside the containing types
+        /// to allow access to private/protected members.
+        /// </summary>
+        public bool IsContainingClassPartial { get; set; }
+
+        /// <summary>
+        /// The chain of containing type declarations (from outermost to innermost / direct containing type).
+        /// Used when IsContainingClassPartial is true to generate the partial class wrappers.
+        /// </summary>
+        public IReadOnlyList<TypeDeclarationSyntax>? ContainingTypeChain { get; set; }
     }
 }
