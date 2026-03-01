@@ -338,7 +338,12 @@ namespace EntityFrameworkCore.Projectables.Generator
                     condition = ConvertPatternToExpression(arm.Pattern, visitedGoverning);
                     if (condition is null)
                     {
-                        return base.VisitSwitchExpression(node);
+                        // A diagnostic (EFP0007) has already been reported for this arm.
+                        // Skip it instead of falling back to base.VisitSwitchExpression which
+                        // would leave an unsupported switch expression in the generated lambda and
+                        // produce unrelated compiler errors.  The best-effort ternary chain built
+                        // so far is still emitted so the output remains valid C#.
+                        continue;
                     }
                 }
 
@@ -604,11 +609,11 @@ namespace EntityFrameworkCore.Projectables.Generator
             // We need to convert patterns into equivalent expressions.
             var expression = (ExpressionSyntax)Visit(node.Expression);
 
-            // ConvertPatternToExpression returns null when a pattern is unsupported (a diagnostic
-            // has already been emitted). Fall back to the original node so the user still sees the
-            // compiler error, but the generator itself does not crash.
-            return ConvertPatternToExpression(node.Pattern, expression)
-                   ?? node.WithExpression(expression);
+            // ConvertPatternToExpression returns null when the pattern cannot be rewritten and has
+            // already reported a diagnostic (EFP0007).  Fall back to the original is-pattern node
+            // so the output is semantically identical to the source and the compiler's own CS8122
+            // points directly at the offending pattern — no misleading placeholder value is emitted.
+            return ConvertPatternToExpression(node.Pattern, expression) ?? node;
         }
 
         /// <summary>
