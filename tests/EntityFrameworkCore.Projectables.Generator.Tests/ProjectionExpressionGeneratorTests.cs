@@ -2634,6 +2634,40 @@ namespace Foo {
             return Verifier.Verify(result.GeneratedTrees[0].ToString());
         }
 
+        [Fact]
+        public Task ExplicitInterfaceImplementation()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public interface IStringId
+    {
+        string Id { get; }
+    }
+
+    public class Item : IStringId
+    {
+        public int Id { get; set; }
+        
+        // Explicit interface implementation without [Projectable]
+        string IStringId.Id => Id.ToString();
+        
+        [Projectable]
+        public string FormattedId => ((IStringId)this).Id;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
         #region Helpers
 
         Compilation CreateCompilation([StringSyntax("csharp")] string source, bool expectedToCompile = true)

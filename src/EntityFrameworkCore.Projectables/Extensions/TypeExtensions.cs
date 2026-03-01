@@ -136,9 +136,9 @@ namespace EntityFrameworkCore.Projectables.Extensions
 
             var derivedProperties = implementingType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
-            return derivedProperties.First(propertyInfo.GetMethod == accessor
+            return derivedProperties.FirstOrDefault(propertyInfo.GetMethod == accessor
                 ? p => MethodInfosEqual(p.GetMethod, implementingAccessor)
-                : p => MethodInfosEqual(p.SetMethod, implementingAccessor));
+                : p => MethodInfosEqual(p.SetMethod, implementingAccessor)) ?? propertyInfo;
         }
 
         /// <summary>

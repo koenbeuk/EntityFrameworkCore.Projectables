@@ -1,0 +1,2 @@
+﻿SELECT CONVERT(varchar(11), [i].[Id])
+FROM [Item] AS [i]
