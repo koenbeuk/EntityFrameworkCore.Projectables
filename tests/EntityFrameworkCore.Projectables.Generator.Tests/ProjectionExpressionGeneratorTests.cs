@@ -3927,7 +3927,7 @@ namespace Foo {
         }
 
         [Fact]
-        public Task ProjectableConstructor_ThisInitializer_ReferencingPreviouslyAssignedProperty()
+        public Task ProjectableConstructor_ThisInitializer_RefPreviouslyAssignedProperty()
         {
             var compilation = CreateCompilation(@"
 using EntityFrameworkCore.Projectables;
