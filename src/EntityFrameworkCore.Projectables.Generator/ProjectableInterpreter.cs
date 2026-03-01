@@ -79,6 +79,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                     if (symbol.IsImplicitlyDeclared)
                         continue;
 
+                    // Only warn for accessibility levels that are NOT accessible from a standalone
+                    // generated class in the same assembly:
+                    //   - Private: only within the declaring class → NOT accessible
+                    //   - Protected (ProtectedAndInternal = private protected): requires derived + same assembly → NOT accessible
+                    //   - Protected: requires derived class → NOT accessible
+                    // Excluded: ProtectedOrInternal (protected internal) and Internal are accessible
+                    // from the same assembly, so the generated class CAN access them without partial support.
                     if (symbol.DeclaredAccessibility is Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal)
                     {
                         // Check that the member belongs to the containing type (or a base type).
