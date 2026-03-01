@@ -5,7 +5,7 @@ using EntityFrameworkCore.Projectables;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class _ItemMapper_ToData
+    static class _ItemMapper_ToData_P0_Item
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Item, global::ItemData>> Expression()
         {

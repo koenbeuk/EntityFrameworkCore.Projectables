@@ -62,7 +62,33 @@ namespace EntityFrameworkCore.Projectables.Services
             static LambdaExpression? GetExpressionFromGeneratedType(MemberInfo projectableMemberInfo)
             {
                 var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
-                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name);
+                
+                // Keep track of the original declaring type's generic arguments for later use
+                var originalDeclaringType = declaringType;
+                
+                // For generic types, use the generic type definition to match the generated name
+                // which is based on the open generic type
+                if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
+                {
+                    declaringType = declaringType.GetGenericTypeDefinition();
+                }
+                
+                // Get parameter types for method overload disambiguation
+                // Use the same format as Roslyn's SymbolDisplayFormat.FullyQualifiedFormat
+                // which uses C# keywords for primitive types (int, string, etc.)
+                string[]? parameterTypeNames = null;
+                if (projectableMemberInfo is MethodInfo method)
+                {
+                    // For generic methods, use the generic definition to get parameter types
+                    // This ensures type parameters like TEntity are used instead of concrete types
+                    var methodToInspect = method.IsGenericMethod ? method.GetGenericMethodDefinition() : method;
+                    
+                    parameterTypeNames = methodToInspect.GetParameters()
+                        .Select(p => GetFullTypeName(p.ParameterType))
+                        .ToArray();
+                }
+                
+                var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), projectableMemberInfo.Name, parameterTypeNames);
 
                 var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
 
@@ -70,7 +96,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 {
                     if (expressionFactoryType.IsGenericTypeDefinition)
                     {
-                        expressionFactoryType = expressionFactoryType.MakeGenericType(declaringType.GenericTypeArguments);
+                        expressionFactoryType = expressionFactoryType.MakeGenericType(originalDeclaringType.GenericTypeArguments);
                     }
 
                     var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
@@ -91,6 +117,99 @@ namespace EntityFrameworkCore.Projectables.Services
                     }
                 }
 
+                return null;
+            }
+            
+            static string GetFullTypeName(Type type)
+            {
+                // Handle generic type parameters (e.g., T, TEntity)
+                if (type.IsGenericParameter)
+                {
+                    return type.Name;
+                }
+                
+                // Handle nullable value types (e.g., int? -> int?)
+                var underlyingType = Nullable.GetUnderlyingType(type);
+                if (underlyingType != null)
+                {
+                    return $"{GetFullTypeName(underlyingType)}?";
+                }
+                
+                // Handle array types
+                if (type.IsArray)
+                {
+                    var elementType = type.GetElementType();
+                    if (elementType == null)
+                    {
+                        // Fallback for edge cases where GetElementType() might return null
+                        return type.Name;
+                    }
+                    
+                    var rank = type.GetArrayRank();
+                    var elementTypeName = GetFullTypeName(elementType);
+                    
+                    if (rank == 1)
+                    {
+                        return $"{elementTypeName}[]";
+                    }
+                    else
+                    {
+                        var commas = new string(',', rank - 1);
+                        return $"{elementTypeName}[{commas}]";
+                    }
+                }
+                
+                // Map primitive types to their C# keyword equivalents to match Roslyn's output
+                var typeKeyword = GetCSharpKeyword(type);
+                if (typeKeyword != null)
+                {
+                    return typeKeyword;
+                }
+                
+                // For generic types, construct the full name matching Roslyn's format
+                if (type.IsGenericType)
+                {
+                    var genericTypeDef = type.GetGenericTypeDefinition();
+                    var genericArgs = type.GetGenericArguments();
+                    var baseName = genericTypeDef.FullName ?? genericTypeDef.Name;
+                    
+                    // Remove the `n suffix (e.g., `1, `2)
+                    var backtickIndex = baseName.IndexOf('`');
+                    if (backtickIndex > 0)
+                    {
+                        baseName = baseName.Substring(0, backtickIndex);
+                    }
+                    
+                    var args = string.Join(", ", genericArgs.Select(GetFullTypeName));
+                    return $"{baseName}<{args}>";
+                }
+                
+                if (type.FullName != null)
+                {
+                    // Replace + with . for nested types to match Roslyn's format
+                    return type.FullName.Replace('+', '.');
+                }
+                
+                return type.Name;
+            }
+            
+            static string? GetCSharpKeyword(Type type)
+            {
+                if (type == typeof(bool)) return "bool";
+                if (type == typeof(byte)) return "byte";
+                if (type == typeof(sbyte)) return "sbyte";
+                if (type == typeof(char)) return "char";
+                if (type == typeof(decimal)) return "decimal";
+                if (type == typeof(double)) return "double";
+                if (type == typeof(float)) return "float";
+                if (type == typeof(int)) return "int";
+                if (type == typeof(uint)) return "uint";
+                if (type == typeof(long)) return "long";
+                if (type == typeof(ulong)) return "ulong";
+                if (type == typeof(short)) return "short";
+                if (type == typeof(ushort)) return "ushort";
+                if (type == typeof(object)) return "object";
+                if (type == typeof(string)) return "string";
                 return null;
             }
         }

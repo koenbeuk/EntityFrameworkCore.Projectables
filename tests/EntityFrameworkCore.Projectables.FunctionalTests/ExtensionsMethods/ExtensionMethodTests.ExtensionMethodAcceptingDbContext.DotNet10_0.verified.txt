@@ -1,0 +1,7 @@
+﻿SELECT [e1].[Id]
+FROM [Entity] AS [e]
+OUTER APPLY (
+    SELECT TOP(1) [e0].[Id]
+    FROM [Entity] AS [e0]
+    WHERE [e0].[Id] > [e].[Id]
+) AS [e1]

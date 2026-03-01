@@ -6,7 +6,7 @@ using Projectables.Repro;
 namespace EntityFrameworkCore.Projectables.Generated
 {
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    static class Projectables_Repro_SomeExtensions_AsSomeResult
+    static class Projectables_Repro_SomeExtensions_AsSomeResult_P0_Projectables_Repro_SomeEntity
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Projectables.Repro.SomeEntity, string>> Expression()
         {
