@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.Generated
     {
         static global::System.Linq.Expressions.Expression<global::System.Func<global::Foo.C, string>> Expression()
         {
-            return (global::Foo.C @this) => @this.Bar == 1 ? "One" : @this.Bar == 2 ? "Two" : default;
+            return (global::Foo.C @this) => @this.Bar == 1 ? "One" : @this.Bar == 2 ? "Two" : null;
         }
     }
 }

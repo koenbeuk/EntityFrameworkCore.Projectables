@@ -89,15 +89,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
             }
 
-            // Check if we have a pattern like multiple if statements without else followed by a final return:
+            // Check if we have a pattern like multiple if/switch statements without else/default followed by a final return:
             // var x = ...; if (a) return 1; if (b) return 2; return 3;
-            // This can be converted to nested ternaries: a ? 1 : (b ? 2 : 3)
+            // Or: switch(x) { case 1: return "One"; case 2: return "Two"; } return null;
+            // These can be converted to nested ternaries: a ? 1 : (b ? 2 : 3)
             if (lastStatement is ReturnStatementSyntax finalReturn &&
-                remainingStatements.All(s => s is IfStatementSyntax { Else: null }))
+                remainingStatements.All(s => s is IfStatementSyntax { Else: null } || IsSwitchWithoutDefault(s)))
             {
-                // All remaining non-return statements are if statements without else
-                var ifStatements = remainingStatements.Cast<IfStatementSyntax>().ToList();
-                
                 // Start with the final return as the base expression
                 var elseBody = TryConvertReturnStatement(finalReturn, memberName);
                 if (elseBody == null)
@@ -106,26 +104,37 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
                 
                 // Build nested conditionals from right to left (last to first)
-                for (var i = ifStatements.Count - 1; i >= 0; i--)
+                for (var i = remainingStatements.Count - 1; i >= 0; i--)
                 {
-                    var ifStmt = ifStatements[i];
-                    var ifBody = TryConvertStatement(ifStmt.Statement, memberName);
-                    if (ifBody == null)
+                    var stmt = remainingStatements[i];
+                    if (stmt is IfStatementSyntax ifStmt)
                     {
-                        return null;
+                        var ifBody = TryConvertStatement(ifStmt.Statement, memberName);
+                        if (ifBody == null)
+                        {
+                            return null;
+                        }
+                        
+                        // Rewrite the condition and replace any local variables
+                        var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifStmt.Condition);
+                        condition = ReplaceLocalVariables(condition);
+                        
+                        elseBody = SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
                     }
-                    
-                    // Rewrite the condition and replace any local variables
-                    var condition = (ExpressionSyntax)_expressionRewriter.Visit(ifStmt.Condition);
-                    condition = ReplaceLocalVariables(condition);
-                    
-                    elseBody = SyntaxFactory.ConditionalExpression(condition, ifBody, elseBody);
+                    else if (stmt is SwitchStatementSyntax switchStmt)
+                    {
+                        elseBody = TryConvertSwitchStatementWithFallthrough(switchStmt, elseBody, memberName);
+                        if (elseBody == null)
+                        {
+                            return null;
+                        }
+                    }
                 }
                 
                 return elseBody;
             }
 
-            // If there are any remaining non-if statements, try to convert them individually
+            // If there are any remaining non-if/switch statements, try to convert them individually
             // This will provide better error messages for unsupported statements
             if (remainingStatements.Count > 0)
             {
@@ -139,7 +148,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     }
                 }
                 
-                // If we got here but had non-if statements, they weren't properly handled
+                // If we got here but had non-if/switch statements, they weren't properly handled
                 ReportUnsupportedStatement(remainingStatements[0], memberName, 
                     "Only local variable declarations and if statements without else (with return) are supported before the final return statement");
                 return null;
@@ -285,6 +294,86 @@ namespace EntityFrameworkCore.Projectables.Generator
                 whenTrue,
                 whenFalse
             );
+        }
+
+        /// <summary>
+        /// Returns true if the statement is a switch statement with no default section.
+        /// </summary>
+        private static bool IsSwitchWithoutDefault(StatementSyntax s)
+            => s is SwitchStatementSyntax sw &&
+               !sw.Sections.Any(sec => sec.Labels.Any(l => l is DefaultSwitchLabelSyntax));
+
+        /// <summary>
+        /// Converts a switch statement (without a default section) to nested conditional expressions,
+        /// using the provided <paramref name="fallthroughExpression"/> as the innermost fallback.
+        /// </summary>
+        private ExpressionSyntax? TryConvertSwitchStatementWithFallthrough(
+            SwitchStatementSyntax switchStmt,
+            ExpressionSyntax fallthroughExpression,
+            string memberName)
+        {
+            var switchExpression = (ExpressionSyntax)_expressionRewriter.Visit(switchStmt.Expression);
+            switchExpression = ReplaceLocalVariables(switchExpression);
+
+            var nonDefaultSections = switchStmt.Sections
+                .Where(sec => !sec.Labels.Any(l => l is DefaultSwitchLabelSyntax))
+                .ToList();
+
+            // Start with the caller-supplied fallthrough expression
+            var currentExpression = fallthroughExpression;
+
+            // Process non-default sections in reverse order
+            for (var i = nonDefaultSections.Count - 1; i >= 0; i--)
+            {
+                var section = nonDefaultSections[i];
+                var sectionExpression = ConvertSwitchSection(section, memberName);
+                if (sectionExpression == null)
+                {
+                    return null;
+                }
+
+                // Build condition for all labels in this section (OR'd together)
+                ExpressionSyntax? condition = null;
+                foreach (var label in section.Labels)
+                {
+                    if (label is CaseSwitchLabelSyntax caseLabel)
+                    {
+                        var caseLabelValue = (ExpressionSyntax)_expressionRewriter.Visit(caseLabel.Value);
+                        caseLabelValue = ReplaceLocalVariables(caseLabelValue);
+
+                        var labelCondition = SyntaxFactory.BinaryExpression(
+                            SyntaxKind.EqualsExpression,
+                            switchExpression,
+                            caseLabelValue
+                        );
+
+                        condition = condition == null
+                            ? labelCondition
+                            : SyntaxFactory.BinaryExpression(
+                                SyntaxKind.LogicalOrExpression,
+                                condition,
+                                labelCondition
+                            );
+                    }
+                    else if (label is not DefaultSwitchLabelSyntax)
+                    {
+                        ReportUnsupportedStatement(switchStmt, memberName,
+                            $"Switch label type '{label.GetType().Name}' is not supported. Use case labels or switch expressions instead.");
+                        return null;
+                    }
+                }
+
+                if (condition != null)
+                {
+                    currentExpression = SyntaxFactory.ConditionalExpression(
+                        condition,
+                        sectionExpression,
+                        currentExpression
+                    );
+                }
+            }
+
+            return currentExpression;
         }
 
         /// <summary>
@@ -588,3 +677,6 @@ namespace EntityFrameworkCore.Projectables.Generator
         }
     }
 }
+
+
+
