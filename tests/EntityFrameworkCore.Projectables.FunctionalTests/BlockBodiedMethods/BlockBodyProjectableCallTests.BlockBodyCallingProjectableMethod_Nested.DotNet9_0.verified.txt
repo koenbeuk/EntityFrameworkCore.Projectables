@@ -1,0 +1,2 @@
+﻿SELECT [e].[Value] + 42 + 10
+FROM [Entity] AS [e]

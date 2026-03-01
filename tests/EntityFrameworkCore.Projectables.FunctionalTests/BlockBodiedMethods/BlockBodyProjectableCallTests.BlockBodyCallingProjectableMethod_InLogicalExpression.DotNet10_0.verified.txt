@@ -1,0 +1,5 @@
+﻿SELECT CASE
+    WHEN ([e].[IsActive] = CAST(1 AS bit) AND [e].[Value] > 100) OR [e].[Value] * 2 > 150 THEN CAST(1 AS bit)
+    ELSE CAST(0 AS bit)
+END
+FROM [Entity] AS [e]

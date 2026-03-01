@@ -159,6 +159,39 @@ GROUP BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 ```
 
+#### Can I use block-bodied members instead of expression-bodied members?
+
+Yes! As of version 6.x, you can now use traditional block-bodied members with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
+
+```csharp
+// Expression-bodied (still supported)
+[Projectable]
+public string Level() => Value > 100 ? "High" : Value > 50 ? "Medium" : "Low";
+
+// Block-bodied (now also supported!)
+[Projectable(AllowBlockBody = true)] // Note: AllowBlockBody is required to remove the warning for experimental feature usage
+public string Level()
+{
+    if (Value > 100)
+        return "High";
+    else if (Value > 50)
+        return "Medium";
+    else
+        return "Low";
+}
+```
+
+> This is an experimental feature and may have some limitations. Please refer to the documentation for details.
+
+Both generate identical SQL. Block-bodied members support:
+- If-else statements (converted to ternary/CASE expressions)
+- Switch statements
+- Local variables (automatically inlined)
+- Simple return statements
+
+The generator will also detect and report side effects (assignments, method calls to non-projectable members, etc.) with precise error messages. See [Block-Bodied Members Documentation](docs/BlockBodiedMembers.md) for complete details.
+
+
 #### How do I expand enum extension methods?
 When you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
 

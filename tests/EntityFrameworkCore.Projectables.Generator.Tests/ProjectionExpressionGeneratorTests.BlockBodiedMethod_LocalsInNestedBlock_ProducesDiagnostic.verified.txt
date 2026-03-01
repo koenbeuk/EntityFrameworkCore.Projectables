@@ -1,0 +1,3 @@
+﻿[
+  (13,17): warning EFP0003: Method 'Foo' contains an unsupported statement: Local declarations in nested blocks are not supported
+]

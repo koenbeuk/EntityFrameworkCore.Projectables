@@ -1,0 +1,5 @@
+﻿SELECT CASE
+    WHEN [e].[Value] > 100 THEN N'High'
+    ELSE N'Low'
+END
+FROM [Entity] AS [e]

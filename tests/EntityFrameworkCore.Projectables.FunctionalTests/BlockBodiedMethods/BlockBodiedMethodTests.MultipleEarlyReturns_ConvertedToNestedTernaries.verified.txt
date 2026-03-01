@@ -1,0 +1,7 @@
+﻿SELECT CASE
+    WHEN [e].[Value] > 100 THEN N'Very High'
+    WHEN [e].[Value] > 50 THEN N'High'
+    WHEN [e].[Value] > 10 THEN N'Medium'
+    ELSE N'Low'
+END
+FROM [Entity] AS [e]

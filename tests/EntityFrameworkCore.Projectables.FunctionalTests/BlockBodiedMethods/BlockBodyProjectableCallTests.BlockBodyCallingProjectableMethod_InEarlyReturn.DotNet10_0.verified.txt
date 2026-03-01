@@ -1,0 +1,9 @@
+﻿SELECT CASE
+    WHEN [e].[Value] > 100 THEN N'Premium'
+    WHEN CASE
+        WHEN [e].[Value] > 100 THEN N'High'
+        ELSE N'Low'
+    END = N'High' THEN N'Standard High'
+    ELSE N'Normal'
+END
+FROM [Entity] AS [e]

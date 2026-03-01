@@ -38,5 +38,14 @@
         /// </para>
         /// </remarks>
         public bool ExpandEnumMethods { get; set; }
+
+        /// <summary>
+        /// Get or set whether to allow block-bodied members (experimental feature).
+        /// </summary>
+        /// <remarks>
+        /// Block-bodied method support is experimental and may have limitations.
+        /// Set this to true to suppress the experimental feature warning.
+        /// </remarks>
+        public bool AllowBlockBody { get; set; }
     }
 }

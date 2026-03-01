@@ -80,6 +80,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .Select(x => x.Value.Value is bool b && b)
                 .FirstOrDefault();
 
+            var allowBlockBody = projectableAttributeClass.NamedArguments
+                .Where(x => x.Key == "AllowBlockBody")
+                .Select(x => x.Value.Value is bool b && b)
+                .FirstOrDefault();
+
             var memberBody = member;
 
             if (useMemberBody is not null)
@@ -120,22 +125,37 @@ namespace EntityFrameworkCore.Projectables.Generator
                             return false;
                         }
                         else if (x is MethodDeclarationSyntax xMethod &&
-                            xMethod.ExpressionBody is not null)
+                            (xMethod.ExpressionBody is not null || xMethod.Body is not null))
                         {
                             return true;
                         }
-                        else if (x is PropertyDeclarationSyntax xProperty &&
-                            xProperty.ExpressionBody is not null)
+                        else if (x is PropertyDeclarationSyntax xProperty)
                         {
-                            return true;
+                            // Support expression-bodied properties: int Prop => value;
+                            if (xProperty.ExpressionBody is not null)
+                            {
+                                return true;
+                            }
+
+                            // Support properties with explicit getters: int Prop { get => value; } or { get { return value; } }
+                            if (xProperty.AccessorList is not null)
+                            {
+                                var getter = xProperty.AccessorList.Accessors
+                                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                                if (getter?.ExpressionBody is not null || getter?.Body is not null)
+                                {
+                                    return true;
+                                }
+                            }
                         }
-                        else
-                        {
-                            return false;
-                        }
+                        
+                        return false;
                     });
 
-                if (memberBody is null) return null;
+                if (memberBody is null)
+                {
+                    return null;
+                }
             }
 
             // Check if this member is inside a C# 14 extension block
@@ -300,11 +320,41 @@ namespace EntityFrameworkCore.Projectables.Generator
                 descriptor.TargetNestedInClassNames = descriptor.NestedInClassNames;
             }
 
+            // Projectable methods
             if (memberBody is MethodDeclarationSyntax methodDeclarationSyntax)
             {
-                if (methodDeclarationSyntax.ExpressionBody is null)
+                ExpressionSyntax? bodyExpression = null;
+
+                if (methodDeclarationSyntax.ExpressionBody is not null)
                 {
-                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    // Expression-bodied method (e.g., int Foo() => 1;)
+                    bodyExpression = methodDeclarationSyntax.ExpressionBody.Expression;
+                }
+                else if (methodDeclarationSyntax.Body is not null)
+                {
+                    // Block-bodied method (e.g., int Foo() { return 1; })
+                    
+                    // Emit warning if AllowBlockBody is not set to true
+                    if (!allowBlockBody)
+                    {
+                        var diagnostic = Diagnostic.Create(Diagnostics.BlockBodyExperimental, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                        context.ReportDiagnostic(diagnostic);
+                    }
+                    
+                    var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
+                    bodyExpression = blockConverter.TryConvertBlock(methodDeclarationSyntax.Body, memberSymbol.Name);
+
+                    if (bodyExpression is null)
+                    {
+                        // Diagnostics already reported by BlockStatementConverter
+                        return null;
+                    }
+                    
+                    // The expression has already been rewritten by BlockStatementConverter, so we don't rewrite it again
+                }
+                else
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresBodyDefinition, methodDeclarationSyntax.GetLocation(), memberSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
                     return null;
                 }
@@ -312,7 +362,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(methodDeclarationSyntax.ExpressionBody.Expression);
+                // Only rewrite expression-bodied methods, block-bodied methods are already rewritten
+                descriptor.ExpressionBody = methodDeclarationSyntax.ExpressionBody is not null 
+                    ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression)
+                    : bodyExpression;
                 foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
                 {
                     descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
@@ -336,11 +389,56 @@ namespace EntityFrameworkCore.Projectables.Generator
                         );
                 }
             }
+            
+            // Projectable properties
             else if (memberBody is PropertyDeclarationSyntax propertyDeclarationSyntax)
             {
-                if (propertyDeclarationSyntax.ExpressionBody is null)
+                ExpressionSyntax? bodyExpression = null;
+                var isBlockBodiedGetter = false;
+    
+                // Expression-bodied property: int Prop => value;
+                if (propertyDeclarationSyntax.ExpressionBody is not null)
                 {
-                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresExpressionBodyDefinition, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                    bodyExpression = propertyDeclarationSyntax.ExpressionBody.Expression;
+                }
+                else if (propertyDeclarationSyntax.AccessorList is not null)
+                {
+                    // Property with explicit getter
+                    var getter = propertyDeclarationSyntax.AccessorList.Accessors
+                        .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+            
+                    if (getter?.ExpressionBody is not null)
+                    {
+                        // get => expression;
+                        bodyExpression = getter.ExpressionBody.Expression;
+                    }
+                    else if (getter?.Body is not null)
+                    {
+                        // get { return expression; }
+                        // Emit warning if AllowBlockBody is not set to true
+                        if (!allowBlockBody)
+                        {
+                            var diagnostic = Diagnostic.Create(Diagnostics.BlockBodyExperimental, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
+                            context.ReportDiagnostic(diagnostic);
+                        }
+                        
+                        var blockConverter = new BlockStatementConverter(context, expressionSyntaxRewriter);
+                        bodyExpression = blockConverter.TryConvertBlock(getter.Body, memberSymbol.Name);
+                        isBlockBodiedGetter = true;
+                        
+                        if (bodyExpression is null)
+                        {
+                            // Diagnostics already reported by BlockStatementConverter
+                            return null;
+                        }
+                        
+                        // The expression has already been rewritten by BlockStatementConverter, so we don't rewrite it again
+                    }
+                }
+    
+                if (bodyExpression is null)
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresBodyDefinition, propertyDeclarationSyntax.GetLocation(), memberSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
                     return null;
                 }
@@ -348,7 +446,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                 var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
 
                 descriptor.ReturnTypeName = returnType.ToString();
-                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(propertyDeclarationSyntax.ExpressionBody.Expression);
+                
+                // Only rewrite expression-bodied properties, block-bodied getters are already rewritten
+                descriptor.ExpressionBody = isBlockBodiedGetter 
+                    ? bodyExpression
+                    : (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression);
             }
             else
             {

@@ -1,0 +1,5 @@
+﻿SELECT CASE
+    WHEN [e].[Value] * 2 > 200 THEN N'Very High'
+    ELSE N'Normal'
+END
+FROM [Entity] AS [e]

@@ -1,0 +1,9 @@
+﻿SELECT CASE
+    WHEN [e].[IsActive] = CAST(1 AS bit) THEN CASE
+        WHEN [e].[Value] = 1 THEN N'Active One'
+        WHEN [e].[Value] = 2 THEN N'Active Two'
+        ELSE N'Active Other'
+    END
+    ELSE N'Inactive'
+END
+FROM [Entity] AS [e]

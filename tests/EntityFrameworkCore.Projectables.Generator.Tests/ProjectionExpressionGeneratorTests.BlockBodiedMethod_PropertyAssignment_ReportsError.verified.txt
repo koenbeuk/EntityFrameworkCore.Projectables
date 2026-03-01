@@ -1,0 +1,3 @@
+﻿[
+  (11,13): error EFP0004: Assignment operation has side effects and cannot be used in projectable methods
+]

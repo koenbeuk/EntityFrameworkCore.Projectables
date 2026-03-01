@@ -1,0 +1,9 @@
+﻿SELECT CASE
+    WHEN [e].[IsActive] = CAST(1 AS bit) THEN CASE
+        WHEN [e].[Value] > 100 THEN N'Active High'
+        WHEN [e].[Value] > 50 THEN N'Active Medium'
+        ELSE N'Active Low'
+    END
+    ELSE N'Inactive'
+END
+FROM [Entity] AS [e]

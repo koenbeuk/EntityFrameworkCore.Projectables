@@ -1,0 +1,2 @@
+﻿SELECT 42
+FROM [Entity] AS [e]

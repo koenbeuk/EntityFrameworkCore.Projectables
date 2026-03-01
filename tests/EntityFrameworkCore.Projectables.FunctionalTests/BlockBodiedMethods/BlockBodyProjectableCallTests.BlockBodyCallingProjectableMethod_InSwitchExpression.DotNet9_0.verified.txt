@@ -1,0 +1,19 @@
+﻿SELECT CASE
+    WHEN CASE
+        WHEN [e].[Value] > 100 THEN N'Level3'
+        WHEN [e].[Value] > 50 THEN N'Level2'
+        ELSE N'Level1'
+    END = N'Level3' THEN N'Expert'
+    WHEN CASE
+        WHEN [e].[Value] > 100 THEN N'Level3'
+        WHEN [e].[Value] > 50 THEN N'Level2'
+        ELSE N'Level1'
+    END = N'Level2' THEN N'Intermediate'
+    WHEN CASE
+        WHEN [e].[Value] > 100 THEN N'Level3'
+        WHEN [e].[Value] > 50 THEN N'Level2'
+        ELSE N'Level1'
+    END = N'Level1' THEN N'Beginner'
+    ELSE N'Unknown'
+END
+FROM [Entity] AS [e]
