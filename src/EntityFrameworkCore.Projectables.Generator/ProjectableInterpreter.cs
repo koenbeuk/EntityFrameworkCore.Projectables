@@ -486,7 +486,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                             initializer.ArgumentList.Arguments,
                             expressionSyntaxRewriter,
                             context,
-                            memberSymbol.Name);
+                            memberSymbol.Name,
+                            compilation);
 
                         if (delegatedAssignments is null)
                         {
@@ -530,15 +531,22 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                // Verify the containing type has a parameterless (instance) constructor.
+                // Verify the containing type has an accessible parameterless (instance) constructor.
                 // The generated projection is: new T() { Prop = ... }, which requires one.
                 // INamedTypeSymbol.Constructors covers all partial declarations and also
                 // the implicit parameterless constructor that the compiler synthesizes when
                 // no constructors are explicitly defined.
-                var hasParameterlessConstructor = containingType.Constructors
-                    .Any(c => !c.IsStatic && c.Parameters.IsEmpty);
+                // We also check accessibility: a private/protected parameterless ctor cannot be
+                // used in the generated projection class, so we require at least public, internal,
+                // or protected-internal visibility.
+                var hasAccessibleParameterlessConstructor = containingType.Constructors
+                    .Any(c => !c.IsStatic
+                              && c.Parameters.IsEmpty
+                              && c.DeclaredAccessibility is Accessibility.Public
+                                  or Accessibility.Internal
+                                  or Accessibility.ProtectedOrInternal);
 
-                if (!hasParameterlessConstructor)
+                if (!hasAccessibleParameterlessConstructor)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         Diagnostics.MissingParameterlessConstructor,
@@ -588,6 +596,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             ExpressionSyntaxRewriter expressionSyntaxRewriter,
             SourceProductionContext context,
             string memberName,
+            Compilation compilation,
             bool argsAlreadyRewritten = false)
         {
             // Only process constructors whose source is available in this compilation
@@ -621,11 +630,12 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             if (syntax.Initializer is { } delegatedInitializer)
             {
-                // The delegated ctor's initializer is part of the original syntax tree,
-                // so we can safely use the semantic model to resolve its symbol.
-                var semanticModel = expressionSyntaxRewriter.GetSemanticModel();
+                // Use the semantic model for the delegated constructor's own SyntaxTree.
+                // The original member's semantic model is bound to a different tree and
+                // would throw if the delegated/base ctor is declared in another file.
+                var delegatedCtorSemanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
                 var delegatedInitializerSymbol =
-                    semanticModel.GetSymbolInfo(delegatedInitializer).Symbol as IMethodSymbol;
+                    delegatedCtorSemanticModel.GetSymbolInfo(delegatedInitializer).Symbol as IMethodSymbol;
 
                 if (delegatedInitializerSymbol is not null)
                 {
@@ -640,13 +650,18 @@ namespace EntityFrameworkCore.Projectables.Generator
                         expressionSyntaxRewriter,
                         context,
                         memberName,
+                        compilation,
                         argsAlreadyRewritten: true); // args are now detached substituted nodes
 
                     if (chainedAssignments is null)
+                    {
                         return null;
+                    }
 
                     foreach (var kvp in chainedAssignments)
+                    {
                         accumulated[kvp.Key] = kvp.Value;
+                    }
                 }
             }
 

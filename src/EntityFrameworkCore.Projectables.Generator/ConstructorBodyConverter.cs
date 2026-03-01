@@ -19,7 +19,6 @@ namespace EntityFrameworkCore.Projectables.Generator
         private readonly SourceProductionContext _context;
         private readonly Func<ExpressionSyntax, ExpressionSyntax> _rewrite;
         private readonly Dictionary<string, ExpressionSyntax> _paramSubstitutions;
-        private readonly Dictionary<string, ExpressionSyntax> _localVariables = new();
 
         /// <summary>Creates a converter for the <em>main</em> constructor body.</summary>
         public ConstructorBodyConverter(
@@ -47,7 +46,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             IReadOnlyDictionary<string, ExpressionSyntax>? initialContext = null)
         {
             var assignments = new Dictionary<string, ExpressionSyntax>();
-            if (!TryProcessBlock(statements, assignments, memberName, outerContext: initialContext))
+            if (!TryProcessBlock(statements, assignments, memberName, outerContext: initialContext, inheritedLocals: null))
             {
                 return null;
             }
@@ -59,13 +58,21 @@ namespace EntityFrameworkCore.Projectables.Generator
             IEnumerable<StatementSyntax> statements,
             Dictionary<string, ExpressionSyntax> assignments,
             string memberName,
-            IReadOnlyDictionary<string, ExpressionSyntax>? outerContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? outerContext,
+            IReadOnlyDictionary<string, ExpressionSyntax>? inheritedLocals = null)
         {
+            // Create a fresh local-variable scope for this block.
+            // Inherited locals (from parent scopes) are copied in so they remain visible here,
+            // but any new locals added inside this block won't escape to the caller's scope.
+            var blockLocals = inheritedLocals is { Count: > 0 }
+                ? inheritedLocals.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                : new Dictionary<string, ExpressionSyntax>();
+
             foreach (var statement in statements)
             {
                 // Everything accumulated so far (from outer scope + this block) is visible.
                 var visible = BuildVisible(outerContext, assignments);
-                if (!TryProcessStatement(statement, assignments, memberName, visible))
+                if (!TryProcessStatement(statement, assignments, memberName, visible, blockLocals))
                 {
                     return false;
                 }
@@ -77,22 +84,24 @@ namespace EntityFrameworkCore.Projectables.Generator
             StatementSyntax statement,
             Dictionary<string, ExpressionSyntax> assignments,
             string memberName,
-            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext,
+            Dictionary<string, ExpressionSyntax> currentLocals)
         {
             switch (statement)
             {
                 case LocalDeclarationStatementSyntax localDecl:
-                    return TryProcessLocalDeclaration(localDecl, memberName, visibleContext);
+                    return TryProcessLocalDeclaration(localDecl, memberName, visibleContext, currentLocals);
 
                 case ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
                     when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression):
-                    return TryProcessAssignment(assignment, assignments, memberName, visibleContext);
+                    return TryProcessAssignment(assignment, assignments, memberName, visibleContext, currentLocals);
 
                 case IfStatementSyntax ifStmt:
-                    return TryProcessIfStatement(ifStmt, assignments, memberName, visibleContext);
+                    return TryProcessIfStatement(ifStmt, assignments, memberName, visibleContext, currentLocals);
 
                 case BlockSyntax block:
-                    return TryProcessBlock(block.Statements, assignments, memberName, visibleContext);
+                    // Nested block: inherit current locals but new locals declared inside won't escape.
+                    return TryProcessBlock(block.Statements, assignments, memberName, visibleContext, currentLocals);
 
                 default:
                     ReportUnsupported(statement, memberName,
@@ -105,7 +114,8 @@ namespace EntityFrameworkCore.Projectables.Generator
         private bool TryProcessLocalDeclaration(
             LocalDeclarationStatementSyntax localDecl,
             string memberName,
-            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext,
+            Dictionary<string, ExpressionSyntax> currentLocals)
         {
             foreach (var variable in localDecl.Declaration.Variables)
             {
@@ -116,8 +126,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                 }
 
                 var rewritten = _rewrite(variable.Initializer.Value);
-                rewritten = ApplySubstitutions(rewritten, visibleContext);
-                _localVariables[variable.Identifier.Text] = rewritten;
+                rewritten = ApplySubstitutions(rewritten, visibleContext, currentLocals);
+                // Store in the current block scope; won't be visible outside this block.
+                currentLocals[variable.Identifier.Text] = rewritten;
             }
             return true;
         }
@@ -126,7 +137,8 @@ namespace EntityFrameworkCore.Projectables.Generator
             AssignmentExpressionSyntax assignment,
             Dictionary<string, ExpressionSyntax> assignments,
             string memberName,
-            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext,
+            IReadOnlyDictionary<string, ExpressionSyntax> currentLocals)
         {
             var targetMember = GetTargetMember(assignment.Left);
             if (targetMember is null)
@@ -138,7 +150,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             var rewritten = _rewrite(assignment.Right);
-            rewritten = ApplySubstitutions(rewritten, visibleContext);
+            rewritten = ApplySubstitutions(rewritten, visibleContext, currentLocals);
             assignments[targetMember.Identifier.Text] = rewritten;
             return true;
         }
@@ -147,14 +159,17 @@ namespace EntityFrameworkCore.Projectables.Generator
             IfStatementSyntax ifStmt,
             Dictionary<string, ExpressionSyntax> assignments,
             string memberName,
-            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext,
+            IReadOnlyDictionary<string, ExpressionSyntax> currentLocals)
         {
             var condition = _rewrite(ifStmt.Condition);
-            condition = ApplySubstitutions(condition, visibleContext);
+            condition = ApplySubstitutions(condition, visibleContext, currentLocals);
 
-            // Each branch starts empty but can see the pre-if accumulated props (visibleContext).
+            // Each branch gets currentLocals as inherited context. TryProcessBlock will create
+            // its own block-scoped copy, so locals declared inside a branch won't leak into the
+            // sibling branch or into code that follows the if-statement.
             var thenAssignments = new Dictionary<string, ExpressionSyntax>();
-            if (!TryProcessBlock(GetStatements(ifStmt.Statement), thenAssignments, memberName, visibleContext))
+            if (!TryProcessBlock(GetStatements(ifStmt.Statement), thenAssignments, memberName, visibleContext, currentLocals))
             {
                 return false;
             }
@@ -162,7 +177,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             var elseAssignments = new Dictionary<string, ExpressionSyntax>();
             if (ifStmt.Else != null)
             {
-                if (!TryProcessBlock(GetStatements(ifStmt.Else.Statement), elseAssignments, memberName, visibleContext))
+                if (!TryProcessBlock(GetStatements(ifStmt.Else.Statement), elseAssignments, memberName, visibleContext, currentLocals))
                 {
                     return false;
                 }
@@ -239,7 +254,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             IReadOnlyDictionary<string, ExpressionSyntax>? outer,
             Dictionary<string, ExpressionSyntax> local)
         {
-            bool outerEmpty = outer == null || outer.Count == 0;
+            var outerEmpty = outer == null || outer.Count == 0;
             var localEmpty = local.Count == 0;
 
             if (outerEmpty && localEmpty)
@@ -273,16 +288,17 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         private ExpressionSyntax ApplySubstitutions(
             ExpressionSyntax expr,
-            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext)
+            IReadOnlyDictionary<string, ExpressionSyntax>? visibleContext,
+            IReadOnlyDictionary<string, ExpressionSyntax>? currentLocals = null)
         {
             if (_paramSubstitutions.Count > 0)
             {
                 expr = ParameterSubstitutor.Substitute(expr, _paramSubstitutions);
             }
 
-            if (_localVariables.Count > 0)
+            if (currentLocals != null && currentLocals.Count > 0)
             {
-                expr = LocalVariableSubstitutor.Substitute(expr, _localVariables);
+                expr = LocalVariableSubstitutor.Substitute(expr, currentLocals);
             }
 
             if (visibleContext != null && visibleContext.Count > 0)
@@ -311,7 +327,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// Replaces parameter-name identifier references with call-site argument expressions
         /// (used when inlining a delegated base/this constructor body).
         /// </summary>
-        internal sealed class ParameterSubstitutor : CSharpSyntaxRewriter
+        sealed internal class ParameterSubstitutor : CSharpSyntaxRewriter
         {
             private readonly Dictionary<string, ExpressionSyntax> _map;
             private ParameterSubstitutor(Dictionary<string, ExpressionSyntax> map) => _map = map;
@@ -331,10 +347,10 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// </summary>
         private sealed class LocalVariableSubstitutor : CSharpSyntaxRewriter
         {
-            private readonly Dictionary<string, ExpressionSyntax> _locals;
-            private LocalVariableSubstitutor(Dictionary<string, ExpressionSyntax> locals) => _locals = locals;
+            private readonly IReadOnlyDictionary<string, ExpressionSyntax> _locals;
+            private LocalVariableSubstitutor(IReadOnlyDictionary<string, ExpressionSyntax> locals) => _locals = locals;
 
-            public static ExpressionSyntax Substitute(ExpressionSyntax expr, Dictionary<string, ExpressionSyntax> locals)
+            public static ExpressionSyntax Substitute(ExpressionSyntax expr, IReadOnlyDictionary<string, ExpressionSyntax> locals)
                 => (ExpressionSyntax)new LocalVariableSubstitutor(locals).Visit(expr);
 
             public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
