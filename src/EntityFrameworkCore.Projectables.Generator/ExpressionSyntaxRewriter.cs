@@ -309,141 +309,51 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public override SyntaxNode? VisitSwitchExpression(SwitchExpressionSyntax node)
         {
-            // Reverse arms order to start from the default value
             var arms = node.Arms.Reverse();
-
+            var visitedGoverning = (ExpressionSyntax)Visit(node.GoverningExpression);
             ExpressionSyntax? currentExpression = null;
 
             foreach (var arm in arms)
             {
                 var armExpression = (ExpressionSyntax)Visit(arm.Expression);
-                
-                // Handle fallback value
+
                 if (currentExpression == null)
                 {
-                    currentExpression = arm.Pattern is DiscardPatternSyntax 
+                    currentExpression = arm.Pattern is DiscardPatternSyntax
                         ? armExpression
                         : SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
-
-                    continue;
-                }
-                
-                // Handle each arm, only if it's a constant expression
-                if (arm.Pattern is ConstantPatternSyntax constant)
-                {
-                    ExpressionSyntax expression = SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, (ExpressionSyntax)Visit(node.GoverningExpression), constant.Expression);
-                    
-                    // Add the when clause as a AND expression
-                    if (arm.WhenClause != null)
-                    {
-                        expression = SyntaxFactory.BinaryExpression(
-                            SyntaxKind.LogicalAndExpression, 
-                            expression,
-                            (ExpressionSyntax)Visit(arm.WhenClause.Condition)
-                        );
-                    }
-                    
-                    currentExpression = SyntaxFactory.ConditionalExpression(
-                        expression,
-                        armExpression,
-                        currentExpression
-                    );
-
                     continue;
                 }
 
-                if (arm.Pattern is DeclarationPatternSyntax declaration)
+                ExpressionSyntax? condition;
+
+                // DeclarationPattern with a named variable requires replacing the variable with a cast in the arm body
+                if (arm.Pattern is DeclarationPatternSyntax declaration && declaration.Designation is SingleVariableDesignationSyntax)
                 {
-                    var getTypeExpression = SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        (ExpressionSyntax)Visit(node.GoverningExpression),
-                        SyntaxFactory.IdentifierName("GetType")
-                    );
-
-                    var getTypeCall = SyntaxFactory.InvocationExpression(getTypeExpression);
-                    var typeofExpression = SyntaxFactory.TypeOfExpression(declaration.Type);
-                    var equalsExpression = SyntaxFactory.BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        getTypeCall,
-                        typeofExpression
-                    );
-
-                    ExpressionSyntax condition = equalsExpression;
-                    if (arm.WhenClause != null)
-                    {
-                        condition = SyntaxFactory.BinaryExpression(
-                            SyntaxKind.LogicalAndExpression, 
-                            equalsExpression,
-                            (ExpressionSyntax)Visit(arm.WhenClause.Condition)
-                        );
-                    }
-
-                    var modifiedArmExpression = ReplaceVariableWithCast(armExpression, declaration, node.GoverningExpression);
-                    currentExpression = SyntaxFactory.ConditionalExpression(
-                        condition,
-                        modifiedArmExpression,
-                        currentExpression
-                    );
-
-                    continue;
+                    condition = SyntaxFactory.BinaryExpression(SyntaxKind.IsExpression, visitedGoverning, declaration.Type);
+                    armExpression = ReplaceVariableWithCast(armExpression, declaration, node.GoverningExpression);
                 }
-
-                // Handle relational patterns (<=, <, >=, >)
-                if (arm.Pattern is RelationalPatternSyntax relational)
+                else
                 {
-                    // Map the pattern operator token to a binary expression kind
-                    SyntaxKind? binaryKindNullable = relational.OperatorToken.Kind() switch
+                    condition = ConvertPatternToExpression(arm.Pattern, visitedGoverning);
+                    if (condition is null)
                     {
-                        SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
-                        SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
-                        SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
-                        SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
-                        _ => null
-                    };
-
-                    if (binaryKindNullable is null)
-                    {
-                        _context.ReportDiagnostic(Diagnostic.Create(
-                            Diagnostics.UnsupportedPatternInExpression,
-                            arm.Pattern.GetLocation(),
-                            arm.Pattern.ToString()));
                         return base.VisitSwitchExpression(node);
                     }
-
-                    var binaryKind = binaryKindNullable.Value;
-
-                    var condition = SyntaxFactory.BinaryExpression(
-                        binaryKind,
-                        (ExpressionSyntax)Visit(node.GoverningExpression),
-                        (ExpressionSyntax)Visit(relational.Expression)
-                    );
-
-                    // Add the when clause as a AND expression
-                    if (arm.WhenClause != null)
-                    {
-                        condition = SyntaxFactory.BinaryExpression(
-                            SyntaxKind.LogicalAndExpression,
-                            condition,
-                            (ExpressionSyntax)Visit(arm.WhenClause.Condition)
-                        );
-                    }
-
-                    currentExpression = SyntaxFactory.ConditionalExpression(
-                        condition,
-                        armExpression,
-                        currentExpression
-                    );
-
-                    continue;
                 }
 
-                _context.ReportDiagnostic(Diagnostic.Create(
-                    Diagnostics.UnsupportedPatternInExpression,
-                    arm.Pattern.GetLocation(),
-                    arm.Pattern.ToString()));
-                return base.VisitSwitchExpression(node);
+                if (arm.WhenClause != null)
+                {
+                    condition = SyntaxFactory.BinaryExpression(
+                        SyntaxKind.LogicalAndExpression,
+                        condition,
+                        (ExpressionSyntax)Visit(arm.WhenClause.Condition)
+                    );
+                }
+
+                currentExpression = SyntaxFactory.ConditionalExpression(condition, armExpression, currentExpression);
             }
-            
+
             return currentExpression;
         }
 
