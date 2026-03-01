@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -134,8 +135,8 @@ namespace Foo {
 using System;
 using EntityFrameworkCore.Projectables;
 namespace Foo {
-    class C {
-        class D {
+    public class C {
+        public class D {
             public int Bar { get; set; }
 
             [Projectable]
@@ -3322,6 +3323,135 @@ namespace Foo {
         }
 
         [Fact]
+        public Task ExplicitInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+
+                public interface IBase
+                {
+                    int ComputedProperty { get; }
+                }
+
+                public class Concrete : IBase
+                {
+                    public int Id { get; }
+                    
+                    [Projectable]
+                    int IBase.ComputedProperty => Id + 1;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task DefaultInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+                
+                public interface IBase
+                {
+                    int Id { get; }
+                    int ComputedProperty { get; }
+                    int ComputedMethod();
+                }
+
+                public interface IDefaultBase : IBase
+                {
+                    [Projectable]
+                    int Default => ComputedProperty * 2;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task DefaultExplicitInterfaceMember()
+        {
+            var compilation = CreateCompilation(
+                """
+                using System;
+                using EntityFrameworkCore.Projectables;
+
+                public interface IBase
+                {
+                    int Id { get; }
+                    int ComputedProperty { get; }
+                    int ComputedMethod();
+                }
+
+                public interface IDefaultBase
+                {
+                    int Default { get; }
+                }
+
+                public interface IDefaultBaseImplementation : IDefaultBase, IBase
+                {
+                    [Projectable]
+                    int IDefaultBase.Default => ComputedProperty * 2;
+                }
+                """);
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
+        public Task ExplicitInterfaceImplementation()
+        {
+            var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+
+namespace Foo {
+    public interface IStringId
+    {
+        string Id { get; }
+    }
+
+    public class Item : IStringId
+    {
+        public int Id { get; set; }
+        
+        // Explicit interface implementation without [Projectable]
+        string IStringId.Id => Id.ToString();
+        
+        [Projectable]
+        public string FormattedId => ((IStringId)this).Id;
+    }
+}
+");
+
+            var result = RunGenerator(compilation);
+
+            Assert.Empty(result.Diagnostics);
+            Assert.Single(result.GeneratedTrees);
+
+            return Verifier.Verify(result.GeneratedTrees[0].ToString());
+        }
+
+        [Fact]
         public void BlockBodiedMethod_WithoutAllowFlag_EmitsWarning()
         {
             var compilation = CreateCompilation(@"
@@ -3375,7 +3505,7 @@ namespace Foo {
 
         #region Helpers
 
-        Compilation CreateCompilation(string source, bool expectedToCompile = true)
+        Compilation CreateCompilation([StringSyntax("csharp")] string source, bool expectedToCompile = true)
         {
             var references = Basic.Reference.Assemblies.
 #if NET10_0
@@ -3427,7 +3557,7 @@ namespace Foo {
             var subject = new ProjectionExpressionGenerator();
             var driver = CSharpGeneratorDriver
                 .Create(subject)
-                .RunGenerators(compilation);
+                .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
             var result = driver.GetRunResult();
 
@@ -3437,11 +3567,11 @@ namespace Foo {
             }
             else
             {
-                _testOutputHelper.WriteLine($"Diagnostics produced:");
+                _testOutputHelper.WriteLine("Diagnostics produced:");
 
                 foreach (var diagnostic in result.Diagnostics)
                 {
-                    _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
+                    _testOutputHelper.WriteLine(" > " + diagnostic);
                 }
             }
 
@@ -3451,7 +3581,30 @@ namespace Foo {
                 _testOutputHelper.WriteLine(newSyntaxTree.GetText().ToString());
             }
 
-            return driver.GetRunResult();
+            // Verify that the generated code compiles without errors
+            var hasGeneratorErrors = result.Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
+            if (!hasGeneratorErrors && result.GeneratedTrees.Length > 0)
+            {
+                _testOutputHelper.WriteLine("Checking that generated code compiles...");
+
+                var compilationErrors = outputCompilation
+                    .GetDiagnostics()
+                    .Where(d => d.Severity == DiagnosticSeverity.Error)
+                    .ToList();
+
+                if (compilationErrors.Count > 0)
+                {
+                    _testOutputHelper.WriteLine("Generated code produced compilation errors:");
+                    foreach (var error in compilationErrors)
+                    {
+                        _testOutputHelper.WriteLine(" > " + error);
+                    }
+                }
+
+                Assert.Empty(compilationErrors);
+            }
+
+            return result;
         }
 
         #endregion

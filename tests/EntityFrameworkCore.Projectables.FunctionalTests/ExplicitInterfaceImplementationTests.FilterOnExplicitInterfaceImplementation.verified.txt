@@ -1,0 +1,3 @@
+﻿SELECT [i].[Id]
+FROM [Item] AS [i]
+WHERE CONVERT(varchar(11), [i].[Id]) = N'123'
