@@ -133,7 +133,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Extensions
         }
 
         [Fact]
-        public void GetImplementingProperty_ExplicitInterfaceImplementation_DoesNotThrow()
+        public void GetImplementingProperty_ExplicitInterfaceImplementation_ReturnsConcreteImplementation()
         {
             // This test verifies that when a class explicitly implements an interface property
             // (e.g., string IStringId.Id => Id.ToString();), GetImplementingProperty doesn't throw
@@ -152,7 +152,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Extensions
         }
 
         [Fact]
-        public void GetConcreteProperty_ExplicitInterfaceImplementation_DoesNotThrow()
+        public void GetConcreteProperty_ExplicitInterfaceImplementation_ReturnsConcreteImplementation()
         {
             // This test verifies the same scenario but through GetConcreteProperty which is the entry point
             var interfaceType = typeof(IStringId);
