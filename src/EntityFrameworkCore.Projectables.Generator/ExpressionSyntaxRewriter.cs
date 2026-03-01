@@ -392,15 +392,25 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (arm.Pattern is RelationalPatternSyntax relational)
                 {
                     // Map the pattern operator token to a binary expression kind
-                    var binaryKind = relational.OperatorToken.Kind() switch
+                    SyntaxKind? binaryKindNullable = relational.OperatorToken.Kind() switch
                     {
                         SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
                         SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
                         SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
                         SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
-                        _ => throw new InvalidOperationException(
-                            $"Unsupported relational operator in switch expression: {relational.OperatorToken.Kind()}")
+                        _ => null
                     };
+
+                    if (binaryKindNullable is null)
+                    {
+                        _context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.UnsupportedPatternInExpression,
+                            arm.Pattern.GetLocation(),
+                            arm.Pattern.ToString()));
+                        return base.VisitSwitchExpression(node);
+                    }
+
+                    var binaryKind = binaryKindNullable.Value;
 
                     var condition = SyntaxFactory.BinaryExpression(
                         binaryKind,
@@ -427,10 +437,11 @@ namespace EntityFrameworkCore.Projectables.Generator
                     continue;
                 }
 
-                throw new InvalidOperationException(
-                    $"Switch expressions rewriting supports constant values, relational patterns (<=, <, >=, >), and declaration patterns (Type var). " +
-                    $"Unsupported pattern: {arm.Pattern.GetType().Name}"
-                );
+                _context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.UnsupportedPatternInExpression,
+                    arm.Pattern.GetLocation(),
+                    arm.Pattern.ToString()));
+                return base.VisitSwitchExpression(node);
             }
             
             return currentExpression;
@@ -679,113 +690,234 @@ namespace EntityFrameworkCore.Projectables.Generator
         
         public override SyntaxNode? VisitIsPatternExpression(IsPatternExpressionSyntax node)
         {
-            // Pattern matching is not supported in expression trees (CS8122)
-            // We need to convert patterns into equivalent expressions
+            // Pattern matching is not supported in expression trees (CS8122).
+            // We need to convert patterns into equivalent expressions.
             var expression = (ExpressionSyntax)Visit(node.Expression);
-            
-            return ConvertPatternToExpression(node.Pattern, expression);
+
+            // ConvertPatternToExpression returns null when a pattern is unsupported (a diagnostic
+            // has already been emitted). Fall back to the original node so the user still sees the
+            // compiler error, but the generator itself does not crash.
+            return ConvertPatternToExpression(node.Pattern, expression)
+                   ?? node.WithExpression(expression);
         }
 
-        private ExpressionSyntax ConvertPatternToExpression(PatternSyntax pattern, ExpressionSyntax expression)
+        /// <summary>
+        /// Returns true when <paramref name="expression"/> has a type that can be compared to null
+        /// (i.e. reference types and nullable value types). Returns false for plain value types
+        /// (struct / record struct) where <c>x != null</c> would not compile.
+        /// </summary>
+        private bool TypeRequiresNullCheck(ExpressionSyntax expression)
+        {
+            var type = _semanticModel.GetTypeInfo(expression).Type;
+            if (type is null)
+            {
+                return true; // conservative: unknown type → assume nullable
+            }
+
+            // Nullable<T> is a value type whose OriginalDefinition is System.Nullable<T>
+            if (type.IsValueType &&
+                type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+            {
+                return false; // plain struct / record struct — null check would not compile
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to convert <paramref name="pattern"/> into an ordinary expression that is valid
+        /// inside an expression tree.  Returns <c>null</c> and reports a diagnostic when the pattern
+        /// cannot be rewritten.
+        /// </summary>
+        private ExpressionSyntax? ConvertPatternToExpression(PatternSyntax pattern, ExpressionSyntax expression)
         {
             switch (pattern)
             {
                 case RecursivePatternSyntax recursivePattern:
                     return ConvertRecursivePattern(recursivePattern, expression);
-                    
+
                 case ConstantPatternSyntax constantPattern:
-                    // e is null or e is 5
+                    // e is null  /  e is 5
                     return SyntaxFactory.BinaryExpression(
                         SyntaxKind.EqualsExpression,
                         expression,
                         (ExpressionSyntax)Visit(constantPattern.Expression)
                     );
-                    
+
                 case DeclarationPatternSyntax declarationPattern:
-                    // e is string s -> e is string (type check)
+                    // e is string _  → type-check only (discard is fine)
+                    // e is string s  → we cannot safely rewrite because references to 's' in
+                    //                  the surrounding expression are outside this node's scope.
+                    if (declarationPattern.Designation is SingleVariableDesignationSyntax)
+                    {
+                        _context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.UnsupportedPatternInExpression,
+                            pattern.GetLocation(),
+                            pattern.ToString()));
+                        return null;
+                    }
+
                     return SyntaxFactory.BinaryExpression(
                         SyntaxKind.IsExpression,
                         expression,
                         declarationPattern.Type
                     );
-                    
+
                 case RelationalPatternSyntax relationalPattern:
+                {
                     // e is > 100
-                    var binaryKind = relationalPattern.OperatorToken.Kind() switch
+                    SyntaxKind? binaryKind = relationalPattern.OperatorToken.Kind() switch
                     {
-                        SyntaxKind.LessThanToken => SyntaxKind.LessThanExpression,
-                        SyntaxKind.LessThanEqualsToken => SyntaxKind.LessThanOrEqualExpression,
-                        SyntaxKind.GreaterThanToken => SyntaxKind.GreaterThanExpression,
+                        SyntaxKind.LessThanToken        => SyntaxKind.LessThanExpression,
+                        SyntaxKind.LessThanEqualsToken  => SyntaxKind.LessThanOrEqualExpression,
+                        SyntaxKind.GreaterThanToken     => SyntaxKind.GreaterThanExpression,
                         SyntaxKind.GreaterThanEqualsToken => SyntaxKind.GreaterThanOrEqualExpression,
-                        _ => throw new NotSupportedException($"Relational operator {relationalPattern.OperatorToken} not supported")
+                        _ => null
                     };
-                    
+
+                    if (binaryKind is null)
+                    {
+                        _context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.UnsupportedPatternInExpression,
+                            pattern.GetLocation(),
+                            pattern.ToString()));
+                        return null;
+                    }
+
                     return SyntaxFactory.BinaryExpression(
-                        binaryKind,
+                        binaryKind.Value,
                         expression,
                         (ExpressionSyntax)Visit(relationalPattern.Expression)
                     );
-                    
+                }
+
                 case BinaryPatternSyntax binaryPattern:
+                {
                     // e is > 10 and < 100
-                    var left = ConvertPatternToExpression(binaryPattern.Left, expression);
+                    var left  = ConvertPatternToExpression(binaryPattern.Left,  expression);
                     var right = ConvertPatternToExpression(binaryPattern.Right, expression);
-                    
-                    var logicalKind = binaryPattern.OperatorToken.Kind() switch
+
+                    // Propagate failures from either side
+                    if (left is null || right is null)
+                    {
+                        return null;
+                    }
+
+                    SyntaxKind? logicalKind = binaryPattern.OperatorToken.Kind() switch
                     {
                         SyntaxKind.AndKeyword => SyntaxKind.LogicalAndExpression,
-                        SyntaxKind.OrKeyword => SyntaxKind.LogicalOrExpression,
-                        _ => throw new NotSupportedException($"Binary pattern operator {binaryPattern.OperatorToken} not supported")
+                        SyntaxKind.OrKeyword  => SyntaxKind.LogicalOrExpression,
+                        _ => null
                     };
-                    
-                    return SyntaxFactory.BinaryExpression(logicalKind, left, right);
-                    
+
+                    if (logicalKind is null)
+                    {
+                        _context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.UnsupportedPatternInExpression,
+                            pattern.GetLocation(),
+                            pattern.ToString()));
+                        return null;
+                    }
+
+                    return SyntaxFactory.BinaryExpression(logicalKind.Value, left, right);
+                }
+
                 case UnaryPatternSyntax unaryPattern when unaryPattern.OperatorToken.IsKind(SyntaxKind.NotKeyword):
+                {
                     // e is not null
-                    var innerPattern = ConvertPatternToExpression(unaryPattern.Pattern, expression);
+                    var inner = ConvertPatternToExpression(unaryPattern.Pattern, expression);
+                    if (inner is null)
+                    {
+                        return null;
+                    }
+
                     return SyntaxFactory.PrefixUnaryExpression(
                         SyntaxKind.LogicalNotExpression,
-                        SyntaxFactory.ParenthesizedExpression(innerPattern)
+                        SyntaxFactory.ParenthesizedExpression(inner)
                     );
-                    
+                }
+
                 default:
-                    throw new NotSupportedException($"Pattern type {pattern.GetType().Name} is not yet supported in projectable methods");
+                    _context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UnsupportedPatternInExpression,
+                        pattern.GetLocation(),
+                        pattern.ToString()));
+                    return null;
             }
         }
 
-        private ExpressionSyntax ConvertRecursivePattern(RecursivePatternSyntax recursivePattern, ExpressionSyntax expression)
+        private ExpressionSyntax? ConvertRecursivePattern(RecursivePatternSyntax recursivePattern, ExpressionSyntax expression)
         {
-            // entity is { IsActive: true, Value: > 100 }
-            // Convert to: entity != null && entity.IsActive == true && entity.Value > 100
-            
+            // Positional / deconstruct patterns (e.g. obj is Point(1, 2)) cannot be rewritten
+            // into a plain expression tree.  Report a diagnostic and bail out.
+            if (recursivePattern.PositionalPatternClause != null)
+            {
+                _context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.UnsupportedPatternInExpression,
+                    recursivePattern.GetLocation(),
+                    recursivePattern.ToString()));
+                return null;
+            }
+
             var conditions = new List<ExpressionSyntax>();
-            
-            // Add null check first (unless pattern explicitly includes null)
-            var nullCheck = SyntaxFactory.BinaryExpression(
-                SyntaxKind.NotEqualsExpression,
-                expression,
-                SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
-            );
-            conditions.Add(nullCheck);
-            
-            // Handle property patterns
+
+            // Null check: only legal (and only necessary) for reference types and nullable value types.
+            // Emitting "x != null" for a plain struct / record struct would not compile.
+            if (TypeRequiresNullCheck(expression))
+            {
+                conditions.Add(SyntaxFactory.BinaryExpression(
+                    SyntaxKind.NotEqualsExpression,
+                    expression,
+                    SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)
+                ));
+            }
+
+            // Type check: "obj is SomeType { ... }" — add "expression is SomeType" guard.
+            TypeSyntax? visitedType = null;
+            if (recursivePattern.Type != null)
+            {
+                visitedType = (TypeSyntax)(Visit(recursivePattern.Type) ?? recursivePattern.Type);
+                conditions.Add(SyntaxFactory.BinaryExpression(
+                    SyntaxKind.IsExpression,
+                    expression,
+                    visitedType
+                ));
+            }
+
+            // When a concrete type is known, member accesses on sub-patterns must go through a
+            // cast so the generated code compiles correctly (e.g. ((SomeType)expression).Prop).
+            var memberBase = visitedType != null
+                ? SyntaxFactory.ParenthesizedExpression(
+                    SyntaxFactory.CastExpression(visitedType, expression))
+                : expression;
+
+            // Handle property sub-patterns: { Prop: value, ... }
             if (recursivePattern.PropertyPatternClause != null)
             {
                 foreach (var subpattern in recursivePattern.PropertyPatternClause.Subpatterns)
                 {
-                    var memberAccess = subpattern.NameColon != null
+                    var propExpression = subpattern.NameColon != null
                         ? SyntaxFactory.MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
-                            expression,
-                            SyntaxFactory.IdentifierName(subpattern.NameColon.Name.Identifier)
-                        )
-                        : expression;
-                    
-                    var condition = ConvertPatternToExpression(subpattern.Pattern, memberAccess);
+                            memberBase,
+                            SyntaxFactory.IdentifierName(subpattern.NameColon.Name.Identifier))
+                        : memberBase;
+
+                    var condition = ConvertPatternToExpression(subpattern.Pattern, propExpression);
+                    if (condition is null)
+                    {
+                        return null; // diagnostic already emitted
+                    }
+
                     conditions.Add(condition);
                 }
             }
-            
+
+            if (conditions.Count == 0)
+            {
+                return SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
+            }
+
             // Combine all conditions with &&
             var result = conditions[0];
             for (var i = 1; i < conditions.Count; i++)
@@ -796,7 +928,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     conditions[i]
                 );
             }
-            
+
             return result;
         }
     }

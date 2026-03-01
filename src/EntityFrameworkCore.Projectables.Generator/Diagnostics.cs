@@ -52,5 +52,13 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor UnsupportedPatternInExpression = new DiagnosticDescriptor(
+            id: "EFP0007",
+            title: "Unsupported pattern in projectable expression",
+            messageFormat: "The pattern '{0}' cannot be rewritten into an expression tree. Simplify the pattern or restructure the projectable member body.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
     }
 }
