@@ -53,13 +53,33 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
             public virtual int SampleMethod() => 0;
         }
 
-        public class Concrete : Base
+        public interface IDefaultBase
+        {
+            int Explicit { get; }
+
+            [Projectable]
+            int Default => 49;
+        }
+
+        public interface IDefaultBaseImplementation : IDefaultBase, IBase
+        {
+            [Projectable]
+            int IDefaultBase.Explicit => Id * 2;
+        }
+
+        public class Concrete : Base, IDefaultBaseImplementation
         {
             [Projectable]
             public override int SampleProperty => 1;
 
             [Projectable]
             public override int SampleMethod() => 1;
+        }
+
+        public class OtherConcrete : Base, IDefaultBase
+        {
+            [Projectable]
+            int IDefaultBase.Explicit => Id / 2;
         }
 
         public class MoreConcrete : Concrete
@@ -131,6 +151,36 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         }
 
         [Fact]
+        public Task ProjectOverDefaultImplementedProperty()
+        {
+            using var dbContext = new SampleDbContext<Concrete>();
+
+            var query = dbContext.Set<Concrete>().SelectDefaultProperty();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ProjectOverExplicitlyImplementedProperty()
+        {
+            using var dbContext = new SampleDbContext<OtherConcrete>();
+
+            var query = dbContext.Set<OtherConcrete>().SelectExplicitProperty();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
+        public Task ProjectOverDefaultExplicitlyImplementedProperty()
+        {
+            using var dbContext = new SampleDbContext<Concrete>();
+
+            var query = dbContext.Set<Concrete>().SelectExplicitProperty();
+
+            return Verifier.Verify(query.ToQueryString());
+        }
+
+        [Fact]
         public Task ProjectOverProvider()
         {
             using var dbContext = new SampleDbContext<BaseProvider>();
@@ -156,6 +206,14 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
         public static IQueryable<int> SelectComputedProperty<TConcrete>(this IQueryable<TConcrete> concretes)
             where TConcrete : InheritedModelTests.IBase
             => concretes.Select(x => x.ComputedProperty);
+        
+        public static IQueryable<int> SelectDefaultProperty<TConcrete>(this IQueryable<TConcrete> concretes)
+            where TConcrete : InheritedModelTests.IDefaultBase
+            => concretes.Select(x => x.Default);
+        
+        public static IQueryable<int> SelectExplicitProperty<TConcrete>(this IQueryable<TConcrete> concretes)
+            where TConcrete : InheritedModelTests.IDefaultBase
+            => concretes.Select(x => x.Explicit);
 
         public static IQueryable<int> SelectComputedMethod<TConcrete>(this IQueryable<TConcrete> concretes)
             where TConcrete : InheritedModelTests.IBase

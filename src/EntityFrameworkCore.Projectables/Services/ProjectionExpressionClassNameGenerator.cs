@@ -65,7 +65,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 }
 
             }
-            stringBuilder.Append(memberName);
+            stringBuilder.Append(memberName.Replace(".", "__")); // Support explicit interface implementations
 
             // Add parameter types to make method overloads unique
             if (parameterTypeNames is not null)
