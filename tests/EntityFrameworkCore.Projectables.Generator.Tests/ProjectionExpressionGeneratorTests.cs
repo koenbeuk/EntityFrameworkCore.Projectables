@@ -4325,7 +4325,7 @@ namespace Foo {
         public void ProjectableConstructor_WithoutParameterlessConstructor_EmitsDiagnostic()
         {
             // A class that only exposes a parameterized constructor (no parameterless one).
-            // The generator must emit EFP0007 and produce no code because the object-initializer
+            // The generator must emit EFP0008 and produce no code because the object-initializer
             // pattern requires a parameterless constructor.
             var compilation = CreateCompilation(@"
 using EntityFrameworkCore.Projectables;
@@ -4345,7 +4345,7 @@ namespace Foo {
             var result = RunGenerator(compilation);
 
             var diagnostic = Assert.Single(result.Diagnostics);
-            Assert.Equal("EFP0007", diagnostic.Id);
+            Assert.Equal("EFP0008", diagnostic.Id);
             Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
             Assert.Empty(result.GeneratedTrees);
         }

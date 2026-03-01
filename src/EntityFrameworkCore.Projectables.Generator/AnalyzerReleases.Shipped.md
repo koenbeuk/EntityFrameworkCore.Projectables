@@ -8,7 +8,8 @@ EFP0003 | Design   | Warning  | Unsupported statement in block-bodied method
 EFP0004 | Design   | Error    | Statement with side effects in block-bodied method                      
 EFP0005 | Design   | Warning  | Potential side effect in block-bodied method                            
 EFP0006 | Design   | Error    | Method or property should expose a body definition (block or expression)
-EFP0007 | Design   | Error    | Target class is missing a parameterless constructor
+EFP0007 | Design   | Error    | Unsupported pattern in projectable expression
+EFP0008 | Design   | Error    | Target class is missing a parameterless constructor
 
 ### Changed Rules
 
