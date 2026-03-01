@@ -2554,7 +2554,8 @@ namespace Foo {
 
                 public class Concrete : IBase
                 {
-                    int Id { get; }
+                    public int Id { get; }
+                    
                     [Projectable]
                     int IBase.ComputedProperty => Id + 1;
                 }
