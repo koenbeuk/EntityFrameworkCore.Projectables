@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -134,8 +135,8 @@ namespace Foo {
 using System;
 using EntityFrameworkCore.Projectables;
 namespace Foo {
-    class C {
-        class D {
+    public class C {
+        public class D {
             public int Bar { get; set; }
 
             [Projectable]
@@ -2540,7 +2541,7 @@ namespace Foo {
 
         #region Helpers
 
-        Compilation CreateCompilation(string source, bool expectedToCompile = true)
+        Compilation CreateCompilation([StringSyntax("csharp")] string source, bool expectedToCompile = true)
         {
             var references = Basic.Reference.Assemblies.
 #if NET10_0
@@ -2592,7 +2593,7 @@ namespace Foo {
             var subject = new ProjectionExpressionGenerator();
             var driver = CSharpGeneratorDriver
                 .Create(subject)
-                .RunGenerators(compilation);
+                .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
             var result = driver.GetRunResult();
 
@@ -2602,11 +2603,11 @@ namespace Foo {
             }
             else
             {
-                _testOutputHelper.WriteLine($"Diagnostics produced:");
+                _testOutputHelper.WriteLine("Diagnostics produced:");
 
                 foreach (var diagnostic in result.Diagnostics)
                 {
-                    _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
+                    _testOutputHelper.WriteLine(" > " + diagnostic);
                 }
             }
 
@@ -2616,7 +2617,30 @@ namespace Foo {
                 _testOutputHelper.WriteLine(newSyntaxTree.GetText().ToString());
             }
 
-            return driver.GetRunResult();
+            // Verify that the generated code compiles without errors
+            var hasGeneratorErrors = result.Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
+            if (!hasGeneratorErrors && result.GeneratedTrees.Length > 0)
+            {
+                _testOutputHelper.WriteLine("Checking that generated code compiles...");
+
+                var compilationErrors = outputCompilation
+                    .GetDiagnostics()
+                    .Where(d => d.Severity == DiagnosticSeverity.Error)
+                    .ToList();
+
+                if (compilationErrors.Count > 0)
+                {
+                    _testOutputHelper.WriteLine("Generated code produced compilation errors:");
+                    foreach (var error in compilationErrors)
+                    {
+                        _testOutputHelper.WriteLine(" > " + error);
+                    }
+                }
+
+                Assert.Empty(compilationErrors);
+            }
+
+            return result;
         }
 
         #endregion
