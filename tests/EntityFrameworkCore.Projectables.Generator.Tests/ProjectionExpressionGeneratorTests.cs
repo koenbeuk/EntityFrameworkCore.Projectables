@@ -2405,7 +2405,7 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2525,10 +2525,12 @@ namespace Foo {
             {
                 return 1;
             }
+            
+            return null;
         }
     }
 }
-", expectedToCompile: false);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2631,10 +2633,12 @@ namespace Foo {
                 case 2:
                     return ""Two"";
             }
+            
+            return null;
         }
     }
 }
-", expectedToCompile: false);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2662,7 +2666,7 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2691,7 +2695,7 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2721,7 +2725,7 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
@@ -2750,7 +2754,7 @@ namespace Foo {
         }
     }
 }
-", expectedToCompile: true);
+");
 
             var result = RunGenerator(compilation);
 
@@ -3505,7 +3509,7 @@ namespace Foo {
 
         #region Helpers
 
-        Compilation CreateCompilation([StringSyntax("csharp")] string source, bool expectedToCompile = true)
+        Compilation CreateCompilation([StringSyntax("csharp")] string source)
         {
             var references = Basic.Reference.Assemblies.
 #if NET10_0
@@ -3525,24 +3529,20 @@ namespace Foo {
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
 #if DEBUG
+            var compilationDiagnostics = compilation.GetDiagnostics();
 
-            if (expectedToCompile)
+            if (!compilationDiagnostics.IsEmpty)
             {
-                var compilationDiagnostics = compilation.GetDiagnostics();
+                _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
 
-                if (!compilationDiagnostics.IsEmpty)
+                foreach (var diagnostic in compilationDiagnostics)
                 {
-                    _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
+                    _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
+                }
 
-                    foreach (var diagnostic in compilationDiagnostics)
-                    {
-                        _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
-                    }
-
-                    if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
-                    {
-                        Debug.Fail("Compilation diagnostics produced");
-                    }
+                if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
+                {
+                    Debug.Fail("Compilation diagnostics produced");
                 }
             }
 #endif
