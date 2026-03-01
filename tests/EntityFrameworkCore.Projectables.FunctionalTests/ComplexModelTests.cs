@@ -1,15 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
-using EntityFrameworkCore.Projectables.Services;
 using Microsoft.EntityFrameworkCore;
-using ScenarioTests;
-using VerifyXunit;
-using Xunit;
 
 #nullable disable
 
@@ -27,20 +18,18 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests
 
             public ICollection<Order> Orders { get; set; }
 
-            // todo: since Order is a nested class, we currently have to fully express the location of this class
             [Projectable]
-            public EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order LastOrder =>
+            public Order LastOrder =>
                 Orders.OrderByDescending(x => x.RecordDate).FirstOrDefault();
 
-            // todo: since Order is a nested class, we currently have to fully express the location of this class
             [Projectable]
             [NotMapped]
-            public IEnumerable<EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order> Last2Orders =>
+            public IEnumerable<Order> Last2Orders =>
                 Orders.OrderByDescending(x => x.RecordDate).Take(2);
 
             [Projectable]
-            public EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order GetLastOrderFromExternalDbContext(DbContext dbContext)
-                => dbContext.Set<EntityFrameworkCore.Projectables.FunctionalTests.ComplexModelTests.Order>().Where(x => x.UserId == Id).OrderByDescending(x => x.RecordDate).FirstOrDefault();
+            public Order GetLastOrderFromExternalDbContext(DbContext dbContext)
+                => dbContext.Set<Order>().Where(x => x.UserId == Id).OrderByDescending(x => x.RecordDate).FirstOrDefault();
 
         }
 

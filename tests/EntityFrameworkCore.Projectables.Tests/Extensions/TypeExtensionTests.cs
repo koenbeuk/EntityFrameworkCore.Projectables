@@ -32,6 +32,17 @@ namespace EntityFrameworkCore.Projectables.Tests.Extensions
             public override void GenericVirtualMethod<TArg>(TArg arg1) { }
         }
 
+        interface IStringId
+        {
+            string Id { get; }
+        }
+
+        class ItemWithExplicitInterfaceImplementation : IStringId
+        {
+            public int Id { get; set; }
+            string IStringId.Id => Id.ToString();
+        }
+
         [Fact]
         public void GetNestedTypePath_OuterType_Returns1Entry()
         {
@@ -119,6 +130,42 @@ namespace EntityFrameworkCore.Projectables.Tests.Extensions
             var resolvedMethod = derivedType.GetOverridingMethod(baseMethod);
 
             Assert.Equal(derivedMethod, resolvedMethod);
+        }
+
+        [Fact]
+        public void GetImplementingProperty_ExplicitInterfaceImplementation_ReturnsConcreteImplementation()
+        {
+            // This test verifies that when a class explicitly implements an interface property
+            // (e.g., string IStringId.Id => Id.ToString();), GetImplementingProperty doesn't throw
+            // an InvalidOperationException
+            var interfaceType = typeof(IStringId);
+            var interfaceProperty = interfaceType.GetProperty("Id")!;
+            var concreteType = typeof(ItemWithExplicitInterfaceImplementation);
+
+            // This should not throw InvalidOperationException
+            var result = concreteType.GetImplementingProperty(interfaceProperty);
+
+            // The result should be the explicit interface implementation property
+            Assert.NotNull(result);
+            Assert.NotEqual(interfaceProperty, result);
+            Assert.Contains("IStringId.Id", result.Name);
+        }
+
+        [Fact]
+        public void GetConcreteProperty_ExplicitInterfaceImplementation_ReturnsConcreteImplementation()
+        {
+            // This test verifies the same scenario but through GetConcreteProperty which is the entry point
+            var interfaceType = typeof(IStringId);
+            var interfaceProperty = interfaceType.GetProperty("Id")!;
+            var concreteType = typeof(ItemWithExplicitInterfaceImplementation);
+
+            // This should not throw InvalidOperationException
+            var result = concreteType.GetConcreteProperty(interfaceProperty);
+
+            // The result should be the explicit interface implementation property
+            Assert.NotNull(result);
+            Assert.NotEqual(interfaceProperty, result);
+            Assert.Contains("IStringId.Id", result.Name);
         }
     }
 }
