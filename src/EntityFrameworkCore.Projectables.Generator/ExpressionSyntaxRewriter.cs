@@ -331,7 +331,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                 if (arm.Pattern is DeclarationPatternSyntax declaration && declaration.Designation is SingleVariableDesignationSyntax)
                 {
                     condition = SyntaxFactory.BinaryExpression(SyntaxKind.IsExpression, visitedGoverning, declaration.Type);
-                    armExpression = ReplaceVariableWithCast(armExpression, declaration, node.GoverningExpression);
+                    armExpression = ReplaceVariableWithCast(armExpression, declaration, visitedGoverning);
                 }
                 else
                 {
