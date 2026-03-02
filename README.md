@@ -21,7 +21,8 @@ Flexible projection magic for EF Core
 Assuming this sample:
 
 ```csharp
-class Order {
+class Order
+{
     public int Id { get; set; }
     public int UserId { get; set; }
     public DateTime CreatedDate { get; set; }
@@ -36,7 +37,8 @@ class Order {
     [Projectable] public decimal GrandTotal => Subtotal + Tax;
 }
 
-public static class UserExtensions {
+public static class UserExtensions
+{
     [Projectable]
     public static Order GetMostRecentOrderForUser(this User user, DateTime? cutoffDate) => 
         user.Orders
@@ -92,7 +94,7 @@ Currently, there is no support for overloaded methods. Each method name needs to
 No, the runtime component injects itself into the EFCore query compilation pipeline, thus having no impact on the database provider used. Of course, you're still limited to whatever your database provider can do.
 
 #### Are there performance implications that I should be aware of?
-There are two compatibility modes: Limited and Full (Default). Most of the time, limited compatibility mode is sufficient. However, if you are running into issues with failed query compilation, then you may want to stick with Full compatibility mode. With Full compatibility mode, each query will first be expanded (any calls to Projectable properties and methods will be replaced by their respective expression) before being handed off to EFCore. (This is similar to how LinqKit/LinqExpander/Expressionify works.) Because of this additional step, there is a small performance impact. Limited compatibility mode is smart about things and only expands the query after it has been accepted by EF. The expanded query will then be stored in the Query Cache. With Limited compatibility, you will likely see increased performance over EFCore without projectables.
+There are two compatibility modes: Limited and Full (Default). Most of the time, limited compatibility mode is sufficient. However, if you are running into issues with failed query compilation, then you may want to stick with Full compatibility mode. With Full compatibility mode, each query will first be expanded (any calls to Projectable properties and methods will be replaced by their respective expression) before being handed off to EFCore. (This is similar to how LinqKit/LinqExpander/Expressionify works.) Because of this additional step, there is a small performance impact. Limited compatibility mode is smart about things and only expands the query after it has been accepted by EF. The expanded query will then be stored in the Query Cache. With Limited compatibility, you will likely see increased performance over EFCore without Projectables.
 
 #### Can I call additional properties and methods from my Projectable properties and methods?
 Yes, you can! Any projectable property/method can call into other properties and methods as long as those properties/methods are native to EFCore or marked with a Projectable attribute.
@@ -106,12 +108,12 @@ public static int Squared(this int i) => i * i;
 Any call to squared given any int will perfectly translate to SQL.
 
 #### How do I deal with nullable properties
-Expressions and Lamdas are different and not equal. Expressions can only express a subset of valid CSharp statements that are allowed in lambda's and arrow functions. One obvious limitation is the null-conditional operator. Consider the following example:
+Expressions and Lambdas are different and not equal. Expressions can only express a subset of valid C# statements that are allowed in lambda's and arrow functions. One obvious limitation is the null-conditional operator. Consider the following example:
 ```csharp
 [Projectable]
 public static string? GetFullAddress(this User? user) => user?.Location?.AddressLine1 + " " + user?.Location.AddressLine2;
 ```
-This is a perfectly valid arrow function but it can't be translated directly to an expression tree. This Project will generate an error by default and suggest 2 solutions: Either you rewrite the function to explicitly check for nullables or you let the generator do that for you!
+This is a perfectly valid arrow function, but it can't be translated directly to an expression tree. This Project will generate an error by default and suggest 2 solutions: Either you rewrite the function to explicitly check for nullables or you let the generator do that for you!
 
 Starting from the official release of V2, we can now hint the generator in how to translate this arrow function to an expression tree. We can say:
 ```csharp
@@ -131,7 +133,7 @@ This will rewrite your expression to explicitly check for nullables. In the form
 ```
 Note that using rewrite (not ignore) may increase the actual SQL query complexity being generated with some database providers such as SQL Server
 
-#### Can I use projectables in any part of my query?
+#### Can I use Projectables in any part of my query?
 Certainly, consider the following example: 
 ```csharp
 public class User
@@ -193,7 +195,7 @@ The generator will also detect and report side effects (assignments, method call
 
 #### Can I use `[Projectable]` on a constructor?
 
-Yes! Constructors can now be marked with `[Projectable]`. The generator will produce a member-init expression (`new T() { Prop = value, … }`) that EF Core can translate to a SQL projection.
+Yes! As of version 6.x, constructors can now be marked with `[Projectable]`. The generator will produce a member-init expression (`new T() { Prop = value, … }`) that EF Core can translate to a SQL projection.
 
 **Requirements:**
 - The class must expose an accessible **parameterless constructor** (public, internal, or protected-internal), because the generated code relies on `new T() { … }` syntax.
@@ -314,7 +316,7 @@ Multiple `[Projectable]` constructors (overloads) per class are fully supported.
 
 #### Can I use pattern matching in projectable members?
 
-Yes! The generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
+Yes! As of version 6.x, the generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
 
 **Switch expressions** with the following arm patterns are supported:
 
@@ -387,7 +389,7 @@ public static ItemData ToData(this Item item) =>
 Unsupported patterns (e.g. positional/deconstruct patterns, variable designations outside switch arms) are reported as **EFP0007**.
 
 #### How do I expand enum extension methods?
-When you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
+As of version 6.x, when you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
 
 ```csharp
 public enum OrderStatus
