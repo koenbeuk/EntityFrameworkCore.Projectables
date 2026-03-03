@@ -8,8 +8,8 @@ namespace EntityFrameworkCore.Projectables.Benchmarks
 {
     /// <summary>
     /// Micro-benchmarks <see cref="ProjectionExpressionResolver.FindGeneratedExpression"/> in
-    /// isolation (no EF Core overhead) to directly compare the registry lookup path against
-    /// the previous per-call reflection chain.
+    /// isolation (no EF Core overhead) to directly compare the static registry path against
+    /// the reflection-based path (<see cref="ProjectionExpressionResolver.FindGeneratedExpressionViaReflection"/>).
     /// </summary>
     [MemoryDiagnoser]
     public class ExpressionResolverBenchmark
@@ -25,16 +25,32 @@ namespace EntityFrameworkCore.Projectables.Benchmarks
 
         private readonly ProjectionExpressionResolver _resolver = new();
 
+        // ── Registry (source-generated) path ─────────────────────────────────
+
         [Benchmark(Baseline = true)]
-        public LambdaExpression? ResolveProperty()
+        public LambdaExpression? ResolveProperty_Registry()
             => _resolver.FindGeneratedExpression(_propertyMember);
 
         [Benchmark]
-        public LambdaExpression? ResolveMethod()
+        public LambdaExpression? ResolveMethod_Registry()
             => _resolver.FindGeneratedExpression(_methodMember);
 
         [Benchmark]
-        public LambdaExpression? ResolveMethodWithParam()
+        public LambdaExpression? ResolveMethodWithParam_Registry()
             => _resolver.FindGeneratedExpression(_methodWithParamMember);
+
+        // ── Reflection path ───────────────────────────────────────────────────
+
+        [Benchmark]
+        public LambdaExpression? ResolveProperty_Reflection()
+            => ProjectionExpressionResolver.FindGeneratedExpressionViaReflection(_propertyMember);
+
+        [Benchmark]
+        public LambdaExpression? ResolveMethod_Reflection()
+            => ProjectionExpressionResolver.FindGeneratedExpressionViaReflection(_methodMember);
+
+        [Benchmark]
+        public LambdaExpression? ResolveMethodWithParam_Reflection()
+            => ProjectionExpressionResolver.FindGeneratedExpressionViaReflection(_methodWithParamMember);
     }
 }
