@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.Benchmarks;
 [MemoryDiagnoser]
 public class GeneratorBenchmarks
 {
-    [Params(1, 10, 50, 100)]
+    [Params(1, 100, 1000)]
     public int ProjectableCount { get; set; }
 
     private Compilation _compilation = null!;
