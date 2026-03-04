@@ -22,11 +22,14 @@ namespace EntityFrameworkCore.Projectables.Services
             _assemblyRegistries.GetOrAdd(assembly, static asm =>
             {
                 var registryType = asm.GetType("EntityFrameworkCore.Projectables.Generated.ProjectionRegistry");
-                if (registryType is null) return null;
-                var tryGetMethod = registryType.GetMethod("TryGet", BindingFlags.Static | BindingFlags.Public);
-                if (tryGetMethod is null) return null;
-                return (Func<MemberInfo, LambdaExpression>)Delegate.CreateDelegate(
-                    typeof(Func<MemberInfo, LambdaExpression>), tryGetMethod);
+                var tryGetMethod = registryType?.GetMethod("TryGet", BindingFlags.Static | BindingFlags.Public);
+                
+                if (tryGetMethod is null)
+                {
+                    return null;
+                }
+
+                return (Func<MemberInfo, LambdaExpression>)Delegate.CreateDelegate(typeof(Func<MemberInfo, LambdaExpression>), tryGetMethod);
             });
 
         public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
@@ -88,16 +91,12 @@ namespace EntityFrameworkCore.Projectables.Services
                 // The first call per assembly does a reflection lookup to find the registry class and
                 // caches it as a delegate; subsequent calls use the cached delegate for an O(1) dictionary lookup.
                 var registry = GetAssemblyRegistry(declaringType.Assembly);
-                if (registry is not null)
-                {
-                    var registeredExpr = registry(projectableMemberInfo);
-                    if (registeredExpr is not null)
-                        return registeredExpr;
-                }
-
-                // Slow path: reflection fallback for open-generic class members and generic methods
-                // that are not yet in the registry.
-                return FindGeneratedExpressionViaReflection(projectableMemberInfo);
+                var registeredExpr = registry?.Invoke(projectableMemberInfo);
+                
+                return registeredExpr ??
+                   // Slow path: reflection fallback for open-generic class members and generic methods
+                   // that are not yet in the registry.
+                   FindGeneratedExpressionViaReflection(projectableMemberInfo);
             }
         }
 
