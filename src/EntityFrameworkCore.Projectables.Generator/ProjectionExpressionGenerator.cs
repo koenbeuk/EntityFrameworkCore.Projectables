@@ -349,20 +349,42 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// Emits the <c>ProjectionRegistry.g.cs</c> file that aggregates all projectable members
         /// into a single static dictionary keyed by <see cref="System.RuntimeMethodHandle.Value"/>.
         /// Uses SyntaxFactory for the class/method/field structure, consistent with <see cref="Execute"/>.
+        /// The generated <c>Build()</c> method uses a shared <c>Register</c> helper to avoid repeating
+        /// the lookup boilerplate for every entry.
         /// </summary>
         static void EmitRegistry(ImmutableArray<ProjectableRegistryEntry?> entries, SourceProductionContext context)
         {
-            var validEntries = entries
+            // Build the per-entry Register(...) statements first so we can bail out early
+            // if every entry is generic (they all fall back to reflection, no registry needed).
+            var entryStatements = entries
                 .Where(e => e is not null)
-                .Select(e => e!)
+                .Select(e => BuildRegistryEntryStatement(e!))
+                .Where(s => s is not null)
+                .Select(s => s!)
                 .ToList();
 
-            if (validEntries.Count == 0)
+            if (entryStatements.Count == 0)
                 return;
 
-            // Build the Build() method body: one block per valid (non-generic) entry
+            // Build() body:
+            //   const BindingFlags allFlags = ...;
+            //   var map = new Dictionary<nint, LambdaExpression>();
+            //   Register(map, typeof(T).GetXxx(...), "ClassName");  ← one line per entry
+            //   return map;
             var buildStatements = new List<StatementSyntax>
             {
+                // const BindingFlags allFlags = BindingFlags.Public | BindingFlags.NonPublic | ...;
+                LocalDeclarationStatement(
+                    VariableDeclaration(ParseTypeName("BindingFlags"))
+                        .AddVariables(
+                            VariableDeclarator("allFlags")
+                                .WithInitializer(EqualsValueClause(
+                                    ParseExpression(
+                                        "BindingFlags.Public | BindingFlags.NonPublic | " +
+                                        "BindingFlags.Instance | BindingFlags.Static")))))
+                    .WithModifiers(TokenList(Token(SyntaxKind.ConstKeyword))),
+
+                // var map = new Dictionary<nint, LambdaExpression>();
                 LocalDeclarationStatement(
                     VariableDeclaration(ParseTypeName("var"))
                         .AddVariables(
@@ -373,13 +395,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                                         .WithArgumentList(ArgumentList()))))),
             };
 
-            foreach (var entry in validEntries)
-            {
-                var block = BuildRegistryEntryBlock(entry);
-                if (block is not null)
-                    buildStatements.Add(block);
-            }
-
+            buildStatements.AddRange(entryStatements);
             buildStatements.Add(ReturnStatement(IdentifierName("map")));
 
             var classSyntax = ClassDeclaration("ProjectionRegistry")
@@ -459,12 +475,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                                     }))))
                         .WithSemicolonToken(Token(SyntaxKind.SemicolonToken)),
 
-                    // private static Dictionary<nint, LambdaExpression> Build()
+                    // private static Dictionary<nint, LambdaExpression> Build() { ... }
                     MethodDeclaration(ParseTypeName("Dictionary<nint, LambdaExpression>"), "Build")
                         .WithModifiers(TokenList(
                             Token(SyntaxKind.PrivateKeyword),
                             Token(SyntaxKind.StaticKeyword)))
-                        .WithBody(Block(buildStatements)));
+                        .WithBody(Block(buildStatements)),
+
+                    // private static void Register(Dictionary<nint, LambdaExpression> map, MethodBase? m, string exprClass)
+                    BuildRegisterHelperMethod());
 
             var compilationUnit = CompilationUnit()
                 .AddUsings(
@@ -484,154 +503,123 @@ namespace EntityFrameworkCore.Projectables.Generator
         }
 
         /// <summary>
-        /// Builds the registration block for a single projectable entry inside <c>Build()</c>.
+        /// Builds a single compact <c>Register(map, typeof(T).GetXxx(...), "ClassName")</c>
+        /// statement for one projectable entry in <c>Build()</c>.
         /// Returns <see langword="null"/> for generic class/method entries (they fall back to reflection).
         /// </summary>
-        static BlockSyntax? BuildRegistryEntryBlock(ProjectableRegistryEntry entry)
+        static StatementSyntax? BuildRegistryEntryStatement(ProjectableRegistryEntry entry)
         {
             if (entry.IsGenericClass || entry.IsGenericMethod)
                 return null;
 
-            var bindingFlagsExpr = ParseExpression(
-                "global::System.Reflection.BindingFlags.Public | " +
-                "global::System.Reflection.BindingFlags.NonPublic | " +
-                "global::System.Reflection.BindingFlags.Instance | " +
-                "global::System.Reflection.BindingFlags.Static");
-
-            // var t = typeof(DeclaringType);
-            var tDecl = LocalDeclarationStatement(
-                VariableDeclaration(ParseTypeName("var"))
-                    .AddVariables(
-                        VariableDeclarator("t")
-                            .WithInitializer(EqualsValueClause(
-                                TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName))))));
-
-            // var m = t.GetProperty(...) / t.GetMethod(...) / t.GetConstructor(...);
-            StatementSyntax? mDecl = entry.MemberKind switch
+            // typeof(DeclaringType).GetProperty/Method/Constructor(name, allFlags, ...)
+            ExpressionSyntax? memberCallExpr = entry.MemberKind switch
             {
-                "Property" => LocalDeclarationStatement(
-                    VariableDeclaration(ParseTypeName("var"))
-                        .AddVariables(
-                            VariableDeclarator("m")
-                                .WithInitializer(EqualsValueClause(
-                                    ConditionalAccessExpression(
-                                        InvocationExpression(
-                                            MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                                IdentifierName("t"),
-                                                IdentifierName("GetProperty")))
-                                            .AddArgumentListArguments(
-                                                Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
-                                                    Literal(entry.MemberLookupName))),
-                                                Argument(bindingFlagsExpr)),
-                                        MemberBindingExpression(IdentifierName("GetMethod"))))))),
+                // typeof(T).GetProperty("Name", allFlags)?.GetMethod
+                "Property" => ConditionalAccessExpression(
+                    InvocationExpression(
+                        MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                            TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
+                            IdentifierName("GetProperty")))
+                        .AddArgumentListArguments(
+                            Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
+                                Literal(entry.MemberLookupName))),
+                            Argument(IdentifierName("allFlags"))),
+                    MemberBindingExpression(IdentifierName("GetMethod"))),
 
-                "Method" => LocalDeclarationStatement(
-                    VariableDeclaration(ParseTypeName("var"))
-                        .AddVariables(
-                            VariableDeclarator("m")
-                                .WithInitializer(EqualsValueClause(
-                                    InvocationExpression(
-                                        MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("t"),
-                                            IdentifierName("GetMethod")))
-                                        .AddArgumentListArguments(
-                                            Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
-                                                Literal(entry.MemberLookupName))),
-                                            Argument(bindingFlagsExpr),
-                                            Argument(LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                                            Argument(BuildTypeArrayExpr(entry.ParameterTypeNames)),
-                                            Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))))))),
+                // typeof(T).GetMethod("Name", allFlags, null, new Type[] {...}, null)
+                "Method" => InvocationExpression(
+                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
+                        IdentifierName("GetMethod")))
+                    .AddArgumentListArguments(
+                        Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
+                            Literal(entry.MemberLookupName))),
+                        Argument(IdentifierName("allFlags")),
+                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression)),
+                        Argument(BuildTypeArrayExpr(entry.ParameterTypeNames)),
+                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))),
 
-                "Constructor" => LocalDeclarationStatement(
-                    VariableDeclaration(ParseTypeName("var"))
-                        .AddVariables(
-                            VariableDeclarator("m")
-                                .WithInitializer(EqualsValueClause(
-                                    InvocationExpression(
-                                        MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("t"),
-                                            IdentifierName("GetConstructor")))
-                                        .AddArgumentListArguments(
-                                            Argument(bindingFlagsExpr),
-                                            Argument(LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                                            Argument(BuildTypeArrayExpr(entry.ParameterTypeNames)),
-                                            Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))))))),
+                // typeof(T).GetConstructor(allFlags, null, new Type[] {...}, null)
+                "Constructor" => InvocationExpression(
+                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
+                        IdentifierName("GetConstructor")))
+                    .AddArgumentListArguments(
+                        Argument(IdentifierName("allFlags")),
+                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression)),
+                        Argument(BuildTypeArrayExpr(entry.ParameterTypeNames)),
+                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))),
 
                 _ => null
             };
 
-            if (mDecl is null)
+            if (memberCallExpr is null)
                 return null;
 
-            // var exprType = t.Assembly.GetType("GeneratedClassFullName");
-            var exprTypeDecl = LocalDeclarationStatement(
-                VariableDeclaration(ParseTypeName("var"))
-                    .AddVariables(
-                        VariableDeclarator("exprType")
-                            .WithInitializer(EqualsValueClause(
-                                InvocationExpression(
-                                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                        MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("t"),
-                                            IdentifierName("Assembly")),
-                                        IdentifierName("GetType")))
-                                    .AddArgumentListArguments(
-                                        Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
-                                            Literal(entry.GeneratedClassFullName))))))));
-
-            // var exprMethod = exprType?.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
-            var exprMethodDecl = LocalDeclarationStatement(
-                VariableDeclaration(ParseTypeName("var"))
-                    .AddVariables(
-                        VariableDeclarator("exprMethod")
-                            .WithInitializer(EqualsValueClause(
-                                ConditionalAccessExpression(
-                                    IdentifierName("exprType"),
-                                    InvocationExpression(
-                                        MemberBindingExpression(IdentifierName("GetMethod")))
-                                        .AddArgumentListArguments(
-                                            Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
-                                                Literal("Expression"))),
-                                            Argument(ParseExpression(
-                                                "global::System.Reflection.BindingFlags.Static | " +
-                                                "global::System.Reflection.BindingFlags.NonPublic"))))))));
-
-            // if (exprMethod != null)
-            //     map[m.MethodHandle.Value] = (LambdaExpression)exprMethod.Invoke(null, null)!;
-            var ifExprMethod = IfStatement(
-                BinaryExpression(SyntaxKind.NotEqualsExpression,
-                    IdentifierName("exprMethod"),
-                    LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                ExpressionStatement(
-                    AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                        ElementAccessExpression(IdentifierName("map"))
-                            .AddArgumentListArguments(
-                                Argument(
-                                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                        MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("m"),
-                                            IdentifierName("MethodHandle")),
-                                        IdentifierName("Value")))),
-                        CastExpression(
-                            ParseTypeName("global::System.Linq.Expressions.LambdaExpression"),
-                            PostfixUnaryExpression(SyntaxKind.SuppressNullableWarningExpression,
-                                InvocationExpression(
-                                    MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                                        IdentifierName("exprMethod"),
-                                        IdentifierName("Invoke")))
-                                    .AddArgumentListArguments(
-                                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                                        Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))))))));
-
-            // if (m != null) { exprType decl; exprMethod decl; if (exprMethod != null) ... }
-            var ifM = IfStatement(
-                BinaryExpression(SyntaxKind.NotEqualsExpression,
-                    IdentifierName("m"),
-                    LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                Block(exprTypeDecl, exprMethodDecl, ifExprMethod));
-
-            return Block(tDecl, mDecl, ifM);
+            // Register(map, <memberCallExpr>, "<generatedClassFullName>");
+            return ExpressionStatement(
+                InvocationExpression(IdentifierName("Register"))
+                    .AddArgumentListArguments(
+                        Argument(IdentifierName("map")),
+                        Argument(memberCallExpr),
+                        Argument(LiteralExpression(SyntaxKind.StringLiteralExpression,
+                            Literal(entry.GeneratedClassFullName)))));
         }
+
+        /// <summary>
+        /// Builds the <c>Register</c> private static helper method that all per-entry calls delegate to.
+        /// It handles the null checks and the common reflection lookup pattern once, centrally.
+        /// </summary>
+        static MethodDeclarationSyntax BuildRegisterHelperMethod() =>
+            // private static void Register(Dictionary<nint, LambdaExpression> map, MethodBase? m, string exprClass)
+            // {
+            //     if (m is null) return;
+            //     var exprType = m.DeclaringType?.Assembly.GetType(exprClass);
+            //     var exprMethod = exprType?.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
+            //     if (exprMethod is not null)
+            //         map[m.MethodHandle.Value] = (LambdaExpression)exprMethod.Invoke(null, null)!;
+            // }
+            MethodDeclaration(PredefinedType(Token(SyntaxKind.VoidKeyword)), "Register")
+                .WithModifiers(TokenList(
+                    Token(SyntaxKind.PrivateKeyword),
+                    Token(SyntaxKind.StaticKeyword)))
+                .AddParameterListParameters(
+                    Parameter(Identifier("map"))
+                        .WithType(ParseTypeName("Dictionary<nint, LambdaExpression>")),
+                    Parameter(Identifier("m"))
+                        .WithType(ParseTypeName("MethodBase?")),
+                    Parameter(Identifier("exprClass"))
+                        .WithType(PredefinedType(Token(SyntaxKind.StringKeyword))))
+                .WithBody(Block(
+                    // if (m is null) return;
+                    IfStatement(
+                        IsPatternExpression(
+                            IdentifierName("m"),
+                            ConstantPattern(LiteralExpression(SyntaxKind.NullLiteralExpression))),
+                        ReturnStatement()),
+                    // var exprType = m.DeclaringType?.Assembly.GetType(exprClass);
+                    LocalDeclarationStatement(
+                        VariableDeclaration(ParseTypeName("var"))
+                            .AddVariables(
+                                VariableDeclarator("exprType")
+                                    .WithInitializer(EqualsValueClause(
+                                        ParseExpression("m.DeclaringType?.Assembly.GetType(exprClass)"))))),
+                    // var exprMethod = exprType?.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
+                    LocalDeclarationStatement(
+                        VariableDeclaration(ParseTypeName("var"))
+                            .AddVariables(
+                                VariableDeclarator("exprMethod")
+                                    .WithInitializer(EqualsValueClause(
+                                        ParseExpression(
+                                            @"exprType?.GetMethod(""Expression"", BindingFlags.Static | BindingFlags.NonPublic)"))))),
+                    // if (exprMethod is not null)
+                    //     map[m.MethodHandle.Value] = (LambdaExpression)exprMethod.Invoke(null, null)!;
+                    IfStatement(
+                        ParseExpression("exprMethod is not null"),
+                        ExpressionStatement(
+                            ParseExpression(
+                                "map[m.MethodHandle.Value] = (LambdaExpression)exprMethod.Invoke(null, null)!")))));
 
         /// <summary>
         /// Builds the <c>typeof(...)</c>-array expression used for reflection method/constructor lookup.
