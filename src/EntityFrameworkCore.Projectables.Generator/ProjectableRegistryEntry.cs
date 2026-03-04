@@ -7,15 +7,13 @@ namespace EntityFrameworkCore.Projectables.Generator
     /// Contains only primitive types and ImmutableArray&lt;string&gt; so that value equality
     /// works correctly across incremental generation steps.
     /// </summary>
-    internal sealed record ProjectableRegistryEntry(
+    sealed internal record ProjectableRegistryEntry(
         string DeclaringTypeFullName,
         string MemberKind,
         string MemberLookupName,
         string GeneratedClassFullName,
         bool IsGenericClass,
-        int ClassTypeParamCount,
         bool IsGenericMethod,
-        int MethodTypeParamCount,
         ImmutableArray<string> ParameterTypeNames
     );
 }
