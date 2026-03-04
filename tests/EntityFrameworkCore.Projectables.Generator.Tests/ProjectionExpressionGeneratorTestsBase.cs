@@ -43,7 +43,7 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         /// </summary>
         public ImmutableArray<SyntaxTree> GeneratedTrees =>
             _inner.GeneratedTrees
-                .Where(t => !t.FilePath.EndsWith("ProjectionRegistry.g.cs"))
+                .Where(t => !t.FilePath.EndsWith("ProjectionRegistry.g.cs", StringComparison.Ordinal))
                 .ToImmutableArray();
 
         /// <summary>
@@ -56,7 +56,7 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         /// The generated <c>ProjectionRegistry.g.cs</c> tree, or <c>null</c> if it was not generated.
         /// </summary>
         public SyntaxTree? RegistryTree =>
-            _inner.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("ProjectionRegistry.g.cs"));
+            _inner.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("ProjectionRegistry.g.cs", StringComparison.Ordinal));
     }
 
     protected Compilation CreateCompilation([StringSyntax("csharp")] string source)

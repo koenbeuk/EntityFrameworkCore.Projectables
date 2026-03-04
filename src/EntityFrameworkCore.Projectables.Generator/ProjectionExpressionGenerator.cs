@@ -647,7 +647,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
 
             var typeofExprs = parameterTypeNames
-                .Select(ExpressionSyntax (name) => TypeOfExpression(ParseTypeName(name)))
+                .Select(name => (ExpressionSyntax)TypeOfExpression(ParseTypeName(name)))
                 .ToArray();
 
             return ArrayCreationExpression(
