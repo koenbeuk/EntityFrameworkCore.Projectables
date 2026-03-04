@@ -87,6 +87,11 @@ public class GeneratorBenchmarks
         sb.AppendLine();
         sb.AppendLine("namespace GeneratorBenchmarkInput;");
         sb.AppendLine();
+
+        // Enum used by the switch-expression and is-pattern members.
+        sb.AppendLine("public enum OrderStatus { Pending, Active, Completed, Cancelled }");
+        sb.AppendLine();
+
         sb.AppendLine("public class Order");
         sb.AppendLine("{");
         sb.AppendLine("    public string FirstName { get; set; } = string.Empty;");
@@ -96,34 +101,133 @@ public class GeneratorBenchmarks
         sb.AppendLine("    public decimal TaxRate { get; set; }");
         sb.AppendLine("    public DateTime? DeletedAt { get; set; }");
         sb.AppendLine("    public bool IsEnabled { get; set; }");
+        sb.AppendLine("    public int Priority { get; set; }");
+        sb.AppendLine("    public OrderStatus Status { get; set; }");
         sb.AppendLine();
 
+        // Nine member kinds — one per transformer path in the generator:
+        //  0  simple string-concat property          (ExpressionSyntaxRewriter baseline)
+        //  1  boolean null-check property            (ExpressionSyntaxRewriter, logical AND)
+        //  2  single-param decimal method            (ExpressionSyntaxRewriter, arithmetic)
+        //  3  multi-param string method              (ExpressionSyntaxRewriter, concat)
+        //  4  null-conditional property              (NullConditionalRewrite, Rewrite mode)
+        //  5  switch-expression method               (SwitchExpressionRewrite, relational patterns)
+        //  6  is-pattern property                    (VisitIsPatternExpression, not-null pattern)
+        //  7  block-bodied if/else chain             (BlockStatementConverter)
+        //  8  block-bodied switch with local var     (BlockStatementConverter + local replacement)
         for (int i = 0; i < projectableCount; i++)
         {
-            sb.AppendLine("    [Projectable]");
-            switch (i % 4)
+            switch (i % 9)
             {
                 case 0:
-                    // Computed string property
+                    // Expression-bodied: simple string concatenation.
+                    sb.AppendLine("    [Projectable]");
                     sb.AppendLine($"    public string FullName{i} => FirstName + \" \" + LastName;");
                     break;
+
                 case 1:
-                    // Boolean flag property
+                    // Expression-bodied: null check combined with logical AND.
+                    sb.AppendLine("    [Projectable]");
                     sb.AppendLine($"    public bool IsActive{i} => DeletedAt == null && IsEnabled;");
                     break;
+
                 case 2:
-                    // Decimal method with single param
+                    // Expression-bodied: single-param decimal arithmetic.
+                    sb.AppendLine("    [Projectable]");
                     sb.AppendLine($"    public decimal TotalWithTax{i}(decimal taxRate) => Amount * (1 + taxRate);");
                     break;
+
                 case 3:
-                    // Multi-param method returning string
+                    // Expression-bodied: multi-param string method.
+                    sb.AppendLine("    [Projectable]");
                     sb.AppendLine($"    public string FormatSummary{i}(string prefix, int count) => prefix + \": \" + FirstName + \" x\" + count;");
                     break;
+
+                case 4:
+                    // Null-conditional member access — exercises NullConditionalRewrite transformer.
+                    sb.AppendLine("    [Projectable(NullConditionalRewriteSupport = NullConditionalRewriteSupport.Rewrite)]");
+                    sb.AppendLine($"    public int? EmailLength{i} => Email?.Length;");
+                    break;
+
+                case 5:
+                    // Switch expression with relational patterns — exercises SwitchExpressionRewrite transformer.
+                    sb.AppendLine("    [Projectable]");
+                    sb.AppendLine($"    public string GetGrade{i}(int score) => score switch {{ >= 90 => \"A\", >= 70 => \"B\", _ => \"C\" }};");
+                    break;
+
+                case 6:
+                    // Is-pattern (not-null) — exercises ExpressionSyntaxRewriter.VisitIsPatternExpression.
+                    sb.AppendLine("    [Projectable]");
+                    sb.AppendLine($"    public bool HasEmail{i} => Email is not null;");
+                    break;
+
+                case 7:
+                    // Block-bodied if/else chain — exercises BlockStatementConverter.
+                    sb.AppendLine("    [Projectable(AllowBlockBody = true)]");
+                    sb.AppendLine($"    public string GetStatusLabel{i}()");
+                    sb.AppendLine("    {");
+                    sb.AppendLine("        if (DeletedAt != null)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            return \"Deleted\";");
+                    sb.AppendLine("        }");
+                    sb.AppendLine("        if (IsEnabled)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            return \"Active: \" + FirstName;");
+                    sb.AppendLine("        }");
+                    sb.AppendLine("        return \"Inactive\";");
+                    sb.AppendLine("    }");
+                    break;
+
+                case 8:
+                    // Block-bodied switch statement with a local variable — exercises
+                    // BlockStatementConverter together with local-variable replacement.
+                    sb.AppendLine("    [Projectable(AllowBlockBody = true)]");
+                    sb.AppendLine($"    public string GetPriorityName{i}()");
+                    sb.AppendLine("    {");
+                    sb.AppendLine("        var p = Priority;");
+                    sb.AppendLine("        switch (p)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine("            case 1: return \"Low\";");
+                    sb.AppendLine("            case 2: return \"Medium\";");
+                    sb.AppendLine("            case 3: return \"High\";");
+                    sb.AppendLine("            default: return \"Unknown\";");
+                    sb.AppendLine("        }");
+                    sb.AppendLine("    }");
+                    break;
             }
+
             sb.AppendLine();
         }
 
         sb.AppendLine("}");
+        sb.AppendLine();
+
+        // DTO classes with [Projectable] constructors — exercises the constructor
+        // projection path (ProjectableInterpreter constructor handling).
+        // Count scales proportionally: roughly one DTO per nine Order members.
+        int ctorCount = Math.Max(1, projectableCount / 9);
+        for (int j = 0; j < ctorCount; j++)
+        {
+            sb.AppendLine($"public class OrderSummaryDto{j}");
+            sb.AppendLine("{");
+            sb.AppendLine("    public string FullName { get; set; } = string.Empty;");
+            sb.AppendLine("    public decimal Total { get; set; }");
+            sb.AppendLine("    public bool IsActive { get; set; }");
+            sb.AppendLine();
+            // Parameterless constructor required by [Projectable] constructor support.
+            sb.AppendLine($"    public OrderSummaryDto{j}() {{ }}");
+            sb.AppendLine();
+            sb.AppendLine("    [Projectable]");
+            sb.AppendLine($"    public OrderSummaryDto{j}(string firstName, string lastName, decimal amount, decimal taxRate, bool isActive)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        FullName = firstName + \" \" + lastName;");
+            sb.AppendLine("        Total = amount * (1 + taxRate);");
+            sb.AppendLine("        IsActive = isActive && amount > 0;");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+
         return sb.ToString();
     }
 }
