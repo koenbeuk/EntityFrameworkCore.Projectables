@@ -1,8 +1,24 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace EntityFrameworkCore.Projectables.Generator;
+
+/// <summary>
+/// Compares two <see cref="SyntaxTree"/> instances by reference identity.
+/// Roslyn reuses the same SyntaxTree object for a file that has not been modified,
+/// so reference equality is a cheap and correct way to detect source-file changes.
+/// </summary>
+file sealed class ReferenceEqualityTreeComparer : IEqualityComparer<SyntaxTree>
+{
+    public static readonly ReferenceEqualityTreeComparer Instance = new();
+    private ReferenceEqualityTreeComparer() { }
+
+    public bool Equals(SyntaxTree? x, SyntaxTree? y) => ReferenceEquals(x, y);
+    public int GetHashCode(SyntaxTree obj) => RuntimeHelpers.GetHashCode(obj);
+}
 
 public class MemberDeclarationSyntaxAndCompilationEqualityComparer
     : IEqualityComparer<((MemberDeclarationSyntax Member, ProjectableAttributeData Attribute), Compilation)>
@@ -44,7 +60,19 @@ public class MemberDeclarationSyntaxAndCompilationEqualityComparer
             return false;
         }
 
-        // 5. Assembly-level references — most expensive (ImmutableArray enumeration)
+        // 5. Check that all source syntax trees in the compilation are the same references.
+        //    Roslyn reuses SyntaxTree instances for unchanged files, so reference comparison
+        //    is cheap and sufficient to detect edits in other files within the same project.
+        //    This catches cases where a referenced type in another source file changes, which
+        //    would affect the semantic model used during code generation.
+        //    Use SequenceEqual with a simple reference-equality predicate, compatible with
+        //    netstandard2.0 where SyntaxTrees is IEnumerable<SyntaxTree>.
+        if (!xCompilation.SyntaxTrees.SequenceEqual(yCompilation.SyntaxTrees, ReferenceEqualityTreeComparer.Instance))
+        {
+            return false;
+        }
+
+        // 6. Assembly-level references — most expensive (ImmutableArray enumeration)
         return xCompilation.ExternalReferences.SequenceEqual(yCompilation.ExternalReferences);
     }
 
