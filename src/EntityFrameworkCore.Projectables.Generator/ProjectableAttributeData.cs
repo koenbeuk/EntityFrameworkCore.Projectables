@@ -14,28 +14,49 @@ public readonly record struct ProjectableAttributeData
     
     public ProjectableAttributeData(AttributeData attribute)
     {
-        NullConditionalRewriteSupport = attribute.NamedArguments
-            .Where(x => x.Key == "NullConditionalRewriteSupport")
-            .Where(x => x.Value.Kind == TypedConstantKind.Enum)
-            .Select(x => x.Value.Value)
-            .Where(x => Enum.IsDefined(typeof(NullConditionalRewriteSupport), x))
-            .Cast<NullConditionalRewriteSupport>()
-            .FirstOrDefault();
-
-        UseMemberBody = attribute.NamedArguments
-            .Where(x => x.Key == "UseMemberBody")
-            .Select(x => x.Value.Value)
-            .OfType<string?>()
-            .FirstOrDefault();
-
-        ExpandEnumMethods = attribute.NamedArguments
-            .Where(x => x.Key == "ExpandEnumMethods")
-            .Select(x => x.Value.Value is bool b && b)
-            .FirstOrDefault();
-
-        AllowBlockBody = attribute.NamedArguments
-            .Where(x => x.Key == "AllowBlockBody")
-            .Select(x => x.Value.Value is bool b && b)
-            .FirstOrDefault();
+        var nullConditionalRewriteSupport = default(NullConditionalRewriteSupport);
+        string? useMemberBody = null;
+        var expandEnumMethods = false;
+        var allowBlockBody = false;
+        
+        foreach (var namedArgument in attribute.NamedArguments)
+        {
+            var key = namedArgument.Key;
+            var value = namedArgument.Value;
+            switch (key)
+            {
+                case "NullConditionalRewriteSupport":
+                    if (value.Kind == TypedConstantKind.Enum &&
+                        value.Value is not null &&
+                        Enum.IsDefined(typeof(NullConditionalRewriteSupport), value.Value))
+                    {
+                        nullConditionalRewriteSupport = (NullConditionalRewriteSupport)value.Value;
+                    }
+                    break;
+                case "UseMemberBody":
+                    if (value.Value is string s)
+                    {
+                        useMemberBody = s;
+                    }
+                    break;
+                case "ExpandEnumMethods":
+                    if (value.Value is bool expand && expand)
+                    {
+                        expandEnumMethods = true;
+                    }
+                    break;
+                case "AllowBlockBody":
+                    if (value.Value is bool allow && allow)
+                    {
+                        allowBlockBody = true;
+                    }
+                    break;
+            }
+        }
+        
+        NullConditionalRewriteSupport = nullConditionalRewriteSupport;
+        UseMemberBody = useMemberBody;
+        ExpandEnumMethods = expandEnumMethods;
+        AllowBlockBody = allowBlockBody;
     }
 }

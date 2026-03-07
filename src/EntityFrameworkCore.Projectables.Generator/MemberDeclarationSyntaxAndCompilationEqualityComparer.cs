@@ -50,13 +50,24 @@ public class MemberDeclarationSyntaxAndCompilationEqualityComparer
 
     public int GetHashCode(((MemberDeclarationSyntax Member, ProjectableAttributeData Attribute), Compilation) obj)
     {
-        var (left, _) = obj;
+        var (left, compilation) = obj;
         unchecked
         {
             var hash = 17;
             hash = hash * 31 + _memberComparer.GetHashCode(left.Member);
             hash = hash * 31 + RuntimeHelpers.GetHashCode(left.Member.SyntaxTree);
             hash = hash * 31 + left.Attribute.GetHashCode();
+            
+            // Incorporate compilation external references to align with Equals
+            var references = compilation.ExternalReferences;
+            var referencesHash = 17;
+            referencesHash = referencesHash * 31 + references.Length;
+            foreach (var reference in references)
+            {
+                referencesHash = referencesHash * 31 + RuntimeHelpers.GetHashCode(reference);
+            }
+            hash = hash * 31 + referencesHash;
+            
             return hash;
         }
     }

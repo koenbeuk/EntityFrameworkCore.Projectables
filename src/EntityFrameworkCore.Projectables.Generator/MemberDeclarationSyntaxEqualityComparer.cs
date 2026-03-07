@@ -20,8 +20,19 @@ public class MemberDeclarationSyntaxEqualityComparer : IEqualityComparer<MemberD
             return false;
         }
 
-        // Same file, same node text = truly unchanged
-        return x.ToFullString() == y.ToFullString();
+        // Pré-filtres O(1) avant IsEquivalentTo
+        if (x.RawKind != y.RawKind)
+        {
+            return false;
+        }
+
+        if (x.FullSpan.Length != y.FullSpan.Length)
+        {
+            return false;
+        }
+
+        // Comparaison structurelle Roslyn — pas d'allocation de string
+        return x.IsEquivalentTo(y);
     }
 
     public int GetHashCode(MemberDeclarationSyntax obj)
@@ -30,7 +41,8 @@ public class MemberDeclarationSyntaxEqualityComparer : IEqualityComparer<MemberD
         {
             var hash = 17;
             hash = hash * 31 + RuntimeHelpers.GetHashCode(obj.SyntaxTree);
-            hash = hash * 31 + obj.ToFullString().GetHashCode();
+            hash = hash * 31 + obj.RawKind;
+            hash = hash * 31 + obj.FullSpan.Length;
             return hash;
         }
     }
