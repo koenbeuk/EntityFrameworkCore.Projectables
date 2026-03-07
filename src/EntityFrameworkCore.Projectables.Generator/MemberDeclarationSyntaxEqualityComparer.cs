@@ -1,4 +1,4 @@
-﻿using System.Text;
+﻿using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace EntityFrameworkCore.Projectables.Generator;
@@ -7,57 +7,31 @@ public class MemberDeclarationSyntaxEqualityComparer : IEqualityComparer<MemberD
 {
     public bool Equals(MemberDeclarationSyntax x, MemberDeclarationSyntax y)
     {
-        return GetMemberDeclarationSyntaxName(x) == GetMemberDeclarationSyntaxName(y);
+        if (ReferenceEquals(x, y))
+        {
+            return true;
+        }
+
+        // Must be in the same file — if the syntax tree changed, treat as different
+        // (Roslyn reuses SyntaxTree objects for unchanged files, so a new SyntaxTree
+        // means the file was edited, even if this specific node text looks the same)
+        if (!ReferenceEquals(x.SyntaxTree, y.SyntaxTree))
+        {
+            return false;
+        }
+
+        // Same file, same node text = truly unchanged
+        return x.ToFullString() == y.ToFullString();
     }
 
     public int GetHashCode(MemberDeclarationSyntax obj)
     {
-        return GetMemberDeclarationSyntaxName(obj).GetHashCode();
-    }
-
-    public static string GetMemberDeclarationSyntaxName(MemberDeclarationSyntax memberDeclaration)
-    {
-        var sb = new StringBuilder();
-
-        // Get the member name
-        if (memberDeclaration is MethodDeclarationSyntax methodDeclaration)
+        unchecked
         {
-            sb.Append(methodDeclaration.Identifier.Text);
+            var hash = 17;
+            hash = hash * 31 + RuntimeHelpers.GetHashCode(obj.SyntaxTree);
+            hash = hash * 31 + obj.ToFullString().GetHashCode();
+            return hash;
         }
-        else if (memberDeclaration is PropertyDeclarationSyntax propertyDeclaration)
-        {
-            sb.Append(propertyDeclaration.Identifier.Text);
-        }
-        else if (memberDeclaration is FieldDeclarationSyntax fieldDeclaration)
-        {
-            sb.Append(string.Join(", ", fieldDeclaration.Declaration.Variables.Select(v => v.Identifier.Text)));
-        }
-
-        // Traverse up the tree to get containing type names
-        var parent = memberDeclaration.Parent;
-        while (parent != null)
-        {
-            switch (parent)
-            {
-                case NamespaceDeclarationSyntax namespaceDeclaration:
-                    sb.Insert(0, namespaceDeclaration.Name + ".");
-                    break;
-                case ClassDeclarationSyntax classDeclaration:
-                    sb.Insert(0, classDeclaration.Identifier.Text + ".");
-                    break;
-                case StructDeclarationSyntax structDeclaration:
-                    sb.Insert(0, structDeclaration.Identifier.Text + ".");
-                    break;
-                case InterfaceDeclarationSyntax interfaceDeclaration:
-                    sb.Insert(0, interfaceDeclaration.Identifier.Text + ".");
-                    break;
-                case EnumDeclarationSyntax enumDeclaration:
-                    sb.Insert(0, enumDeclaration.Identifier.Text + ".");
-                    break;
-            }
-            parent = parent.Parent;
-        }
-
-        return sb.ToString();
     }
 }
