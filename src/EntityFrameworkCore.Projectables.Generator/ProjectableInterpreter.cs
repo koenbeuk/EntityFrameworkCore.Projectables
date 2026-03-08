@@ -60,28 +60,98 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var comparer = SymbolEqualityComparer.Default;
 
-                memberBody = memberSymbol.ContainingType.GetMembers(useMemberBody)
-                    .Where(x =>
+                // Helper: returns true when a symbol is a property returning Expression<TDelegate>.
+                static bool IsExpressionDelegateProperty(ISymbol sym) =>
+                    sym is IPropertySymbol p &&
+                    p.Type is INamedTypeSymbol { Name: "Expression" } et &&
+                    et.ContainingNamespace?.ToDisplayString() == "System.Linq.Expressions";
+
+                // Helper: returns true when a PropertyDeclarationSyntax has a readable body.
+                static bool HasReadablePropertyBody(PropertyDeclarationSyntax xProp)
+                {
+                    if (xProp.ExpressionBody is not null)
                     {
-                        if (memberSymbol is IMethodSymbol symbolMethod &&
-                            x is IMethodSymbol xMethod &&
-                            comparer.Equals(symbolMethod.ReturnType, xMethod.ReturnType) &&
-                            symbolMethod.TypeArguments.Length == xMethod.TypeArguments.Length &&
-                            !symbolMethod.TypeArguments.Zip(xMethod.TypeArguments, (a, b) => !comparer.Equals(a, b)).Any())
+                        return true;
+                    }
+
+                    if (xProp.AccessorList is not null)
+                    {
+                        var getter = xProp.AccessorList.Accessors
+                            .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                        
+                        if (getter?.ExpressionBody is not null || getter?.Body is not null)
                         {
                             return true;
                         }
-                        else if (memberSymbol is IPropertySymbol symbolProperty &&
-                            x is IPropertySymbol xProperty &&
-                            comparer.Equals(symbolProperty.Type, xProperty.Type))
-                        {
-                            return true;
-                        }
-                        else
-                        {
-                            return false;
-                        }
-                    })
+                    }
+                    return false;
+                }
+
+                // ── Step 1: find all members with the requested name ─────────────────────
+                var allCandidates = memberSymbol.ContainingType.GetMembers(useMemberBody);
+
+                if (allCandidates.IsEmpty)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UseMemberBodyNotFound,
+                        member.GetLocation(),
+                        memberSymbol.Name,
+                        useMemberBody,
+                        memberSymbol.ContainingType.Name));
+                    return null;
+                }
+
+                // ── Step 2: partition into same-type candidates and Expression<TDelegate>
+                //            property candidates ────────────────────────────────────────
+                var regularCompatible = allCandidates.Where(x =>
+                {
+                    if (memberSymbol is IMethodSymbol symbolMethod &&
+                        x is IMethodSymbol xMethod &&
+                        comparer.Equals(symbolMethod.ReturnType, xMethod.ReturnType) &&
+                        symbolMethod.TypeArguments.Length == xMethod.TypeArguments.Length &&
+                        !symbolMethod.TypeArguments.Zip(xMethod.TypeArguments, (a, b) => !comparer.Equals(a, b)).Any())
+                    {
+                        return true;
+                    }
+
+                    if (memberSymbol is IPropertySymbol symbolProperty &&
+                        x is IPropertySymbol xProperty &&
+                        comparer.Equals(symbolProperty.Type, xProperty.Type))
+                    {
+                        return true;
+                    }
+
+                    return false;
+                }).ToList();
+
+                // Expression-property candidates: a property returning Expression<TDelegate>.
+                // Supported in the generator only when the projectable member is a method.
+                // When the projectable member is a property the runtime resolver handles it.
+                var exprPropertyCandidates = memberSymbol is IMethodSymbol
+                    ? allCandidates.Where(IsExpressionDelegateProperty).ToList()
+                    : [];
+
+                // ── Step 3: if no generator-handled candidates exist, diagnose or skip ──
+                if (regularCompatible.Count == 0 && exprPropertyCandidates.Count == 0)
+                {
+                    // A projectable *property* backed by an Expression<TDelegate> property is
+                    // handled at runtime by ProjectionExpressionResolver; skip silently so the
+                    // runtime path can take over without a spurious error.
+                    if (memberSymbol is IPropertySymbol && allCandidates.Any(IsExpressionDelegateProperty))
+                    {
+                        return null;
+                    }
+
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UseMemberBodyIncompatible,
+                        member.GetLocation(),
+                        memberSymbol.Name,
+                        useMemberBody));
+                    return null;
+                }
+
+                // ── Step 4a: locate valid syntax for regular (same-type) candidates ────
+                memberBody = regularCompatible
                     .SelectMany(x => x.DeclaringSyntaxReferences)
                     .Select(x => x.GetSyntax())
                     .OfType<MemberDeclarationSyntax>()
@@ -93,36 +163,51 @@ namespace EntityFrameworkCore.Projectables.Generator
                         {
                             return false;
                         }
-                        else if (x is MethodDeclarationSyntax xMethod &&
+
+                        if (x is MethodDeclarationSyntax xMethod &&
                             (xMethod.ExpressionBody is not null || xMethod.Body is not null))
                         {
                             return true;
                         }
-                        else if (x is PropertyDeclarationSyntax xProperty)
-                        {
-                            // Support expression-bodied properties: int Prop => value;
-                            if (xProperty.ExpressionBody is not null)
-                            {
-                                return true;
-                            }
 
-                            // Support properties with explicit getters: int Prop { get => value; } or { get { return value; } }
-                            if (xProperty.AccessorList is not null)
-                            {
-                                var getter = xProperty.AccessorList.Accessors
-                                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                                if (getter?.ExpressionBody is not null || getter?.Body is not null)
-                                {
-                                    return true;
-                                }
-                            }
+                        if (x is PropertyDeclarationSyntax xProp)
+                        {
+                            return HasReadablePropertyBody(xProp);
                         }
-                        
+
                         return false;
                     });
 
+                // ── Step 4b: if not found, try Expression<TDelegate> property candidates.
+                //             These don't need to share the member's static modifier because a
+                //             static Expression<Func<...>> property can legitimately back either
+                //             a static or an instance projectable method. ──────────────────
+                if (memberBody is null && exprPropertyCandidates.Count > 0)
+                {
+                    memberBody = exprPropertyCandidates
+                        .SelectMany(x => x.DeclaringSyntaxReferences)
+                        .Select(x => x.GetSyntax())
+                        .OfType<MemberDeclarationSyntax>()
+                        .FirstOrDefault(x =>
+                        {
+                            if (x == null || x.SyntaxTree != member.SyntaxTree)
+                            {
+                                return false;
+                            }
+
+                            return x is PropertyDeclarationSyntax xProp && HasReadablePropertyBody(xProp);
+                        });
+                }
+
+                // ── Step 5: if still null, the candidates exist but are syntactically
+                //            inaccessible (different file, no body, etc.) ────────────────
                 if (memberBody is null)
                 {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UseMemberBodyIncompatible,
+                        member.GetLocation(),
+                        memberSymbol.Name,
+                        useMemberBody));
                     return null;
                 }
             }
@@ -361,6 +446,63 @@ namespace EntityFrameworkCore.Projectables.Generator
                             .ConstraintClauses
                             .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x))
                         );
+                }
+            }
+            
+            // Projectable method delegating to an Expression<TDelegate> property body.
+            // The original member is a method but the body is a property returning Expression<Func<...>>.
+            // Unwrap the inner lambda from the Expression property and use the method's own
+            // return type and parameter list for the generated expression.
+            else if (member is MethodDeclarationSyntax originalMethodDecl && memberBody is PropertyDeclarationSyntax exprPropDecl)
+            {
+                // Extract the inner lambda expression from the property body.
+                ExpressionSyntax? innerBody = null;
+
+                if (exprPropDecl.ExpressionBody?.Expression is LambdaExpressionSyntax exprLambda)
+                {
+                    innerBody = exprLambda.Body as ExpressionSyntax;
+                }
+                else if (exprPropDecl.AccessorList is not null)
+                {
+                    var getter = exprPropDecl.AccessorList.Accessors
+                        .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                    if (getter?.ExpressionBody?.Expression is LambdaExpressionSyntax accessorLambda)
+                    {
+                        innerBody = accessorLambda.Body as ExpressionSyntax;
+                    }
+                }
+
+                if (innerBody is null)
+                {
+                    var diagnostic = Diagnostic.Create(Diagnostics.RequiresBodyDefinition, exprPropDecl.GetLocation(), memberSymbol.Name);
+                    context.ReportDiagnostic(diagnostic);
+                    return null;
+                }
+
+                var returnType = declarationSyntaxRewriter.Visit(originalMethodDecl.ReturnType);
+                descriptor.ReturnTypeName = returnType.ToString();
+                descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
+
+                foreach (var additionalParameter in ((ParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.ParameterList)).Parameters)
+                {
+                    descriptor.ParametersList = descriptor.ParametersList.AddParameters(additionalParameter);
+                }
+
+                if (originalMethodDecl.TypeParameterList is not null)
+                {
+                    descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
+                    foreach (var additionalTypeParameter in ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.TypeParameterList)).Parameters)
+                    {
+                        descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
+                    }
+                }
+
+                if (originalMethodDecl.ConstraintClauses.Any())
+                {
+                    descriptor.ConstraintClauses = SyntaxFactory.List(
+                        originalMethodDecl.ConstraintClauses
+                            .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x))
+                    );
                 }
             }
             

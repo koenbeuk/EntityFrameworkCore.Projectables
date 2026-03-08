@@ -62,5 +62,17 @@ namespace EntityFrameworkCore.Projectables.FunctionalTests.ExtensionMethods
 
             return Verifier.Verify(query.ToQueryString());
         }
+
+        [Fact]
+        public Task ExtensionMethod_WithExpressionPropertyBody()
+        {
+            using var dbContext = new SampleDbContext<Entity>();
+
+            var nameToMatch = "Alice";
+            var query = dbContext.Set<Entity>()
+                .Where(x => x.NameEquals(new Entity { Name = nameToMatch }));
+
+            return Verifier.Verify(query.ToQueryString());
+        }
     }
 }

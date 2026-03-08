@@ -77,12 +77,30 @@ namespace EntityFrameworkCore.Projectables.Services
                     {
                         return lambda;
                     }
-                    else if (projectableMemberInfo is MethodInfo method &&
-                        lambda.Parameters.Count == method.GetParameters().Length + 1 &&
-                        lambda.Parameters.Last().Type == declaringType &&
-                        !lambda.Parameters.Zip(method.GetParameters(), (a, b) => a.Type != b.ParameterType).Any())
+
+                    if (projectableMemberInfo is MethodInfo method)
                     {
-                        return lambda;
+                        var methodParams = method.GetParameters();
+                        if (method.IsStatic)
+                        {
+                            // Static methods (including extension methods): all parameters are explicit.
+                            // The lambda maps directly to the method's parameter list — no implicit 'this'.
+                            if (lambda.Parameters.Count == methodParams.Length &&
+                                !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            {
+                                return lambda;
+                            }
+                        }
+                        else
+                        {
+                            // Instance methods: the lambda has an extra 'this' appended as the last parameter.
+                            if (lambda.Parameters.Count == methodParams.Length + 1 &&
+                                lambda.Parameters.Last().Type == declaringType &&
+                                !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            {
+                                return lambda;
+                            }
+                        }
                     }
                 }
 
