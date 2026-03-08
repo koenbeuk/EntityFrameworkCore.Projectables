@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System.Collections.Immutable;
 using System.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -13,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Generator
     {
         private const string ProjectablesAttributeName = "EntityFrameworkCore.Projectables.ProjectableAttribute";
 
-        static readonly AttributeSyntax _editorBrowsableAttribute = 
+        private readonly static AttributeSyntax _editorBrowsableAttribute =
             Attribute(
                 ParseName("global::System.ComponentModel.EditorBrowsable"),
                 AttributeArgumentList(
@@ -46,14 +47,14 @@ namespace EntityFrameworkCore.Projectables.Generator
             var compilationAndMemberPairs = memberDeclarations
                 .Combine(context.CompilationProvider)
                 .WithComparer(new MemberDeclarationSyntaxAndCompilationEqualityComparer());
-            
+
             context.RegisterSourceOutput(compilationAndMemberPairs,
                 static (spc, source) =>
                 {
                     var ((member, attribute), compilation) = source;
                     var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
                     var memberSymbol = semanticModel.GetDeclaredSymbol(member);
-                    
+
                     if (memberSymbol is null)
                     {
                         return;
@@ -61,9 +62,31 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                     Execute(member, semanticModel, memberSymbol, attribute, compilation, spc);
                 });
+
+            // Build the projection registry: collect all entries and emit a single registry file
+            var registryEntries = compilationAndMemberPairs.Select(
+                static (source, cancellationToken) => {
+                    var ((member, _), compilation) = source;
+
+                    var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
+                    var memberSymbol = semanticModel.GetDeclaredSymbol(member, cancellationToken);
+
+                    if (memberSymbol is null)
+                    {
+                        return null;
+                    }
+
+                    return ExtractRegistryEntry(memberSymbol);
+                });
+
+            // Delegate registry file emission to the dedicated ProjectionRegistryEmitter,
+            // which uses a string-based CodeWriter instead of SyntaxFactory.
+            context.RegisterImplementationSourceOutput(
+                registryEntries.Collect(),
+                static (spc, entries) => ProjectionRegistryEmitter.Emit(entries, spc));
         }
 
-        static SyntaxTriviaList BuildSourceDocComment(ConstructorDeclarationSyntax ctor, Compilation compilation)
+        private static SyntaxTriviaList BuildSourceDocComment(ConstructorDeclarationSyntax ctor, Compilation compilation)
         {
             var chain = CollectConstructorChain(ctor, compilation);
 
@@ -104,7 +127,7 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// then its delegate's delegate, …). Stops when a delegated constructor has no source
         /// available in the compilation (e.g. a compiler-synthesised parameterless constructor).
         /// </summary>
-        static IReadOnlyList<ConstructorDeclarationSyntax> CollectConstructorChain(
+        private static List<ConstructorDeclarationSyntax> CollectConstructorChain(
             ConstructorDeclarationSyntax ctor, Compilation compilation)
         {
             var result = new List<ConstructorDeclarationSyntax> { ctor };
@@ -115,7 +138,9 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var semanticModel = compilation.GetSemanticModel(current.SyntaxTree);
                 if (semanticModel.GetSymbolInfo(initializer).Symbol is not IMethodSymbol delegated)
+                {
                     break;
+                }
 
                 var delegatedSyntax = delegated.DeclaringSyntaxReferences
                     .Select(r => r.GetSyntax())
@@ -123,7 +148,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                     .FirstOrDefault();
 
                 if (delegatedSyntax is null || !visited.Add(delegatedSyntax))
+                {
                     break;
+                }
 
                 result.Add(delegatedSyntax);
                 current = delegatedSyntax;
@@ -132,7 +159,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             return result;
         }
 
-        static void Execute(
+        private static void Execute(
             MemberDeclarationSyntax member,
             SemanticModel semanticModel,
             ISymbol memberSymbol,
@@ -193,14 +220,14 @@ namespace EntityFrameworkCore.Projectables.Generator
                                 )
                             )
                         )
-                        )
+                    )
                 );
 
 #nullable disable
 
             var compilationUnit = CompilationUnit();
 
-            foreach (var usingDirective in projectable.UsingDirectives)
+            foreach (var usingDirective in projectable.UsingDirectives!)
             {
                 compilationUnit = compilationUnit.AddUsings(usingDirective);
             }
@@ -229,7 +256,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                     )
                 );
 
-
             context.AddSource(generatedFileName, SourceText.From(compilationUnit.NormalizeWhitespace().ToFullString(), Encoding.UTF8));
 
             static TypeArgumentListSyntax GetLambdaTypeArgumentListSyntax(ProjectableDescriptor projectable)
@@ -248,6 +274,100 @@ namespace EntityFrameworkCore.Projectables.Generator
 
                 return lambdaTypeArguments;
             }
+        }
+
+#nullable restore
+
+        /// <summary>
+        /// Extracts a <see cref="ProjectableRegistryEntry"/> from a member declaration.
+        /// Returns null when the member does not have [Projectable], is an extension member,
+        /// or cannot be represented in the registry (e.g. a generic class member or generic method).
+        /// </summary>
+        private static ProjectableRegistryEntry? ExtractRegistryEntry(ISymbol memberSymbol)
+        {
+            var containingType = memberSymbol.ContainingType;
+
+            // Skip C# 14 extension type members — they require special handling (fall back to reflection)
+            if (containingType is { IsExtension: true })
+            {
+                return null;
+            }
+
+            // Skip generic classes: the registry only supports closed constructed types.
+            if (containingType.TypeParameters.Length > 0)
+            {
+                return null;
+            }
+
+            // Determine member kind and lookup name
+            ProjectableRegistryMemberType memberKind;
+            string memberLookupName;
+            var parameterTypeNames = ImmutableArray<string>.Empty;
+
+            if (memberSymbol is IMethodSymbol methodSymbol)
+            {
+                // Skip generic methods for the same reason as generic classes
+                if (methodSymbol.TypeParameters.Length > 0)
+                {
+                    return null;
+                }
+
+                if (methodSymbol.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor)
+                {
+                    memberKind = ProjectableRegistryMemberType.Constructor;
+                    memberLookupName = "_ctor";
+                }
+                else
+                {
+                    memberKind = ProjectableRegistryMemberType.Method;
+                    memberLookupName = memberSymbol.Name;
+                }
+
+                parameterTypeNames = [
+                    ..methodSymbol.Parameters.Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                ];
+            }
+            else
+            {
+                memberKind = ProjectableRegistryMemberType.Property;
+                memberLookupName = memberSymbol.Name;
+            }
+
+            // Build the generated class name using the same logic as Execute
+            var classNamespace = containingType.ContainingNamespace.IsGlobalNamespace
+                ? null
+                : containingType.ContainingNamespace.ToDisplayString();
+
+            var nestedTypePath = GetRegistryNestedTypePath(containingType);
+
+            var generatedClassName = ProjectionExpressionClassNameGenerator.GenerateName(
+                classNamespace,
+                nestedTypePath,
+                memberLookupName,
+                parameterTypeNames.IsEmpty ? null : parameterTypeNames);
+
+            var generatedClassFullName = "EntityFrameworkCore.Projectables.Generated." + generatedClassName;
+
+            var declaringTypeFullName = containingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            return new ProjectableRegistryEntry(
+                DeclaringTypeFullName: declaringTypeFullName,
+                MemberKind: memberKind,
+                MemberLookupName: memberLookupName,
+                GeneratedClassFullName: generatedClassFullName,
+                ParameterTypeNames: parameterTypeNames);
+        }
+
+        private static IEnumerable<string> GetRegistryNestedTypePath(INamedTypeSymbol typeSymbol)
+        {
+            if (typeSymbol.ContainingType is not null)
+            {
+                foreach (var name in GetRegistryNestedTypePath(typeSymbol.ContainingType))
+                {
+                    yield return name;
+                }
+            }
+            yield return typeSymbol.Name;
         }
     }
 }

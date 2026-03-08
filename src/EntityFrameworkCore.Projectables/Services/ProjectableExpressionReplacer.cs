@@ -21,27 +21,19 @@ namespace EntityFrameworkCore.Projectables.Services
         private readonly bool _trackingByDefault;
         private IEntityType? _entityType;
 
-        private readonly MethodInfo _select;
-        private readonly MethodInfo _where;
+        // Extract MethodInfo via expression trees (trim-safe; computed once per AppDomain)
+        private static readonly MethodInfo _select =
+            ((MethodCallExpression)((Expression<Func<IQueryable<object>, IQueryable<object>>>)
+                (q => q.Select(x => x))).Body).Method.GetGenericMethodDefinition();
+
+        private static readonly MethodInfo _where =
+            ((MethodCallExpression)((Expression<Func<IQueryable<object>, IQueryable<object>>>)
+                (q => q.Where(x => true))).Body).Method.GetGenericMethodDefinition();
 
         public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver, bool trackByDefault = false)
         {
             _trackingByDefault = trackByDefault;
             _resolver = projectionExpressionResolver;
-            _select = typeof(Queryable).GetMethods(BindingFlags.Static | BindingFlags.Public)
-                .Where(x => x.Name == nameof(Queryable.Select))
-                .First(x =>
-                        x.GetParameters().Last().ParameterType // Expression<Func<T, Ret>>
-                            .GetGenericArguments().First() // Func<T, Ret>
-                            .GetGenericArguments().Length == 2 // Separate between Func<T, Ret> and Func<T, int, Ret>
-                );
-            _where = typeof(Queryable).GetMethods(BindingFlags.Static | BindingFlags.Public)
-                .Where(x => x.Name == nameof(Queryable.Where))
-                .First(x =>
-                        x.GetParameters().Last().ParameterType // Expression<Func<T, Ret>>
-                            .GetGenericArguments().First() // Func<T, Ret>
-                            .GetGenericArguments().Length == 2 // Separate between Func<T, Ret> and Func<T, int, Ret>
-                );
         }
 
         bool TryGetReflectedExpression(MemberInfo memberInfo, [NotNullWhen(true)] out LambdaExpression? reflectedExpression)
