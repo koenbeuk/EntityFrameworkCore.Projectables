@@ -157,6 +157,8 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         
         var rawResult = driver.GetRunResult();
         var result = new TestGeneratorRunResult(rawResult);
+        
+        LogGeneratorResult(result, outputCompilation);
 
         return (driver, result);
     }
