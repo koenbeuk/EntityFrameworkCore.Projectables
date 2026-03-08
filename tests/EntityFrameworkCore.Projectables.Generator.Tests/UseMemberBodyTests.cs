@@ -97,6 +97,122 @@ namespace Foo {
     }
 
     [Fact]
+    public Task Method_UsesExpressionPropertyBody_BlockBodiedGetterLambda()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        private static Expression<Func<C, bool>> IsPositiveExpr {
+            get { return @this => @this.Value > 0; }
+        }
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_StoredField_ExpressionBodied()
+    {
+        // Expression-bodied property that returns a stored private field.
+        // The generator follows the field reference to inline the underlying lambda body,
+        // so no code is emitted that would reference the private field from the generated class.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        private static Expression<Func<C, bool>> IsPositiveExpr => _isPositiveExpr;
+        private static readonly Expression<Func<C, bool>> _isPositiveExpr = @this => @this.Value > 0;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_StoredField_GetterExpressionBodied()
+    {
+        // get => storedField: the generator follows the reference into the field initializer.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        private static Expression<Func<C, bool>> IsPositiveExpr { get => _isPositiveExpr; }
+        private static readonly Expression<Func<C, bool>> _isPositiveExpr = @this => @this.Value > 0;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_StoredField_BlockBodiedGetter()
+    {
+        // get { return storedField; }: block-bodied getter returning a stored private field.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        private static Expression<Func<C, bool>> IsPositiveExpr {
+            get { return _isPositiveExpr; }
+        }
+        private static readonly Expression<Func<C, bool>> _isPositiveExpr = @this => @this.Value > 0;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
     public Task Property_UsesPropertyBody_SameType()
     {
         var compilation = CreateCompilation(@"

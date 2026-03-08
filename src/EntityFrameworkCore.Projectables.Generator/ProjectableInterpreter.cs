@@ -474,20 +474,118 @@ namespace EntityFrameworkCore.Projectables.Generator
             // return type and parameter list for the generated expression.
             else if (member is MethodDeclarationSyntax originalMethodDecl && memberBody is PropertyDeclarationSyntax exprPropDecl)
             {
-                // Extract the inner lambda expression from the property body.
                 ExpressionSyntax? innerBody = null;
 
-                if (exprPropDecl.ExpressionBody?.Expression is LambdaExpressionSyntax exprLambda)
+                // Tries to populate innerBody from a candidate expression.
+                //
+                //   • Lambda literal  → extract its expression body directly.
+                //   • Non-lambda      → follow the symbol reference (field/property) to its
+                //                       declaration and try to extract a lambda body from there.
+                //                       Only declarations in the same syntax tree are followed so
+                //                       that the current semantic model stays valid, and no code
+                //                       referencing potentially-private members is ever generated.
+                void TryExtract(ExpressionSyntax? expression, int depth = 0)
                 {
-                    innerBody = exprLambda.Body as ExpressionSyntax;
+                    if (expression is null || depth > 5 || innerBody is not null)
+                    {
+                        return;
+                    }
+
+                    if (expression is LambdaExpressionSyntax lambda)
+                    {
+                        // Block-bodied lambda (e.g. x => { return x > 5; }) is not supported;
+                        // lambda.Body as ExpressionSyntax returns null → falls through to EFP0006.
+                        innerBody = lambda.Body as ExpressionSyntax;
+                        return;
+                    }
+
+                    // Non-lambda: resolve the symbol and follow the reference to its source
+                    // declaration (field initialiser or property body) to find the underlying lambda.
+                    var symbol = semanticModel.GetSymbolInfo(expression).Symbol;
+                    if (symbol is not (IFieldSymbol or IPropertySymbol))
+                    {
+                        return;
+                    }
+
+                    foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
+                    {
+                        // Only follow same-file declarations; the current semantic model is
+                        // bound to member.SyntaxTree and cannot analyse nodes in other trees.
+                        if (syntaxRef.SyntaxTree != member.SyntaxTree)
+                        {
+                            continue;
+                        }
+
+                        var declSyntax = syntaxRef.GetSyntax();
+
+                        // Field: private static readonly Expression<Func<…>> _f = @this => …;
+                        if (declSyntax is VariableDeclaratorSyntax { Initializer.Value: var initValue })
+                        {
+                            TryExtract(initValue, depth + 1);
+                            if (innerBody is not null)
+                            {
+                                return;
+                            }
+                        }
+
+                        // Property: unwrap its body the same way we unwrap the outer property.
+                        if (declSyntax is PropertyDeclarationSyntax followedProp)
+                        {
+                            if (followedProp.ExpressionBody?.Expression is { } followedExprBody)
+                            {
+                                TryExtract(followedExprBody, depth + 1);
+                                if (innerBody is not null)
+                                {
+                                    return;
+                                }
+                            }
+
+                            var followedGetter = followedProp.AccessorList?.Accessors
+                                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+
+                            if (followedGetter?.ExpressionBody?.Expression is { } getterExprBody)
+                            {
+                                TryExtract(getterExprBody, depth + 1);
+                                if (innerBody is not null)
+                                {
+                                    return;
+                                }
+                            }
+
+                            TryExtract(
+                                followedGetter?.Body?.Statements
+                                    .OfType<ReturnStatementSyntax>()
+                                    .FirstOrDefault()?.Expression,
+                                depth + 1);
+                        }
+                    }
+                }
+
+                if (exprPropDecl.ExpressionBody?.Expression is { } exprBodyExpr)
+                {
+                    // Expression-bodied property: Prop => (x) => …  OR  Prop => storedExpr
+                    TryExtract(exprBodyExpr);
                 }
                 else if (exprPropDecl.AccessorList is not null)
                 {
                     var getter = exprPropDecl.AccessorList.Accessors
                         .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                    if (getter?.ExpressionBody?.Expression is LambdaExpressionSyntax accessorLambda)
+
+                    if (getter?.ExpressionBody?.Expression is { } getterExprBody)
                     {
-                        innerBody = accessorLambda.Body as ExpressionSyntax;
+                        // get => (x) => …  OR  get => storedExpr
+                        TryExtract(getterExprBody);
+                    }
+                    else if (getter?.Body is not null)
+                    {
+                        // Block-bodied getter: get { return (x) => …; }
+                        // or:                  get { return storedExpr; }
+                        // Pick the first return statement; fall through if there is none.
+                        var returnStmt = getter.Body.Statements
+                            .OfType<ReturnStatementSyntax>()
+                            .FirstOrDefault();
+
+                        TryExtract(returnStmt?.Expression);
                     }
                 }
 
