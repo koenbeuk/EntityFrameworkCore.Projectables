@@ -76,5 +76,21 @@ namespace EntityFrameworkCore.Projectables.Generator
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
+        public static readonly DiagnosticDescriptor UseMemberBodyNotFound = new DiagnosticDescriptor(
+            id: "EFP0010",
+            title: "UseMemberBody target member not found",
+            messageFormat: "Member '{1}' referenced by UseMemberBody on '{0}' was not found on type '{2}'",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor UseMemberBodyIncompatible = new DiagnosticDescriptor(
+            id: "EFP0011",
+            title: "UseMemberBody target member is incompatible",
+            messageFormat: "Member '{1}' referenced by UseMemberBody on '{0}' has an incompatible type or signature",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
     }
 }
