@@ -91,6 +91,5 @@ namespace EntityFrameworkCore.Projectables.Generator
             category: "Design",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true);
-
     }
 }

@@ -316,7 +316,9 @@ Multiple `[Projectable]` constructors (overloads) per class are fully supported.
 
 #### Can I redirect the expression body to a different member with `UseMemberBody`?
 
-Yes! The `UseMemberBody` property on `[Projectable]` lets you redirect the source of the generated expression to a *different* member on the same type. This is useful when you want to:
+Yes! The `UseMemberBody` property on `[Projectable]` lets you redirect the source of the generated expression to a *different* member on the same type (and in the same file). 
+
+This is useful when you want to:
 
 - keep a regular C# implementation for in-memory use while maintaining a separate, cleaner expression for EF Core
 - supply the body as a pre-built `Expression<Func<...>>` property for full control over the generated tree

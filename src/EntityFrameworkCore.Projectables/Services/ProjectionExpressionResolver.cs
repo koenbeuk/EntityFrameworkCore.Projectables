@@ -10,8 +10,8 @@ namespace EntityFrameworkCore.Projectables.Services
     public sealed class ProjectionExpressionResolver : IProjectionExpressionResolver
     {
         // We never store null in the dictionary; assemblies without a registry use a sentinel delegate.
-        private static readonly Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
-        private static readonly ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
+        private readonly static Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
+        private readonly static ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
 
         /// <summary>
         /// Looks up the generated <c>ProjectionRegistry</c> class in an assembly (once, then caches it).
@@ -50,80 +50,90 @@ namespace EntityFrameworkCore.Projectables.Services
                 expression = GetExpressionFromMemberBody(projectableMemberInfo, projectableAttribute.UseMemberBody);
             }
 
-            if (expression is null)
+            if (expression is not null)
             {
-                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
-                var fullName = string.Join(".", Enumerable.Empty<string>()
-                    .Concat(new[] { declaringType.Namespace })
-                    .Concat(declaringType.GetNestedTypePath().Select(x => x.Name))
-                    .Concat(new[] { projectableMemberInfo.Name }));
-
-                throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.");
+                return expression;
             }
 
-            return expression;
+            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+            var fullName = string.Join(".", Enumerable.Empty<string>()
+                .Concat(new[] { declaringType.Namespace })
+                .Concat(declaringType.GetNestedTypePath().Select(x => x.Name))
+                .Concat(new[] { projectableMemberInfo.Name }));
 
-            static LambdaExpression? GetExpressionFromMemberBody(MemberInfo projectableMemberInfo, string memberName)
-            {
-                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
-                var exprProperty = declaringType.GetProperty(memberName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                var lambda = exprProperty?.GetValue(null) as LambdaExpression;
+            throw new InvalidOperationException($"Unable to resolve generated expression for {fullName}.");
+        }
 
-                if (lambda is not null)
-                {
-                    if (projectableMemberInfo is PropertyInfo property &&
-                        lambda.Parameters.Count == 1 &&
-                        lambda.Parameters[0].Type == declaringType && lambda.ReturnType == property.PropertyType)
-                    {
-                        return lambda;
-                    }
+        private static LambdaExpression? GetExpressionFromGeneratedType(MemberInfo projectableMemberInfo)
+        {
+            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
 
-                    if (projectableMemberInfo is MethodInfo method)
-                    {
-                        var methodParams = method.GetParameters();
-                        if (method.IsStatic)
-                        {
-                            // Static methods (including extension methods): all parameters are explicit.
-                            // The lambda maps directly to the method's parameter list — no implicit 'this'.
-                            if (lambda.ReturnType == method.ReturnType &&
-                                lambda.Parameters.Count == methodParams.Length &&
-                                !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
-                            {
-                                return lambda;
-                            }
-                        }
-                        else
-                        {
-                            // Instance methods: the lambda has an extra 'this' appended as the last parameter.
-                            if (lambda.ReturnType == method.ReturnType &&
-                                lambda.Parameters.Count == methodParams.Length + 1 &&
-                                lambda.Parameters.Last().Type == declaringType &&
-                                !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
-                            {
-                                return lambda;
-                            }
-                        }
-                    }
-                }
-
-                return null;
-            }
-
-            static LambdaExpression? GetExpressionFromGeneratedType(MemberInfo projectableMemberInfo)
-            {
-                var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
-
-                // Fast path: check the per-assembly static registry (generated by source generator).
-                // The first call per assembly does a reflection lookup to find the registry class and
-                // caches it as a delegate; subsequent calls use the cached delegate for an O(1) dictionary lookup.
-                var registry = GetAssemblyRegistry(declaringType.Assembly);
-                var registeredExpr = registry?.Invoke(projectableMemberInfo);
+            // Fast path: check the per-assembly static registry (generated by source generator).
+            // The first call per assembly does a reflection lookup to find the registry class and
+            // caches it as a delegate; subsequent calls use the cached delegate for an O(1) dictionary lookup.
+            var registry = GetAssemblyRegistry(declaringType.Assembly);
+            var registeredExpr = registry?.Invoke(projectableMemberInfo);
                 
-                return registeredExpr ??
+            return registeredExpr ??
                    // Slow path: reflection fallback for open-generic class members and generic methods
                    // that are not yet in the registry.
                    FindGeneratedExpressionViaReflection(projectableMemberInfo);
+        }
+
+        private static LambdaExpression? GetExpressionFromMemberBody(MemberInfo projectableMemberInfo, string memberName)
+        {
+            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+            var exprProperty = declaringType.GetProperty(memberName, BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (exprProperty?.GetValue(null) is not LambdaExpression lambda)
+            {
+                return null;
             }
+
+            switch (projectableMemberInfo)
+            {
+                case PropertyInfo property when
+                    lambda.Parameters.Count == 1 &&
+                    lambda.Parameters[0].Type == declaringType && lambda.ReturnType == property.PropertyType:
+                    return lambda;
+                    
+                case MethodInfo method:
+                {
+                    var methodParams = method.GetParameters();
+                        
+                    // The lambda's return type must match the method's return type.
+                    if (lambda.ReturnType != method.ReturnType) 
+                    {
+                        return null;
+                    }
+                        
+                    if (method.IsStatic)
+                    {
+                        // Static methods (including extension methods): all parameters are explicit.
+                        // The lambda maps directly to the method's parameter list — no implicit 'this'.
+                        if (lambda.Parameters.Count == methodParams.Length &&
+                            !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                        {
+                            return lambda;
+                        }
+                    }
+                    else
+                    {
+                        // Instance methods: the lambda's first parameter is the implicit 'this' (the declaring
+                        // type), followed by the explicit method parameters — i.e. (@this, arg1, arg2, ...) => ...
+                        if (lambda.Parameters.Count == methodParams.Length + 1 &&
+                            lambda.Parameters[0].Type == declaringType &&
+                            !lambda.Parameters.Skip(1).Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                        {
+                            return lambda;
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
