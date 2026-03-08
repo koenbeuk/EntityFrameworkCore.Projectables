@@ -40,50 +40,19 @@ namespace EntityFrameworkCore.Projectables.Generator
             return [];
         }
 
-        public static ProjectableDescriptor? GetDescriptor(Compilation compilation, MemberDeclarationSyntax member, SourceProductionContext context)
+        public static ProjectableDescriptor? GetDescriptor(
+            SemanticModel semanticModel,
+            MemberDeclarationSyntax member,
+            ISymbol memberSymbol,
+            ProjectableAttributeData projectableAttribute,
+            SourceProductionContext context,
+            Compilation? compilation = null)
         {
-            var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
-            var memberSymbol = semanticModel.GetDeclaredSymbol(member);
-
-            if (memberSymbol is null)
-            {
-                return null;
-            }
-
-            var projectableAttributeTypeSymbol = compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
-
-            var projectableAttributeClass = memberSymbol.GetAttributes()
-                .Where(x => x.AttributeClass?.Name == "ProjectableAttribute")
-                .FirstOrDefault();
-
-            if (projectableAttributeClass is null || !SymbolEqualityComparer.Default.Equals(projectableAttributeClass.AttributeClass, projectableAttributeTypeSymbol))
-            {
-                return null;
-            }
-
-            var nullConditionalRewriteSupport = projectableAttributeClass.NamedArguments
-                .Where(x => x.Key == "NullConditionalRewriteSupport")
-                .Where(x => x.Value.Kind == TypedConstantKind.Enum)
-                .Select(x => x.Value.Value)
-                .Where(x => Enum.IsDefined(typeof(NullConditionalRewriteSupport), x))
-                .Cast<NullConditionalRewriteSupport>()
-                .FirstOrDefault();
-
-            var useMemberBody = projectableAttributeClass.NamedArguments
-                .Where(x => x.Key == "UseMemberBody")
-                .Select(x => x.Value.Value)
-                .OfType<string?>()
-                .FirstOrDefault();
-
-            var expandEnumMethods = projectableAttributeClass.NamedArguments
-                .Where(x => x.Key == "ExpandEnumMethods")
-                .Select(x => x.Value.Value is bool b && b)
-                .FirstOrDefault();
-
-            var allowBlockBody = projectableAttributeClass.NamedArguments
-                .Where(x => x.Key == "AllowBlockBody")
-                .Select(x => x.Value.Value is bool b && b)
-                .FirstOrDefault();
+            // Read directly from the struct fields — no more LINQ over NamedArguments
+            var nullConditionalRewriteSupport = projectableAttribute.NullConditionalRewriteSupport;
+            var useMemberBody = projectableAttribute.UseMemberBody;
+            var expandEnumMethods = projectableAttribute.ExpandEnumMethods;
+            var allowBlockBody = projectableAttribute.AllowBlockBody;
 
             var memberBody = member;
 
@@ -460,6 +429,14 @@ namespace EntityFrameworkCore.Projectables.Generator
             // Projectable constructors
             else if (memberBody is ConstructorDeclarationSyntax constructorDeclarationSyntax)
             {
+                // Constructor delegation requires a Compilation to get semantic models
+                // for other syntax trees (base/this ctor may be in a different file).
+                if (compilation is null)
+                {
+                    // Should not happen in practice: the pipeline passes compilation for constructors.
+                    return null;
+                }
+
                 var containingType = memberSymbol.ContainingType;
                 var fullTypeName = containingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 

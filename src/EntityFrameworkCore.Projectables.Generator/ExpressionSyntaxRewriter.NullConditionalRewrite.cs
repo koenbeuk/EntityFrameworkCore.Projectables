@@ -9,8 +9,9 @@ public partial class ExpressionSyntaxRewriter
     public override SyntaxNode? VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
     {
         var targetExpression = (ExpressionSyntax)Visit(node.Expression);
+        var targetType = _semanticModel.GetTypeInfo(node.Expression).Type;
 
-        _conditionalAccessExpressionsStack.Push(targetExpression);
+        _conditionalAccessExpressionsStack.Push((targetExpression, targetType));
 
         if (_nullConditionalRewriteSupport == NullConditionalRewriteSupport.None)
         {
@@ -60,11 +61,16 @@ public partial class ExpressionSyntaxRewriter
     {
         if (_conditionalAccessExpressionsStack.Count > 0)
         {
-            var targetExpression = _conditionalAccessExpressionsStack.Pop();
+            var (targetExpression, targetType) = _conditionalAccessExpressionsStack.Pop();
+
+            // When the target is a Nullable<T> value type, we need .Value to access members on the underlying type
+            var accessExpression = IsNullableValueType(targetType)
+                ? SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, SyntaxFactory.IdentifierName("Value"))
+                : targetExpression;
 
             return _nullConditionalRewriteSupport switch {
-                NullConditionalRewriteSupport.Ignore => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
-                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, node.Name),
+                NullConditionalRewriteSupport.Ignore => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, accessExpression, node.Name),
+                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, accessExpression, node.Name),
                 _ => node
             };
         }
@@ -76,15 +82,26 @@ public partial class ExpressionSyntaxRewriter
     {
         if (_conditionalAccessExpressionsStack.Count > 0)
         {
-            var targetExpression = _conditionalAccessExpressionsStack.Pop();
+            var (targetExpression, targetType) = _conditionalAccessExpressionsStack.Pop();
+
+            // When the target is a Nullable<T> value type, we need .Value to access indexer on the underlying type
+            var accessExpression = IsNullableValueType(targetType)
+                ? SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, targetExpression, SyntaxFactory.IdentifierName("Value"))
+                : targetExpression;
 
             return _nullConditionalRewriteSupport switch {
-                NullConditionalRewriteSupport.Ignore => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
-                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.ElementAccessExpression(targetExpression, node.ArgumentList),
+                NullConditionalRewriteSupport.Ignore => SyntaxFactory.ElementAccessExpression(accessExpression, node.ArgumentList),
+                NullConditionalRewriteSupport.Rewrite => SyntaxFactory.ElementAccessExpression(accessExpression, node.ArgumentList),
                 _ => Visit(node)
             };
         }
 
         return base.VisitElementBindingExpression(node);
+    }
+
+    private static bool IsNullableValueType(ITypeSymbol? type)
+    {
+        return type is { IsValueType: true } &&
+               type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
     }
 }

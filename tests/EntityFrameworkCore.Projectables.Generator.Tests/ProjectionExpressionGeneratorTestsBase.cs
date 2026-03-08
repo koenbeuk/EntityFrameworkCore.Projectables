@@ -59,7 +59,7 @@ public abstract class ProjectionExpressionGeneratorTestsBase
             _inner.GeneratedTrees.FirstOrDefault(t => t.FilePath.EndsWith("ProjectionRegistry.g.cs"));
     }
 
-    protected Compilation CreateCompilation([StringSyntax("csharp")] string source)
+    protected IReadOnlyList<MetadataReference> GetDefaultReferences()
     {
         var references = Basic.Reference.Assemblies.
 #if NET10_0
@@ -72,6 +72,12 @@ public abstract class ProjectionExpressionGeneratorTestsBase
             .References.All.ToList();
 
         references.Add(MetadataReference.CreateFromFile(typeof(ProjectableAttribute).Assembly.Location));
+        return references;
+    }
+
+    protected Compilation CreateCompilation([StringSyntax("csharp")] string source)
+    {
+        var references = GetDefaultReferences();
 
         var compilation = CSharpCompilation.Create("compilation",
             new[] { CSharpSyntaxTree.ParseText(source) },
@@ -112,6 +118,48 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         var rawResult = driver.GetRunResult();
         var result = new TestGeneratorRunResult(rawResult);
 
+        LogGeneratorResult(result, outputCompilation);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Creates a new generator driver and runs the generator on the given compilation,
+    /// returning both the driver and the run result. The driver can be passed to subsequent
+    /// calls to <see cref="RunGeneratorWithDriver"/> to test incremental caching behavior.
+    /// </summary>
+    protected (GeneratorDriver Driver, GeneratorDriverRunResult Result) CreateAndRunGenerator(Compilation compilation)
+    {
+        _testOutputHelper.WriteLine("Creating generator driver and running on initial compilation...");
+
+        var subject = new ProjectionExpressionGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(subject);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+
+        var result = driver.GetRunResult();
+        LogGeneratorResult(result, outputCompilation);
+
+        return (driver, result);
+    }
+
+    /// <summary>
+    /// Runs the generator using an existing driver (preserving incremental state from previous runs)
+    /// on a new compilation, returning the updated driver and run result.
+    /// </summary>
+    protected (GeneratorDriver Driver, GeneratorDriverRunResult Result) RunGeneratorWithDriver(
+        GeneratorDriver driver, Compilation compilation)
+    {
+        _testOutputHelper.WriteLine("Running generator with existing driver on updated compilation...");
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        var result = driver.GetRunResult();
+        LogGeneratorResult(result, outputCompilation);
+
+        return (driver, result);
+    }
+
+    private void LogGeneratorResult(GeneratorDriverRunResult result, Compilation outputCompilation)
+    {
         if (result.Diagnostics.IsEmpty)
         {
             _testOutputHelper.WriteLine("Run did not produce diagnostics");
@@ -154,7 +202,4 @@ public abstract class ProjectionExpressionGeneratorTestsBase
 
             Assert.Empty(compilationErrors);
         }
-
-        return result;
-    }
-}
+    }}

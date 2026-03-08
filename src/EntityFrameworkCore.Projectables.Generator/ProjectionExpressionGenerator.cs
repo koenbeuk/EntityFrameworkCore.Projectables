@@ -32,23 +32,37 @@ namespace EntityFrameworkCore.Projectables.Generator
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            // Do a simple filter for members
+            // Extract only pure stable data from the attribute in the transform.
+            // No live Roslyn objects (no AttributeData, SemanticModel, Compilation, ISymbol) —
+            // those are always new instances and defeat incremental caching entirely.
             var memberDeclarations = context.SyntaxProvider
                 .ForAttributeWithMetadataName(
                     ProjectablesAttributeName,
                     predicate: static (s, _) => s is MemberDeclarationSyntax,
-                    transform: static (c, _) => (MemberDeclarationSyntax)c.TargetNode)
-                .WithComparer(new MemberDeclarationSyntaxEqualityComparer());
+                    transform: static (c, _) => (
+                        Member: (MemberDeclarationSyntax)c.TargetNode,
+                        Attribute: new ProjectableAttributeData(c.Attributes[0])
+                    ));
 
-            // Combine the selected enums with the `Compilation`
             var compilationAndMemberPairs = memberDeclarations
                 .Combine(context.CompilationProvider)
                 .WithComparer(new MemberDeclarationSyntaxAndCompilationEqualityComparer());
+            
+            context.RegisterSourceOutput(compilationAndMemberPairs,
+                static (spc, source) =>
+                {
+                    var ((member, attribute), compilation) = source;
+                    var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
+                    var memberSymbol = semanticModel.GetDeclaredSymbol(member);
+                    
+                    if (memberSymbol is null)
+                    {
+                        return;
+                    }
 
-            // Generate the source using the compilation and enums
-            context.RegisterImplementationSourceOutput(compilationAndMemberPairs,
-                static (spc, source) => Execute(source.Item1, source.Item2, spc));
-
+                    Execute(member, semanticModel, memberSymbol, attribute, compilation, spc);
+                });
+            
             // Build the projection registry: collect all entries and emit a single registry file
             var registryEntries =
                 compilationAndMemberPairs.Select(
@@ -135,9 +149,16 @@ namespace EntityFrameworkCore.Projectables.Generator
             return result;
         }
 
-        private static void Execute(MemberDeclarationSyntax member, Compilation compilation, SourceProductionContext context)
+        private static void Execute(
+            MemberDeclarationSyntax member,
+            SemanticModel semanticModel,
+            ISymbol memberSymbol,
+            ProjectableAttributeData projectableAttribute,
+            Compilation? compilation,
+            SourceProductionContext context)
         {
-            var projectable = ProjectableInterpreter.GetDescriptor(compilation, member, context);
+            var projectable = ProjectableInterpreter.GetDescriptor(
+                semanticModel, member, memberSymbol, projectableAttribute, context, compilation);
 
             if (projectable is null)
             {
@@ -160,35 +181,35 @@ namespace EntityFrameworkCore.Projectables.Generator
                     AttributeList()
                         .AddAttributes(_editorBrowsableAttribute)
                 )
-                .WithLeadingTrivia(member is ConstructorDeclarationSyntax ctor ? BuildSourceDocComment(ctor, compilation) : TriviaList())
+                .WithLeadingTrivia(member is ConstructorDeclarationSyntax ctor && compilation is not null ? BuildSourceDocComment(ctor, compilation) : TriviaList())
                 .AddMembers(
                     MethodDeclaration(
-                            GenericName(
-                                Identifier("global::System.Linq.Expressions.Expression"),
-                                TypeArgumentList(
-                                    SingletonSeparatedList(
-                                        (TypeSyntax)GenericName(
-                                            Identifier("global::System.Func"),
-                                            GetLambdaTypeArgumentListSyntax(projectable)
-                                        )
-                                    )
-                                )
-                            ),
-                            "Expression"
-                        )
-                        .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword)))
-                        .WithTypeParameterList(projectable.TypeParameterList)
-                        .WithConstraintClauses(projectable.ConstraintClauses ?? List<TypeParameterConstraintClauseSyntax>())
-                        .WithBody(
-                            Block(
-                                ReturnStatement(
-                                    ParenthesizedLambdaExpression(
-                                        projectable.ParametersList ?? ParameterList(),
-                                        null,
-                                        projectable.ExpressionBody
+                        GenericName(
+                            Identifier("global::System.Linq.Expressions.Expression"),
+                            TypeArgumentList(
+                                SingletonSeparatedList(
+                                    (TypeSyntax)GenericName(
+                                        Identifier("global::System.Func"),
+                                        GetLambdaTypeArgumentListSyntax(projectable)
                                     )
                                 )
                             )
+                        ),
+                        "Expression"
+                    )
+                    .WithModifiers(TokenList(Token(SyntaxKind.StaticKeyword)))
+                    .WithTypeParameterList(projectable.TypeParameterList)
+                    .WithConstraintClauses(projectable.ConstraintClauses ?? List<TypeParameterConstraintClauseSyntax>())
+                    .WithBody(
+                        Block(
+                            ReturnStatement(
+                                ParenthesizedLambdaExpression(
+                                    projectable.ParametersList ?? ParameterList(),
+                                    null,
+                                    projectable.ExpressionBody
+                                )
+                            )
+                        )
                         )
                 );
 
@@ -219,6 +240,8 @@ namespace EntityFrameworkCore.Projectables.Generator
                 .WithLeadingTrivia(
                     TriviaList(
                         Comment("// <auto-generated/>"),
+                        // Uncomment line below, for debugging purposes, to see when the generator is run on source generated files
+                        // CarriageReturnLineFeed, Comment($"// Generated at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} UTC for '{memberSymbol.Name}' in '{memberSymbol.ContainingType?.Name}'"),
                         Trivia(NullableDirectiveTrivia(Token(SyntaxKind.DisableKeyword), true))
                     )
                 );

@@ -12,7 +12,7 @@ public partial class ExpressionSyntaxRewriter : CSharpSyntaxRewriter
     readonly NullConditionalRewriteSupport _nullConditionalRewriteSupport;
     readonly bool _expandEnumMethods;
     readonly SourceProductionContext _context;
-    readonly Stack<ExpressionSyntax> _conditionalAccessExpressionsStack = new();
+    readonly Stack<(ExpressionSyntax Expression, ITypeSymbol? Type)> _conditionalAccessExpressionsStack = new();
     readonly string? _extensionParameterName;
 
     public ExpressionSyntaxRewriter(INamedTypeSymbol targetTypeSymbol, NullConditionalRewriteSupport nullConditionalRewriteSupport, bool expandEnumMethods, SemanticModel semanticModel, SourceProductionContext context, string? extensionParameterName = null)
