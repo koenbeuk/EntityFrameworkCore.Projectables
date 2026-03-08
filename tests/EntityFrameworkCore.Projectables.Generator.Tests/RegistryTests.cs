@@ -1,6 +1,3 @@
-using System.Threading.Tasks;
-using VerifyXunit;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace EntityFrameworkCore.Projectables.Generator.Tests;
@@ -16,7 +13,9 @@ public class RegistryTests : ProjectionExpressionGeneratorTestsBase
         var compilation = CreateCompilation(@"class C { }");
         var result = RunGenerator(compilation);
 
-        return Verifier.Verify(result.RegistryTree?.GetText().ToString());
+        Assert.Null(result.RegistryTree);
+        
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -85,8 +84,10 @@ namespace Foo {
     }
 }");
         var result = RunGenerator(compilation);
-
-        return Verifier.Verify(result.RegistryTree?.GetText().ToString());
+        
+        Assert.Null(result.RegistryTree);
+        
+        return Task.CompletedTask;
     }
 
     [Fact]
