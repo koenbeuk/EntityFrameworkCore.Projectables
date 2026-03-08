@@ -10,11 +10,9 @@ namespace EntityFrameworkCore.Projectables.Generator
     /// </summary>
     sealed internal record ProjectableRegistryEntry(
         string DeclaringTypeFullName,
-        string MemberKind,
+        ProjectableRegistryMemberType MemberKind,
         string MemberLookupName,
         string GeneratedClassFullName,
-        bool IsGenericClass,
-        bool IsGenericMethod,
         EquatableImmutableArray ParameterTypeNames
     );
 
@@ -25,21 +23,12 @@ namespace EntityFrameworkCore.Projectables.Generator
     /// produced by two different steps. This wrapper provides element-wise equality so
     /// that incremental steps are correctly cached and skipped.
     /// </summary>
-    internal readonly struct EquatableImmutableArray : System.IEquatable<EquatableImmutableArray>
+    readonly internal struct EquatableImmutableArray(ImmutableArray<string> array) : IEquatable<EquatableImmutableArray>
     {
-        public static readonly EquatableImmutableArray Empty = new(ImmutableArray<string>.Empty);
-
-        public readonly ImmutableArray<string> Array;
-
-        public EquatableImmutableArray(ImmutableArray<string> array)
-        {
-            Array = array;
-        }
-
-        public bool IsDefaultOrEmpty => Array.IsDefaultOrEmpty;
+        private readonly ImmutableArray<string> _array = array;
 
         public bool Equals(EquatableImmutableArray other) =>
-            Array.SequenceEqual(other.Array);
+            _array.SequenceEqual(other._array);
 
         public override bool Equals(object? obj) =>
             obj is EquatableImmutableArray other && Equals(other);
@@ -49,13 +38,16 @@ namespace EntityFrameworkCore.Projectables.Generator
             unchecked
             {
                 var hash = 17;
-                foreach (var s in Array)
+                foreach (var s in _array)
+                {
                     hash = hash * 31 + (s?.GetHashCode() ?? 0);
+                }
+
                 return hash;
             }
         }
 
-        public static implicit operator ImmutableArray<string>(EquatableImmutableArray e) => e.Array;
+        public static implicit operator ImmutableArray<string>(EquatableImmutableArray e) => e._array;
         public static implicit operator EquatableImmutableArray(ImmutableArray<string> a) => new(a);
     }
 }

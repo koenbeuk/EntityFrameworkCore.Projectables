@@ -287,33 +287,41 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// </summary>
         private static ProjectableRegistryEntry? ExtractRegistryEntry(ISymbol memberSymbol)
         {
+            var containingType = memberSymbol.ContainingType;
+            
             // Skip C# 14 extension type members — they require special handling (fall back to reflection)
-            if (memberSymbol.ContainingType is { IsExtension: true })
+            if (containingType is { IsExtension: true })
             {
                 return null;
             }
 
-            var containingType = memberSymbol.ContainingType;
-            var isGenericClass = containingType.TypeParameters.Length > 0;
+            // Early exit for generic classes: BuildRegistryEntryStatement returns null for them anyway.
+            if (containingType.TypeParameters.Length > 0)
+            {
+                return null;
+            }
 
             // Determine member kind and lookup name
-            string memberKind;
+            ProjectableRegistryMemberType memberKind;
             string memberLookupName;
             var parameterTypeNames = ImmutableArray<string>.Empty;
-            var isGenericMethod = false;
 
             if (memberSymbol is IMethodSymbol methodSymbol)
             {
-                isGenericMethod = methodSymbol.TypeParameters.Length > 0;
+                // Early exit for generic methods
+                if (methodSymbol.TypeParameters.Length > 0)
+                {
+                    return null;
+                }
 
                 if (methodSymbol.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor)
                 {
-                    memberKind = "Constructor";
+                    memberKind = ProjectableRegistryMemberType.Constructor;
                     memberLookupName = "_ctor";
                 }
                 else
                 {
-                    memberKind = "Method";
+                    memberKind = ProjectableRegistryMemberType.Method;
                     memberLookupName = memberSymbol.Name;
                 }
 
@@ -323,7 +331,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             }
             else
             {
-                memberKind = "Property";
+                memberKind = ProjectableRegistryMemberType.Property;
                 memberLookupName = memberSymbol.Name;
             }
 
@@ -349,8 +357,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                 MemberKind: memberKind,
                 MemberLookupName: memberLookupName,
                 GeneratedClassFullName: generatedClassFullName,
-                IsGenericClass: isGenericClass,
-                IsGenericMethod: isGenericMethod,
                 ParameterTypeNames: parameterTypeNames);
         }
 
@@ -459,20 +465,14 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// <summary>
         /// Builds a single compact <c>Register(map, typeof(T).GetXxx(...), "ClassName")</c>
         /// statement for one projectable entry in <c>Build()</c>.
-        /// Returns <see langword="null"/> for generic class/method entries (they fall back to reflection).
         /// </summary>
         private static ExpressionStatementSyntax? BuildRegistryEntryStatement(ProjectableRegistryEntry entry)
         {
-            if (entry.IsGenericClass || entry.IsGenericMethod)
-            {
-                return null;
-            }
-
             // typeof(DeclaringType).GetProperty/Method/Constructor(name, allFlags, ...)
             ExpressionSyntax? memberCallExpr = entry.MemberKind switch
             {
                 // typeof(T).GetProperty("Name", allFlags)?.GetMethod
-                "Property" => ConditionalAccessExpression(
+                ProjectableRegistryMemberType.Property => ConditionalAccessExpression(
                     InvocationExpression(
                             MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                                 TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
@@ -484,7 +484,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     MemberBindingExpression(IdentifierName("GetMethod"))),
 
                 // typeof(T).GetMethod("Name", allFlags, null, new Type[] {...}, null)
-                "Method" => InvocationExpression(
+                ProjectableRegistryMemberType.Method => InvocationExpression(
                         MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                             TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
                             IdentifierName("GetMethod")))
@@ -497,7 +497,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                         Argument(LiteralExpression(SyntaxKind.NullLiteralExpression))),
 
                 // typeof(T).GetConstructor(allFlags, null, new Type[] {...}, null)
-                "Constructor" => InvocationExpression(
+                ProjectableRegistryMemberType.Constructor => InvocationExpression(
                         MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                             TypeOfExpression(ParseTypeName(entry.DeclaringTypeFullName)),
                             IdentifierName("GetConstructor")))
