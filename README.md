@@ -314,6 +314,92 @@ Multiple `[Projectable]` constructors (overloads) per class are fully supported.
 
 > **Note:** If the delegated constructor's source is not available in the current compilation, the generator reports **EFP0009** and skips the projection.
 
+#### Can I redirect the expression body to a different member with `UseMemberBody`?
+
+Yes! The `UseMemberBody` property on `[Projectable]` lets you redirect the source of the generated expression to a *different* member on the same type (and in the same file). 
+
+This is useful when you want to:
+
+- keep a regular C# implementation for in-memory use while maintaining a separate, cleaner expression for EF Core
+- supply the body as a pre-built `Expression<Func<...>>` property for full control over the generated tree
+
+##### Delegating to a method or property body
+
+The simplest case — point `UseMemberBody` at another method or property that has the **same return type and parameter signature**. The generator uses the body of the target member instead:
+
+```csharp
+public class Entity
+{
+    public int Id { get; set; }
+
+    // EF-side: generates an expression from ComputedImpl
+    [Projectable(UseMemberBody = nameof(ComputedImpl))]
+    public int Computed => Id;            // original body is ignored
+
+    // In-memory implementation (or a different algorithm)
+    private int ComputedImpl => Id * 2;
+}
+```
+
+The generated expression is `(@this) => @this.Id * 2`, so `Computed` projects as `Id * 2` in SQL even though the arrow body says `Id`.
+
+##### Using an `Expression<Func<...>>` property as the body
+
+For even more control you can supply the body as a typed `Expression<Func<...>>` property. This lets you write the expression once and reuse it from both the `[Projectable]` member and any runtime code that needs the expression tree directly:
+
+```csharp
+public class Entity
+{
+    public int Id { get; set; }
+
+    [Projectable(UseMemberBody = nameof(Computed4))]
+    public int Computed3 => Id;   // body is replaced at compile time
+
+    // The expression tree is picked up by the generator and by the runtime resolver
+    private static Expression<Func<Entity, int>> Computed4 => x => x.Id * 3;
+}
+```
+
+> **Note:** When the projectable member is a *property*, the `Expression<Func<...>>` property body is handled entirely by the runtime resolver — no extra source is generated. This works transparently.
+
+For **instance methods**, name the lambda parameter `@this` so that it matches the generator's own naming convention:
+
+```csharp
+public class Entity
+{
+    public int Value { get; set; }
+
+    [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+    public bool IsPositive() => Value > 0;
+
+    private static Expression<Func<Entity, bool>> IsPositiveExpr => @this => @this.Value > 0;
+}
+```
+
+##### Static extension methods
+
+`UseMemberBody` works equally well on static extension methods. Name the lambda parameters to match the method's parameter names:
+
+```csharp
+public static class FooExtensions
+{
+    [Projectable(UseMemberBody = nameof(NameEqualsExpr))]
+    public static bool NameEquals(this Foo a, Foo b) => a.Name == b.Name;
+
+    private static Expression<Func<Foo, Foo, bool>> NameEqualsExpr =>
+        (a, b) => a.Name == b.Name;
+}
+```
+
+The generated expression is `(Foo a, Foo b) => a.Name == b.Name` — the same lambda that EF Core receives at query time. The two implementations are kept in sync in one place.
+
+##### Diagnostics
+
+| Code        | Severity | Cause                                                                                                |
+|-------------|----------|------------------------------------------------------------------------------------------------------|
+| **EFP0010** | Error    | The name given to `UseMemberBody` does not match any member on the containing type                   |
+| **EFP0011** | Error    | A member with that name exists but its type or signature is incompatible with the projectable member |
+
 #### Can I use pattern matching in projectable members?
 
 Yes! As of version 6.x, the generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
