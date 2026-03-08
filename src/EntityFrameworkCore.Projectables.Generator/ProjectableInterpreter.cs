@@ -60,34 +60,7 @@ namespace EntityFrameworkCore.Projectables.Generator
             {
                 var comparer = SymbolEqualityComparer.Default;
 
-                // Helper: returns true when a symbol is a property returning Expression<TDelegate>.
-                static bool IsExpressionDelegateProperty(ISymbol sym) =>
-                    sym is IPropertySymbol p &&
-                    p.Type is INamedTypeSymbol { Name: "Expression" } et &&
-                    et.ContainingNamespace?.ToDisplayString() == "System.Linq.Expressions";
-
-                // Helper: returns true when a PropertyDeclarationSyntax has a readable body.
-                static bool HasReadablePropertyBody(PropertyDeclarationSyntax xProp)
-                {
-                    if (xProp.ExpressionBody is not null)
-                    {
-                        return true;
-                    }
-
-                    if (xProp.AccessorList is not null)
-                    {
-                        var getter = xProp.AccessorList.Accessors
-                            .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                        
-                        if (getter?.ExpressionBody is not null || getter?.Body is not null)
-                        {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
-                // ── Step 1: find all members with the requested name ─────────────────────
+                // Step 1: find all members with the requested name
                 var allCandidates = memberSymbol.ContainingType.GetMembers(useMemberBody);
 
                 if (allCandidates.IsEmpty)
@@ -101,15 +74,17 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                // ── Step 2: partition into same-type candidates and Expression<TDelegate>
-                //            property candidates ────────────────────────────────────────
+                // Step 2: partition into same-type candidates and Expression<TDelegate> property candidates
                 var regularCompatible = allCandidates.Where(x =>
                 {
                     if (memberSymbol is IMethodSymbol symbolMethod &&
                         x is IMethodSymbol xMethod &&
                         comparer.Equals(symbolMethod.ReturnType, xMethod.ReturnType) &&
                         symbolMethod.TypeArguments.Length == xMethod.TypeArguments.Length &&
-                        !symbolMethod.TypeArguments.Zip(xMethod.TypeArguments, (a, b) => !comparer.Equals(a, b)).Any())
+                        !symbolMethod.TypeArguments.Zip(xMethod.TypeArguments, (a, b) => !comparer.Equals(a, b)).Any(v => v) &&
+                        symbolMethod.Parameters.Length == xMethod.Parameters.Length &&
+                        !symbolMethod.Parameters.Zip(xMethod.Parameters,
+                            (a, b) => !comparer.Equals(a.Type, b.Type) || a.RefKind != b.RefKind).Any(v => v))
                     {
                         return true;
                     }
@@ -131,9 +106,53 @@ namespace EntityFrameworkCore.Projectables.Generator
                     ? allCandidates.Where(IsExpressionDelegateProperty).ToList()
                     : [];
 
-                // ── Step 3: if no generator-handled candidates exist, diagnose or skip ──
-                if (regularCompatible.Count == 0 && exprPropertyCandidates.Count == 0)
+                // Filter Expression<TDelegate> candidates whose Func generic-argument count is
+                // compatible with the projectable method's parameter list.
+                //   • Static / extension methods: all params are explicit → expected = params + 1 (return)
+                //   • Instance methods / C# 14 extension members: implicit 'this' is the first
+                //     Func arg → expected = params + 2 (this + return)
+                List<ISymbol> compatibleExprPropertyCandidates = [];
+                if (exprPropertyCandidates.Count > 0 && memberSymbol is IMethodSymbol exprCheckMethod)
                 {
+                    var isExtensionBlock = memberSymbol.ContainingType is { IsExtension: true };
+                    var hasImplicitThis = !exprCheckMethod.IsStatic || isExtensionBlock;
+                    var expectedFuncArgCount = exprCheckMethod.Parameters.Length + (hasImplicitThis ? 2 : 1);
+
+                    compatibleExprPropertyCandidates = exprPropertyCandidates.Where(x =>
+                    {
+                        if (x is not IPropertySymbol propSym)
+                        {
+                            return false;
+                        }
+
+                        if (propSym.Type is not INamedTypeSymbol exprType || exprType.TypeArguments.Length != 1)
+                        {
+                            return false;
+                        }
+
+                        if (exprType.TypeArguments[0] is not INamedTypeSymbol delegateType)
+                        {
+                            return false;
+                        }
+
+                        return delegateType.TypeArguments.Length == expectedFuncArgCount;
+                    }).ToList();
+                }
+
+                // Step 3: if no generator-handled candidates exist, diagnose or skip
+                if (regularCompatible.Count == 0 && compatibleExprPropertyCandidates.Count == 0)
+                {
+                    // Expression properties were found but all have incompatible Func signatures.
+                    if (exprPropertyCandidates.Count > 0)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            Diagnostics.UseMemberBodyIncompatible,
+                            member.GetLocation(),
+                            memberSymbol.Name,
+                            useMemberBody));
+                        return null;
+                    }
+
                     // A projectable *property* backed by an Expression<TDelegate> property is
                     // handled at runtime by ProjectionExpressionResolver; skip silently so the
                     // runtime path can take over without a spurious error.
@@ -150,7 +169,7 @@ namespace EntityFrameworkCore.Projectables.Generator
                     return null;
                 }
 
-                // ── Step 4a: locate valid syntax for regular (same-type) candidates ────
+                // Step 4a: locate valid syntax for regular (same-type) candidates
                 memberBody = regularCompatible
                     .SelectMany(x => x.DeclaringSyntaxReferences)
                     .Select(x => x.GetSyntax())
@@ -178,13 +197,13 @@ namespace EntityFrameworkCore.Projectables.Generator
                         return false;
                     });
 
-                // ── Step 4b: if not found, try Expression<TDelegate> property candidates.
-                //             These don't need to share the member's static modifier because a
-                //             static Expression<Func<...>> property can legitimately back either
-                //             a static or an instance projectable method. ──────────────────
-                if (memberBody is null && exprPropertyCandidates.Count > 0)
+                // Step 4b: if not found, try compatible Expression<TDelegate> property candidates.
+                // These don't need to share the member's static modifier because a
+                // static Expression<Func<...>> property can legitimately back either
+                // a static or an instance projectable method. 
+                if (memberBody is null && compatibleExprPropertyCandidates.Count > 0)
                 {
-                    memberBody = exprPropertyCandidates
+                    memberBody = compatibleExprPropertyCandidates
                         .SelectMany(x => x.DeclaringSyntaxReferences)
                         .Select(x => x.GetSyntax())
                         .OfType<MemberDeclarationSyntax>()
@@ -701,6 +720,39 @@ namespace EntityFrameworkCore.Projectables.Generator
 
             return descriptor;
         }
+
+
+        /// <summary>
+        /// Returns true when a PropertyDeclarationSyntax has a readable body.
+        /// </summary>
+        private static bool HasReadablePropertyBody(PropertyDeclarationSyntax xProp)
+        {
+            if (xProp.ExpressionBody is not null)
+            {
+                return true;
+            }
+
+            if (xProp.AccessorList is not null)
+            {
+                var getter = xProp.AccessorList.Accessors
+                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                        
+                if (getter?.ExpressionBody is not null || getter?.Body is not null)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Returns true when a symbol is a property returning Expression&lt;TDelegate&gt;.
+        /// </summary>
+        private static bool IsExpressionDelegateProperty(ISymbol sym) =>
+            sym is IPropertySymbol p &&
+            p.Type is INamedTypeSymbol { Name: "Expression", IsGenericType: true } et &&
+            et.TypeArguments.Length == 1 &&
+            et.ContainingNamespace?.ToDisplayString() == "System.Linq.Expressions";
 
         /// <summary>
         /// Collects the property-assignment expressions that the delegated constructor (base/this)

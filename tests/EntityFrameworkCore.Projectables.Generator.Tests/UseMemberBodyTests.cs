@@ -29,9 +29,9 @@ namespace Foo {
         public int Bar { get; set; }
 
         [Projectable(UseMemberBody = nameof(ComputedImpl))]
-        public int Computed => Bar;
+        public int GetComputed() => Bar;
 
-        private int ComputedImpl => Bar * 2;
+        private int ComputedImpl() => Bar * 2;
     }
 }
 ");
@@ -287,6 +287,55 @@ namespace Foo {
     }
 
     [Fact]
+    public void UseMemberBody_IncompatibleParameterCount_EmitsEFP0011()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        // Two parameters
+        [Projectable(UseMemberBody = nameof(WrongParams))]
+        public int Add(int a, int b) => a + b;
+
+        // Same return type but only one parameter — count mismatch
+        private int WrongParams(int a) => a * 2;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void UseMemberBody_IncompatibleParameterTypes_EmitsEFP0011()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        [Projectable(UseMemberBody = nameof(WrongParamTypes))]
+        public int Add(int a, int b) => a + b;
+
+        // Same return type and parameter count but different parameter types
+        private int WrongParamTypes(int a, string b) => a;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
     public void UseMemberBody_ExtensionMethod_IncompatibleExpressionProperty_EmitsEFP0011()
     {
         var compilation = CreateCompilation(@"
@@ -305,19 +354,12 @@ namespace Foo {
     }
 }
 ");
-        // The Expression property exists but is not a same-type candidate and
-        // it IS an Expression<TDelegate> property — but the member is a METHOD so
-        // it falls into exprPropertyCandidates, which will find the property by name.
-        // The generator will attempt to dispatch to method→Expression-property branch
-        // and generate code using the method's parameter list.
-        // This is a valid scenario (the generator accepts any Expression property for methods)
-        // — incompatibility will be caught at runtime/compile time of the consuming project.
-        // Therefore NO EFP0011 should be emitted; instead we expect valid generation.
         var result = RunGenerator(compilation);
 
-        // Generator proceeds (it accepts Expression properties for methods without type-checking
-        // the Func delegate's generic arguments — that's a runtime concern).
-        Assert.Empty(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
     }
 }
 

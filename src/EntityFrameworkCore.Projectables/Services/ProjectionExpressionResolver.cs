@@ -85,7 +85,8 @@ namespace EntityFrameworkCore.Projectables.Services
                         {
                             // Static methods (including extension methods): all parameters are explicit.
                             // The lambda maps directly to the method's parameter list — no implicit 'this'.
-                            if (lambda.Parameters.Count == methodParams.Length &&
+                            if (lambda.ReturnType == method.ReturnType &&
+                                lambda.Parameters.Count == methodParams.Length &&
                                 !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
                             {
                                 return lambda;
@@ -94,7 +95,8 @@ namespace EntityFrameworkCore.Projectables.Services
                         else
                         {
                             // Instance methods: the lambda has an extra 'this' appended as the last parameter.
-                            if (lambda.Parameters.Count == methodParams.Length + 1 &&
+                            if (lambda.ReturnType == method.ReturnType &&
+                                lambda.Parameters.Count == methodParams.Length + 1 &&
                                 lambda.Parameters.Last().Type == declaringType &&
                                 !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
                             {
