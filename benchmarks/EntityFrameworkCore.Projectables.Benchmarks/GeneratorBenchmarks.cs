@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.Benchmarks;
 [MemoryDiagnoser]
 public class GeneratorBenchmarks
 {
-    [Params(1, 100, 1000)]
+    [Params(1, 100)]
     public int ProjectableCount { get; set; }
 
     private Compilation _compilation = null!;
@@ -84,25 +84,25 @@ public class GeneratorBenchmarks
             .Create(new ProjectionExpressionGenerator())
             .RunGeneratorsAndUpdateCompilation(_compilation, out _, out _);
 
-    /// <summary>
-    /// Cold run where the compilation has a trivial edit in a <em>noise</em> file.
-    /// Shows whether the cold path is sensitive to which files changed.
-    /// </summary>
-    [Benchmark]
-    public GeneratorDriver RunGenerator_NoiseChange()
-        => CSharpGeneratorDriver
-            .Create(new ProjectionExpressionGenerator())
-            .RunGeneratorsAndUpdateCompilation(_noiseModifiedCompilation, out _, out _);
-
-    /// <summary>
-    /// Cold run where the compilation has a trivial edit in a <em>projectable</em>
-    /// file (comment only — no member body change).
-    /// </summary>
-    [Benchmark]
-    public GeneratorDriver RunGenerator_ProjectableChange()
-        => CSharpGeneratorDriver
-            .Create(new ProjectionExpressionGenerator())
-            .RunGeneratorsAndUpdateCompilation(_projectableModifiedCompilation, out _, out _);
+    // /// <summary>
+    // /// Cold run where the compilation has a trivial edit in a <em>noise</em> file.
+    // /// Shows whether the cold path is sensitive to which files changed.
+    // /// </summary>
+    // [Benchmark]
+    // public GeneratorDriver RunGenerator_NoiseChange()
+    //     => CSharpGeneratorDriver
+    //         .Create(new ProjectionExpressionGenerator())
+    //         .RunGeneratorsAndUpdateCompilation(_noiseModifiedCompilation, out _, out _);
+    //
+    // /// <summary>
+    // /// Cold run where the compilation has a trivial edit in a <em>projectable</em>
+    // /// file (comment only — no member body change).
+    // /// </summary>
+    // [Benchmark]
+    // public GeneratorDriver RunGenerator_ProjectableChange()
+    //     => CSharpGeneratorDriver
+    //         .Create(new ProjectionExpressionGenerator())
+    //         .RunGeneratorsAndUpdateCompilation(_projectableModifiedCompilation, out _, out _);
 
     // -------------------------------------------------------------------------
     // Incremental benchmarks — the pre-warmed driver processes a single edit.

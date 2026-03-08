@@ -14,7 +14,7 @@ namespace EntityFrameworkCore.Projectables.Generator
     {
         private const string ProjectablesAttributeName = "EntityFrameworkCore.Projectables.ProjectableAttribute";
 
-        static readonly AttributeSyntax _editorBrowsableAttribute = 
+        private readonly static AttributeSyntax _editorBrowsableAttribute = 
             Attribute(
                 ParseName("global::System.ComponentModel.EditorBrowsable"),
                 AttributeArgumentList(
@@ -29,7 +29,10 @@ namespace EntityFrameworkCore.Projectables.Generator
                     )
                 )
             );
-
+        
+        private static MethodDeclarationSyntax? _registerHelperMethod;
+        private static FieldDeclarationSyntax? _mapField;
+        private static MethodDeclarationSyntax? _tryGetMethod;
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             // Extract only pure stable data from the attribute in the transform.
@@ -65,10 +68,18 @@ namespace EntityFrameworkCore.Projectables.Generator
             
             // Build the projection registry: collect all entries and emit a single registry file
             var registryEntries = compilationAndMemberPairs.Select(
-                static (pair, _) => {
-                    var ((member, _), compilation) = pair;
+                static (source, cancellationToken) => {
+                    var ((member, _), compilation) = source;
                     
-                    return ExtractRegistryEntry(member, compilation);
+                    var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
+                    var memberSymbol = semanticModel.GetDeclaredSymbol(member, cancellationToken);
+
+                    if (memberSymbol is null)
+                    {
+                        return null;
+                    }
+                    
+                    return ExtractRegistryEntry(memberSymbol);
                 });
 
             context.RegisterImplementationSourceOutput(
@@ -274,27 +285,8 @@ namespace EntityFrameworkCore.Projectables.Generator
         /// Returns null when the member does not have [Projectable], is an extension member,
         /// or cannot be represented in the registry (e.g. a generic class member or generic method).
         /// </summary>
-        private static ProjectableRegistryEntry? ExtractRegistryEntry(MemberDeclarationSyntax member, Compilation compilation)
+        private static ProjectableRegistryEntry? ExtractRegistryEntry(ISymbol memberSymbol)
         {
-            var semanticModel = compilation.GetSemanticModel(member.SyntaxTree);
-            var memberSymbol = semanticModel.GetDeclaredSymbol(member);
-
-            if (memberSymbol is null)
-            {
-                return null;
-            }
-
-            // Verify [Projectable] attribute
-            var projectableAttributeTypeSymbol = compilation.GetTypeByMetadataName("EntityFrameworkCore.Projectables.ProjectableAttribute");
-            var projectableAttribute = memberSymbol.GetAttributes()
-                .FirstOrDefault(x => x.AttributeClass?.Name == "ProjectableAttribute");
-
-            if (projectableAttribute is null ||
-                !SymbolEqualityComparer.Default.Equals(projectableAttribute.AttributeClass, projectableAttributeTypeSymbol))
-            {
-                return null;
-            }
-
             // Skip C# 14 extension type members — they require special handling (fall back to reflection)
             if (memberSymbol.ContainingType is { IsExtension: true })
             {
@@ -308,13 +300,11 @@ namespace EntityFrameworkCore.Projectables.Generator
             string memberKind;
             string memberLookupName;
             var parameterTypeNames = ImmutableArray<string>.Empty;
-            var methodTypeParamCount = 0;
             var isGenericMethod = false;
 
             if (memberSymbol is IMethodSymbol methodSymbol)
             {
                 isGenericMethod = methodSymbol.TypeParameters.Length > 0;
-                methodTypeParamCount = methodSymbol.TypeParameters.Length;
 
                 if (methodSymbol.MethodKind is MethodKind.Constructor or MethodKind.StaticConstructor)
                 {
@@ -437,77 +427,6 @@ namespace EntityFrameworkCore.Projectables.Generator
                     Token(SyntaxKind.StaticKeyword)))
                 .AddAttributeLists(AttributeList().AddAttributes(_editorBrowsableAttribute))
                 .AddMembers(
-                    // private static readonly Dictionary<nint, LambdaExpression> _map = Build();
-                    FieldDeclaration(
-                            VariableDeclaration(ParseTypeName("Dictionary<nint, LambdaExpression>"))
-                                .AddVariables(
-                                    VariableDeclarator("_map")
-                                        .WithInitializer(EqualsValueClause(
-                                            InvocationExpression(IdentifierName("Build"))
-                                                .WithArgumentList(ArgumentList())))))
-                        .WithModifiers(TokenList(
-                            Token(SyntaxKind.PrivateKeyword),
-                            Token(SyntaxKind.StaticKeyword),
-                            Token(SyntaxKind.ReadOnlyKeyword))),
-
-                    // public static LambdaExpression TryGet(MemberInfo member)
-                    MethodDeclaration(ParseTypeName("LambdaExpression"), "TryGet")
-                        .WithModifiers(TokenList(
-                            Token(SyntaxKind.PublicKeyword),
-                            Token(SyntaxKind.StaticKeyword)))
-                        .AddParameterListParameters(
-                            Parameter(Identifier("member"))
-                                .WithType(ParseTypeName("MemberInfo")))
-                        .WithBody(Block(
-                            LocalDeclarationStatement(
-                                VariableDeclaration(ParseTypeName("var"))
-                                    .AddVariables(
-                                        VariableDeclarator("handle")
-                                            .WithInitializer(EqualsValueClause(
-                                                InvocationExpression(IdentifierName("GetHandle"))
-                                                    .AddArgumentListArguments(
-                                                        Argument(IdentifierName("member"))))))),
-                            ReturnStatement(
-                                ParseExpression(
-                                    "handle.HasValue && _map.TryGetValue(handle.Value, out var expr) ? expr : null")))),
-
-                    // private static nint? GetHandle(MemberInfo member) => member switch { ... };
-                    MethodDeclaration(ParseTypeName("nint?"), "GetHandle")
-                        .WithModifiers(TokenList(
-                            Token(SyntaxKind.PrivateKeyword),
-                            Token(SyntaxKind.StaticKeyword)))
-                        .AddParameterListParameters(
-                            Parameter(Identifier("member"))
-                                .WithType(ParseTypeName("MemberInfo")))
-                        .WithExpressionBody(ArrowExpressionClause(
-                            SwitchExpression(IdentifierName("member"))
-                                .WithArms(SeparatedList<SwitchExpressionArmSyntax>(
-                                    new SyntaxNodeOrToken[]
-                                    {
-                                        SwitchExpressionArm(
-                                            DeclarationPattern(
-                                                ParseTypeName("MethodInfo"),
-                                                SingleVariableDesignation(Identifier("m"))),
-                                            ParseExpression("m.MethodHandle.Value")),
-                                        Token(SyntaxKind.CommaToken),
-                                        SwitchExpressionArm(
-                                            DeclarationPattern(
-                                                ParseTypeName("PropertyInfo"),
-                                                SingleVariableDesignation(Identifier("p"))),
-                                            ParseExpression("p.GetMethod?.MethodHandle.Value")),
-                                        Token(SyntaxKind.CommaToken),
-                                        SwitchExpressionArm(
-                                            DeclarationPattern(
-                                                ParseTypeName("ConstructorInfo"),
-                                                SingleVariableDesignation(Identifier("c"))),
-                                            ParseExpression("c.MethodHandle.Value")),
-                                        Token(SyntaxKind.CommaToken),
-                                        SwitchExpressionArm(
-                                            DiscardPattern(),
-                                            LiteralExpression(SyntaxKind.NullLiteralExpression))
-                                    }))))
-                        .WithSemicolonToken(Token(SyntaxKind.SemicolonToken)),
-
                     // private static Dictionary<nint, LambdaExpression> Build() { ... }
                     MethodDeclaration(ParseTypeName("Dictionary<nint, LambdaExpression>"), "Build")
                         .WithModifiers(TokenList(
@@ -515,7 +434,9 @@ namespace EntityFrameworkCore.Projectables.Generator
                             Token(SyntaxKind.StaticKeyword)))
                         .WithBody(Block(buildStatements)),
 
-                    // private static void Register(Dictionary<nint, LambdaExpression> map, MethodBase m, string exprClass)
+                    // Cached members — built once and reused across incremental runs
+                    BuildMapField(),
+                    BuildTryGetMethod(),
                     BuildRegisterHelperMethod());
 
             var compilationUnit = CompilationUnit()
@@ -604,11 +525,88 @@ namespace EntityFrameworkCore.Projectables.Generator
                             Literal(entry.GeneratedClassFullName)))));
         }
 
+
+        /// <summary>
+        /// Builds (and caches) the <c>_map</c> field declaration:
+        /// <c>private static readonly Dictionary&lt;nint, LambdaExpression&gt; _map = Build();</c>
+        /// </summary>
+        private static FieldDeclarationSyntax BuildMapField() => _mapField ??=
+            FieldDeclaration(
+                    VariableDeclaration(ParseTypeName("Dictionary<nint, LambdaExpression>"))
+                        .AddVariables(
+                            VariableDeclarator("_map")
+                                .WithInitializer(EqualsValueClause(
+                                    InvocationExpression(IdentifierName("Build"))
+                                        .WithArgumentList(ArgumentList())))))
+                .WithModifiers(TokenList(
+                    Token(SyntaxKind.PrivateKeyword),
+                    Token(SyntaxKind.StaticKeyword),
+                    Token(SyntaxKind.ReadOnlyKeyword)));
+
+        /// <summary>
+        /// Builds (and caches) the <c>TryGet</c> public static method declaration.
+        /// The <c>GetHandle</c> logic is inlined as a switch expression on <c>member</c>.
+        /// </summary>
+        private static MethodDeclarationSyntax BuildTryGetMethod() => _tryGetMethod ??=
+            // public static LambdaExpression TryGet(MemberInfo member)
+            // {
+            //     var handle = member switch
+            //     {
+            //         MethodInfo m      => (nint?)m.MethodHandle.Value,
+            //         PropertyInfo p    => p.GetMethod?.MethodHandle.Value,
+            //         ConstructorInfo c => (nint?)c.MethodHandle.Value,
+            //         _                 => null
+            //     };
+            //     return handle.HasValue && _map.TryGetValue(handle.Value, out var expr) ? expr : null;
+            // }
+            MethodDeclaration(ParseTypeName("LambdaExpression"), "TryGet")
+                .WithModifiers(TokenList(
+                    Token(SyntaxKind.PublicKeyword),
+                    Token(SyntaxKind.StaticKeyword)))
+                .AddParameterListParameters(
+                    Parameter(Identifier("member"))
+                        .WithType(ParseTypeName("MemberInfo")))
+                .WithBody(Block(
+                    LocalDeclarationStatement(
+                        VariableDeclaration(ParseTypeName("var"))
+                            .AddVariables(
+                                VariableDeclarator("handle")
+                                    .WithInitializer(EqualsValueClause(
+                                        SwitchExpression(IdentifierName("member"))
+                                            .WithArms(SeparatedList<SwitchExpressionArmSyntax>(
+                                                new SyntaxNodeOrToken[]
+                                                {
+                                                    SwitchExpressionArm(
+                                                        DeclarationPattern(
+                                                            ParseTypeName("MethodInfo"),
+                                                            SingleVariableDesignation(Identifier("m"))),
+                                                        ParseExpression("(nint?)m.MethodHandle.Value")),
+                                                    Token(SyntaxKind.CommaToken),
+                                                    SwitchExpressionArm(
+                                                        DeclarationPattern(
+                                                            ParseTypeName("PropertyInfo"),
+                                                            SingleVariableDesignation(Identifier("p"))),
+                                                        ParseExpression("p.GetMethod?.MethodHandle.Value")),
+                                                    Token(SyntaxKind.CommaToken),
+                                                    SwitchExpressionArm(
+                                                        DeclarationPattern(
+                                                            ParseTypeName("ConstructorInfo"),
+                                                            SingleVariableDesignation(Identifier("c"))),
+                                                        ParseExpression("(nint?)c.MethodHandle.Value")),
+                                                    Token(SyntaxKind.CommaToken),
+                                                    SwitchExpressionArm(
+                                                        DiscardPattern(),
+                                                        LiteralExpression(SyntaxKind.NullLiteralExpression))
+                                                })))))),
+                    ReturnStatement(
+                        ParseExpression(
+                            "handle.HasValue && _map.TryGetValue(handle.Value, out var expr) ? expr : null"))));
+
         /// <summary>
         /// Builds the <c>Register</c> private static helper method that all per-entry calls delegate to.
         /// It handles the null checks and the common reflection lookup pattern once, centrally.
         /// </summary>
-        private static MethodDeclarationSyntax BuildRegisterHelperMethod() =>
+        private static MethodDeclarationSyntax BuildRegisterHelperMethod() => _registerHelperMethod ??=
             // private static void Register(Dictionary<nint, LambdaExpression> map, MethodBase m, string exprClass)
             // {
             //     if (m is null) return;
