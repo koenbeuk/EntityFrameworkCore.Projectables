@@ -64,15 +64,15 @@ namespace EntityFrameworkCore.Projectables.Generator
                 });
             
             // Build the projection registry: collect all entries and emit a single registry file
-            var registryEntries =
-                compilationAndMemberPairs.Select(
-                    static (pair, _) => ExtractRegistryEntry(pair.Item1, pair.Item2));
-
-            var allEntries =
-                registryEntries.Collect();
+            var registryEntries = compilationAndMemberPairs.Select(
+                static (pair, _) => {
+                    var ((member, _), compilation) = pair;
+                    
+                    return ExtractRegistryEntry(member, compilation);
+                });
 
             context.RegisterImplementationSourceOutput(
-                allEntries,
+                registryEntries.Collect(),
                 static (spc, entries) => EmitRegistry(entries, spc));
         }
 

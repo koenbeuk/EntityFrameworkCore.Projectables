@@ -128,7 +128,7 @@ public abstract class ProjectionExpressionGeneratorTestsBase
     /// returning both the driver and the run result. The driver can be passed to subsequent
     /// calls to <see cref="RunGeneratorWithDriver"/> to test incremental caching behavior.
     /// </summary>
-    protected (GeneratorDriver Driver, GeneratorDriverRunResult Result) CreateAndRunGenerator(Compilation compilation)
+    protected (GeneratorDriver Driver, TestGeneratorRunResult Result) CreateAndRunGenerator(Compilation compilation)
     {
         _testOutputHelper.WriteLine("Creating generator driver and running on initial compilation...");
 
@@ -136,7 +136,9 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         GeneratorDriver driver = CSharpGeneratorDriver.Create(subject);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
-        var result = driver.GetRunResult();
+        var rawResult = driver.GetRunResult();
+        var result = new TestGeneratorRunResult(rawResult);
+        
         LogGeneratorResult(result, outputCompilation);
 
         return (driver, result);
@@ -146,19 +148,20 @@ public abstract class ProjectionExpressionGeneratorTestsBase
     /// Runs the generator using an existing driver (preserving incremental state from previous runs)
     /// on a new compilation, returning the updated driver and run result.
     /// </summary>
-    protected (GeneratorDriver Driver, GeneratorDriverRunResult Result) RunGeneratorWithDriver(
+    protected (GeneratorDriver Driver, TestGeneratorRunResult Result) RunGeneratorWithDriver(
         GeneratorDriver driver, Compilation compilation)
     {
         _testOutputHelper.WriteLine("Running generator with existing driver on updated compilation...");
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
-        var result = driver.GetRunResult();
-        LogGeneratorResult(result, outputCompilation);
+        
+        var rawResult = driver.GetRunResult();
+        var result = new TestGeneratorRunResult(rawResult);
 
         return (driver, result);
     }
 
-    private void LogGeneratorResult(GeneratorDriverRunResult result, Compilation outputCompilation)
+    private void LogGeneratorResult(TestGeneratorRunResult result, Compilation outputCompilation)
     {
         if (result.Diagnostics.IsEmpty)
         {
