@@ -9,28 +9,34 @@ namespace EntityFrameworkCore.Projectables.Services
 {
     public sealed class ProjectionExpressionResolver : IProjectionExpressionResolver
     {
-        // Cache per-assembly registry delegate: Assembly → Func<MemberInfo, LambdaExpression>
-        // After first lookup, subsequent calls do a fast lock-free read.
-        private static readonly ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>?> _assemblyRegistries = new();
+        // We never store null in the dictionary; assemblies without a registry use a sentinel delegate.
+        private static readonly Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
+        private static readonly ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
 
         /// <summary>
         /// Looks up the generated <c>ProjectionRegistry</c> class in an assembly (once, then caches it).
         /// Returns a delegate that calls <c>TryGet(MemberInfo)</c> on the registry, or null if the registry
         /// is not present in that assembly (e.g. if the source generator was not run against it).
         /// </summary>
-        private static Func<MemberInfo, LambdaExpression>? GetAssemblyRegistry(Assembly assembly) =>
-            _assemblyRegistries.GetOrAdd(assembly, static asm =>
+        private static Func<MemberInfo, LambdaExpression>? GetAssemblyRegistry(Assembly assembly)
+        {
+            var registry = _assemblyRegistries.GetOrAdd(assembly, static asm =>
             {
                 var registryType = asm.GetType("EntityFrameworkCore.Projectables.Generated.ProjectionRegistry");
                 var tryGetMethod = registryType?.GetMethod("TryGet", BindingFlags.Static | BindingFlags.Public);
-                
+
                 if (tryGetMethod is null)
                 {
-                    return null;
+                    // Use sentinel to indicate "no registry for this assembly"
+                    return _nullRegistry;
                 }
 
                 return (Func<MemberInfo, LambdaExpression>)Delegate.CreateDelegate(typeof(Func<MemberInfo, LambdaExpression>), tryGetMethod);
             });
+
+            // Translate sentinel back to null for callers, preserving existing behavior.
+            return ReferenceEquals(registry, _nullRegistry) ? null : registry;
+        }
 
         public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
         {
