@@ -376,13 +376,13 @@ public static partial class ProjectableInterpreter
         // Block-bodied lambda yields null body → falls through to EFP0006.
         if (expression is SimpleLambdaExpressionSyntax simpleLambda)
         {
-            return (simpleLambda.Body as ExpressionSyntax, simpleLambda.Parameter.Identifier.Text);
+            return (simpleLambda.Body as ExpressionSyntax, simpleLambda.Parameter.Identifier.ValueText);
         }
 
         if (expression is ParenthesizedLambdaExpressionSyntax parenLambda)
         {
             var firstName = parenLambda.ParameterList.Parameters.Count > 0
-                ? parenLambda.ParameterList.Parameters[0].Identifier.Text
+                ? parenLambda.ParameterList.Parameters[0].Identifier.ValueText
                 : null;
             return (parenLambda.Body as ExpressionSyntax, firstName);
         }

@@ -152,6 +152,16 @@ public static partial class ProjectableInterpreter
                         return false;
                     }
 
+                    // For instance properties, the first delegate type argument must be the containing type
+                    // (the implicit receiver).
+                    if (!exprCheckProperty.IsStatic)
+                    {
+                        var receiverType = delegateType.TypeArguments[0];
+                        if (!comparer.Equals(receiverType, exprCheckProperty.ContainingType))
+                        {
+                            return false;
+                        }
+                    }
                     // Return-type check: the last type argument of the delegate must match the property type.
                     var delegateReturnType = delegateType.TypeArguments[delegateType.TypeArguments.Length - 1];
                     return comparer.Equals(delegateReturnType, exprCheckProperty.Type);
