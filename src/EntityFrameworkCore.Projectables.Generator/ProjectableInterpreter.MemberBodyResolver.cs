@@ -81,6 +81,17 @@ public static partial class ProjectableInterpreter
                 var hasImplicitThis = !exprCheckMethod.IsStatic || isExtensionBlock;
                 var expectedFuncArgCount = exprCheckMethod.Parameters.Length + (hasImplicitThis ? 2 : 1);
 
+                // Determine the expected receiver type when hasImplicitThis is true.
+                // For extension-block members the receiver is the extension parameter's type;
+                // for ordinary instance methods it is the containing type.
+                ITypeSymbol? expectedReceiverType = null;
+                if (hasImplicitThis)
+                {
+                    expectedReceiverType = isExtensionBlock
+                        ? exprCheckMethod.ContainingType.ExtensionParameter?.Type
+                        : exprCheckMethod.ContainingType;
+                }
+
                 compatibleExprPropertyCandidates = exprPropertyCandidates.Where(x =>
                 {
                     if (x is not IPropertySymbol propSym)
@@ -101,6 +112,17 @@ public static partial class ProjectableInterpreter
                     if (delegateType.TypeArguments.Length != expectedFuncArgCount)
                     {
                         return false;
+                    }
+
+                    // Receiver-type check: when hasImplicitThis is true, TypeArguments[0] must match
+                    // the implicit receiver — the containing type for instance methods, or the extension
+                    // receiver type for extension-block members.
+                    if (hasImplicitThis && expectedReceiverType is not null)
+                    {
+                        if (!comparer.Equals(delegateType.TypeArguments[0], expectedReceiverType))
+                        {
+                            return false;
+                        }
                     }
 
                     // Return-type check: the last type argument of the delegate must match the method's return type.
