@@ -67,64 +67,101 @@ public static partial class ProjectableInterpreter
         }).ToList();
 
         // Expression-property candidates: a property returning Expression<TDelegate>.
-        // Supported in the generator only when the projectable member is a method.
-        // When the projectable member is a property, the runtime resolver handles it.
-        var exprPropertyCandidates = memberSymbol is IMethodSymbol
-            ? allCandidates.Where(IsExpressionDelegateProperty).ToList()
-            : [];
+        // Supported in the generator for both projectable methods and projectable properties.
+        var exprPropertyCandidates = allCandidates.Where(IsExpressionDelegateProperty).ToList();
 
-        // Filter Expression<TDelegate> candidates whose Func generic-argument count is
-        // compatible with the projectable method's parameter list.
+        // Filter Expression<TDelegate> candidates whose Func generic-argument count, return type,
+        // and parameter types are all compatible with the projectable member's signature.
         List<ISymbol> compatibleExprPropertyCandidates = [];
-        if (exprPropertyCandidates.Count > 0 && memberSymbol is IMethodSymbol exprCheckMethod)
+        if (exprPropertyCandidates.Count > 0)
         {
-            var isExtensionBlock = memberSymbol.ContainingType is { IsExtension: true };
-            var hasImplicitThis = !exprCheckMethod.IsStatic || isExtensionBlock;
-            var expectedFuncArgCount = exprCheckMethod.Parameters.Length + (hasImplicitThis ? 2 : 1);
-
-            compatibleExprPropertyCandidates = exprPropertyCandidates.Where(x =>
+            if (memberSymbol is IMethodSymbol exprCheckMethod)
             {
-                if (x is not IPropertySymbol propSym)
-                {
-                    return false;
-                }
+                var isExtensionBlock = memberSymbol.ContainingType is { IsExtension: true };
+                var hasImplicitThis = !exprCheckMethod.IsStatic || isExtensionBlock;
+                var expectedFuncArgCount = exprCheckMethod.Parameters.Length + (hasImplicitThis ? 2 : 1);
 
-                if (propSym.Type is not INamedTypeSymbol exprType || exprType.TypeArguments.Length != 1)
+                compatibleExprPropertyCandidates = exprPropertyCandidates.Where(x =>
                 {
-                    return false;
-                }
+                    if (x is not IPropertySymbol propSym)
+                    {
+                        return false;
+                    }
 
-                if (exprType.TypeArguments[0] is not INamedTypeSymbol delegateType)
+                    if (propSym.Type is not INamedTypeSymbol exprType || exprType.TypeArguments.Length != 1)
+                    {
+                        return false;
+                    }
+
+                    if (exprType.TypeArguments[0] is not INamedTypeSymbol delegateType)
+                    {
+                        return false;
+                    }
+
+                    if (delegateType.TypeArguments.Length != expectedFuncArgCount)
+                    {
+                        return false;
+                    }
+
+                    // Return-type check: the last type argument of the delegate must match the method's return type.
+                    var delegateReturnType = delegateType.TypeArguments[delegateType.TypeArguments.Length - 1];
+                    if (!comparer.Equals(delegateReturnType, exprCheckMethod.ReturnType))
+                    {
+                        return false;
+                    }
+
+                    // Parameter-type checks: each explicit parameter type must match.
+                    // When hasImplicitThis is true, TypeArguments[0] is the implicit receiver — skip it.
+                    var paramOffset = hasImplicitThis ? 1 : 0;
+                    for (var i = 0; i < exprCheckMethod.Parameters.Length; i++)
+                    {
+                        if (!comparer.Equals(delegateType.TypeArguments[paramOffset + i], exprCheckMethod.Parameters[i].Type))
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }).ToList();
+            }
+            else if (memberSymbol is IPropertySymbol exprCheckProperty)
+            {
+                // Instance property: Func<ContainingType, PropType> — 2 type arguments.
+                // Static property:   Func<PropType>                  — 1 type argument.
+                var expectedFuncArgCount = exprCheckProperty.IsStatic ? 1 : 2;
+
+                compatibleExprPropertyCandidates = exprPropertyCandidates.Where(x =>
                 {
-                    return false;
-                }
+                    if (x is not IPropertySymbol propSym)
+                    {
+                        return false;
+                    }
 
-                return delegateType.TypeArguments.Length == expectedFuncArgCount;
-            }).ToList();
+                    if (propSym.Type is not INamedTypeSymbol exprType || exprType.TypeArguments.Length != 1)
+                    {
+                        return false;
+                    }
+
+                    if (exprType.TypeArguments[0] is not INamedTypeSymbol delegateType)
+                    {
+                        return false;
+                    }
+
+                    if (delegateType.TypeArguments.Length != expectedFuncArgCount)
+                    {
+                        return false;
+                    }
+
+                    // Return-type check: the last type argument of the delegate must match the property type.
+                    var delegateReturnType = delegateType.TypeArguments[delegateType.TypeArguments.Length - 1];
+                    return comparer.Equals(delegateReturnType, exprCheckProperty.Type);
+                }).ToList();
+            }
         }
 
-        // Step 3: if no generator-handled candidates exist, diagnose or skip
+        // Step 3: if no generator-handled candidates exist, diagnose
         if (regularCompatible.Count == 0 && compatibleExprPropertyCandidates.Count == 0)
         {
-            // Expression properties were found but all have incompatible Func signatures.
-            if (exprPropertyCandidates.Count > 0)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    Diagnostics.UseMemberBodyIncompatible,
-                    member.GetLocation(),
-                    memberSymbol.Name,
-                    useMemberBody));
-                return null;
-            }
-
-            // A projectable *property* backed by an Expression<TDelegate> property is
-            // handled at runtime by ProjectionExpressionResolver; skip silently so the
-            // runtime path can take over without a spurious error.
-            if (memberSymbol is IPropertySymbol && allCandidates.Any(IsExpressionDelegateProperty))
-            {
-                return null;
-            }
-
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.UseMemberBodyIncompatible,
                 member.GetLocation(),

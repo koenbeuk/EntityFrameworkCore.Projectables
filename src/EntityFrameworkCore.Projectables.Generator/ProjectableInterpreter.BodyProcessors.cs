@@ -174,6 +174,82 @@ public static partial class ProjectableInterpreter
     }
 
     /// <summary>
+    /// Fills <paramref name="descriptor"/> for a projectable property whose body is
+    /// delegated to an <c>Expression&lt;TDelegate&gt;</c> property (specified via
+    /// <c>UseMemberBody</c>). Unwraps the inner lambda and uses the projectable
+    /// property's own return type. The implicit <c>@this</c> parameter is already
+    /// added by <see cref="BuildBaseDescriptor"/>.
+    /// Returns <c>false</c> and reports diagnostics on failure.
+    /// </summary>
+    private static bool TryApplyExpressionPropertyBodyForProperty(
+        PropertyDeclarationSyntax originalPropertyDecl,
+        PropertyDeclarationSyntax exprPropDecl,
+        SemanticModel semanticModel,
+        MemberDeclarationSyntax member,
+        ISymbol memberSymbol,
+        ExpressionSyntaxRewriter expressionSyntaxRewriter,
+        DeclarationSyntaxRewriter declarationSyntaxRewriter,
+        SourceProductionContext context,
+        ProjectableDescriptor descriptor)
+    {
+        ExpressionSyntax? innerBody = null;
+        string? firstParamName = null;
+
+        if (exprPropDecl.ExpressionBody?.Expression is { } exprBodyExpr)
+        {
+            // Expression-bodied property: Prop => @this => …  OR  Prop => storedExpr
+            (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(exprBodyExpr, semanticModel, member.SyntaxTree);
+        }
+        else if (exprPropDecl.AccessorList is not null)
+        {
+            var getter = exprPropDecl.AccessorList.Accessors
+                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+
+            if (getter?.ExpressionBody?.Expression is { } getterExprBody)
+            {
+                // get => @this => …  OR  get => storedExpr
+                (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(getterExprBody, semanticModel, member.SyntaxTree);
+            }
+            else if (getter?.Body is not null)
+            {
+                // Block-bodied getter: get { return @this => …; } or get { return storedExpr; }
+                var returnStmt = getter.Body.Statements
+                    .OfType<ReturnStatementSyntax>()
+                    .FirstOrDefault();
+
+                (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(returnStmt?.Expression, semanticModel, member.SyntaxTree);
+            }
+        }
+
+        if (innerBody is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.RequiresBodyDefinition,
+                exprPropDecl.GetLocation(),
+                memberSymbol.Name));
+            return false;
+        }
+
+        // The generated lambda always uses @this as the receiver parameter name.
+        // If the expression property used a different name (e.g. `x => x.Id`), rename it.
+        // NOTE: renaming must happen AFTER expressionSyntaxRewriter.Visit because the rewriter
+        // uses the semantic model which requires the original (pre-rename) syntax nodes.
+        var visitedBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
+        if (firstParamName is not null && firstParamName != "@this")
+        {
+            visitedBody = (ExpressionSyntax)new VariableReplacementRewriter(
+                firstParamName,
+                SyntaxFactory.IdentifierName("@this")).Visit(visitedBody);
+        }
+
+        var returnType = declarationSyntaxRewriter.Visit(originalPropertyDecl.Type);
+        descriptor.ReturnTypeName = returnType.ToString();
+        descriptor.ExpressionBody = visitedBody;
+
+        return true;
+    }
+
+    /// <summary>
     /// Fills <paramref name="descriptor"/> from a property declaration body.
     /// Returns <c>false</c> and reports diagnostics on failure.
     /// </summary>
@@ -390,17 +466,36 @@ public static partial class ProjectableInterpreter
         SemanticModel semanticModel,
         SyntaxTree memberSyntaxTree,
         int depth = 0)
+        => TryExtractLambdaBodyAndFirstParam(expression, semanticModel, memberSyntaxTree, depth).body;
+
+    /// <summary>
+    /// Like <see cref="TryExtractLambdaBody"/>, but also returns the first lambda parameter name
+    /// so callers can rename it (e.g. to <c>@this</c>) in the extracted body.
+    /// </summary>
+    private static (ExpressionSyntax? body, string? firstParamName) TryExtractLambdaBodyAndFirstParam(
+        ExpressionSyntax? expression,
+        SemanticModel semanticModel,
+        SyntaxTree memberSyntaxTree,
+        int depth = 0)
     {
         if (expression is null || depth > 5)
         {
-            return null;
+            return (null, null);
         }
 
-        // Lambda literal → extract its expression body directly.
-        // Block-bodied lambda (e.g. x => { return x > 5; }) yields null → falls through to EFP0006.
-        if (expression is LambdaExpressionSyntax lambda)
+        // Lambda literal → extract its expression body and first parameter name directly.
+        // Block-bodied lambda yields null body → falls through to EFP0006.
+        if (expression is SimpleLambdaExpressionSyntax simpleLambda)
         {
-            return lambda.Body as ExpressionSyntax;
+            return (simpleLambda.Body as ExpressionSyntax, simpleLambda.Parameter.Identifier.Text);
+        }
+
+        if (expression is ParenthesizedLambdaExpressionSyntax parenLambda)
+        {
+            var firstName = parenLambda.ParameterList.Parameters.Count > 0
+                ? parenLambda.ParameterList.Parameters[0].Identifier.Text
+                : null;
+            return (parenLambda.Body as ExpressionSyntax, firstName);
         }
 
         // Non-lambda: resolve the symbol and follow the reference to its source
@@ -408,7 +503,7 @@ public static partial class ProjectableInterpreter
         var symbol = semanticModel.GetSymbolInfo(expression).Symbol;
         if (symbol is not (IFieldSymbol or IPropertySymbol))
         {
-            return null;
+            return (null, null);
         }
 
         foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
@@ -425,8 +520,8 @@ public static partial class ProjectableInterpreter
             // Field: private static readonly Expression<Func<…>> _f = @this => …;
             if (declSyntax is VariableDeclaratorSyntax { Initializer.Value: var initValue })
             {
-                var result = TryExtractLambdaBody(initValue, semanticModel, memberSyntaxTree, depth + 1);
-                if (result is not null)
+                var result = TryExtractLambdaBodyAndFirstParam(initValue, semanticModel, memberSyntaxTree, depth + 1);
+                if (result.body is not null)
                 {
                     return result;
                 }
@@ -437,8 +532,8 @@ public static partial class ProjectableInterpreter
             {
                 if (followedProp.ExpressionBody?.Expression is { } followedExprBody)
                 {
-                    var result = TryExtractLambdaBody(followedExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result is not null)
+                    var result = TryExtractLambdaBodyAndFirstParam(followedExprBody, semanticModel, memberSyntaxTree, depth + 1);
+                    if (result.body is not null)
                     {
                         return result;
                     }
@@ -449,26 +544,26 @@ public static partial class ProjectableInterpreter
 
                 if (followedGetter?.ExpressionBody?.Expression is { } getterExprBody)
                 {
-                    var result = TryExtractLambdaBody(getterExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result is not null)
+                    var result = TryExtractLambdaBodyAndFirstParam(getterExprBody, semanticModel, memberSyntaxTree, depth + 1);
+                    if (result.body is not null)
                     {
                         return result;
                     }
                 }
 
-                var returnResult = TryExtractLambdaBody(
+                var returnResult = TryExtractLambdaBodyAndFirstParam(
                     followedGetter?.Body?.Statements
                         .OfType<ReturnStatementSyntax>()
                         .FirstOrDefault()?.Expression,
                     semanticModel, memberSyntaxTree, depth + 1);
 
-                if (returnResult is not null)
+                if (returnResult.body is not null)
                 {
                     return returnResult;
                 }
             }
         }
 
-        return null;
+        return (null, null);
     }
 }

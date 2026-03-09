@@ -260,7 +260,87 @@ namespace Foo {
         return Verifier.Verify(result.GeneratedTrees[0].ToString());
     }
 
-    // ── Invalid cases ──────────────────────────────────────────────────────────
+    [Fact]
+    public Task Property_UsesExpressionPropertyBody_InstanceProperty()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Id { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IdDoubledExpr))]
+        public int Computed => Id;
+
+        private static Expression<Func<C, int>> IdDoubledExpr => @this => @this.Id * 2;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public void Property_UsesExpressionPropertyBody_IncompatibleReturnType_EmitsEFP0011()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Id { get; set; }
+
+        [Projectable(UseMemberBody = nameof(WrongExpr))]
+        public int Computed => Id;
+
+        // Return type string does not match int
+        private static Expression<Func<C, string>> WrongExpr => @this => @this.Id.ToString();
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void Property_UsesExpressionPropertyBody_IncompatibleParameterCount_EmitsEFP0011()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Id { get; set; }
+
+        [Projectable(UseMemberBody = nameof(WrongExpr))]
+        public int Computed => Id;
+
+        // Func<int> has 1 arg but instance property needs Func<C, int> (2 args)
+        private static Expression<Func<int>> WrongExpr => () => 42;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+
 
     [Fact]
     public void UseMemberBody_MemberNotFound_EmitsEFP0010()
@@ -467,6 +547,91 @@ namespace Foo {
 
         // Wrong signature: Func<Entity, bool> instead of Func<Entity, Entity, bool>
         private static Expression<Func<Entity, bool>> WrongSignatureExpr => a => a.Name == null;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void UseMemberBody_ExpressionProperty_IncompatibleReturnType_EmitsEFP0011()
+    {
+        // Parameter count matches (Func<Entity, Entity, ???>) but return type is int instead of bool.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity { public string Name { get; set; } }
+
+    static class EntityExtensions {
+        [Projectable(UseMemberBody = nameof(NameEqualsExpr))]
+        public static bool NameEquals(this Entity a, Entity b) => a.Name == b.Name;
+
+        // Return type int does not match the projectable method's bool
+        private static Expression<Func<Entity, Entity, int>> NameEqualsExpr => (a, b) => 1;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void UseMemberBody_ExpressionProperty_IncompatibleParameterType_EmitsEFP0011()
+    {
+        // Parameter count and return type match, but the second parameter type is wrong (Other vs Entity).
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class Entity { public string Name { get; set; } }
+    class Other  { public string Name { get; set; } }
+
+    static class EntityExtensions {
+        [Projectable(UseMemberBody = nameof(NameEqualsExpr))]
+        public static bool NameEquals(this Entity a, Entity b) => a.Name == b.Name;
+
+        // Second parameter is Other, not Entity
+        private static Expression<Func<Entity, Other, bool>> NameEqualsExpr => (a, b) => a.Name == b.Name;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("EFP0011", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    [Fact]
+    public void UseMemberBody_InstanceMethod_ExpressionProperty_IncompatibleReturnType_EmitsEFP0011()
+    {
+        // Instance method: Expression<Func<C, ???>> — return type mismatch.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        // Return type int does not match bool
+        private static Expression<Func<C, int>> IsPositiveExpr => @this => @this.Value;
     }
 }
 ");

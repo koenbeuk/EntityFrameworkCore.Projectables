@@ -72,6 +72,13 @@ public static partial class ProjectableInterpreter
                     semanticModel, member, memberSymbol,
                     expressionSyntaxRewriter, declarationSyntaxRewriter, context, descriptor),
 
+            // Projectable property whose body is an Expression<TDelegate> property
+            (PropertyDeclarationSyntax originalPropertyDecl, PropertyDeclarationSyntax exprPropDecl)
+                when semanticModel.GetDeclaredSymbol(exprPropDecl) is IPropertySymbol s && IsExpressionDelegateProperty(s) =>
+                TryApplyExpressionPropertyBodyForProperty(originalPropertyDecl, exprPropDecl,
+                    semanticModel, member, memberSymbol,
+                    expressionSyntaxRewriter, declarationSyntaxRewriter, context, descriptor),
+
             // Projectable property
             (_, PropertyDeclarationSyntax propDecl) =>
                 TryApplyPropertyBody(propDecl, allowBlockBody, memberSymbol,
