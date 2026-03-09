@@ -47,11 +47,7 @@ public static partial class ProjectableInterpreter
         }
         else
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                methodDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, methodDeclarationSyntax, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
@@ -62,28 +58,8 @@ public static partial class ProjectableInterpreter
             ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression)
             : bodyExpression;
 
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
-        {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
-        }
-
-        if (methodDeclarationSyntax.TypeParameterList is not null)
-        {
-            descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
-            foreach (var additionalTypeParameter in
-                     ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.TypeParameterList)).Parameters)
-            {
-                descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
-            }
-        }
-
-        if (methodDeclarationSyntax.ConstraintClauses.Any())
-        {
-            descriptor.ConstraintClauses = SyntaxFactory.List(
-                methodDeclarationSyntax.ConstraintClauses
-                    .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x)));
-        }
+        ApplyParameterList(methodDeclarationSyntax.ParameterList, declarationSyntaxRewriter, descriptor);
+        ApplyTypeParameters(methodDeclarationSyntax, declarationSyntaxRewriter, descriptor);
 
         return true;
     }
@@ -106,69 +82,22 @@ public static partial class ProjectableInterpreter
         SourceProductionContext context,
         ProjectableDescriptor descriptor)
     {
-        ExpressionSyntax? innerBody = null;
-
-        if (exprPropDecl.ExpressionBody?.Expression is { } exprBodyExpr)
-        {
-            // Expression-bodied property: Prop => (x) => …  OR  Prop => storedExpr
-            innerBody = TryExtractLambdaBody(exprBodyExpr, semanticModel, member.SyntaxTree);
-        }
-        else if (exprPropDecl.AccessorList is not null)
-        {
-            var getter = exprPropDecl.AccessorList.Accessors
-                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-            if (getter?.ExpressionBody?.Expression is { } getterExprBody)
-            {
-                // get => (x) => …  OR  get => storedExpr
-                innerBody = TryExtractLambdaBody(getterExprBody, semanticModel, member.SyntaxTree);
-            }
-            else if (getter?.Body is not null)
-            {
-                // Block-bodied getter: get { return (x) => …; } or get { return storedExpr; }
-                var returnStmt = getter.Body.Statements
-                    .OfType<ReturnStatementSyntax>()
-                    .FirstOrDefault();
-
-                innerBody = TryExtractLambdaBody(returnStmt?.Expression, semanticModel, member.SyntaxTree);
-            }
-        }
+        var rawExpr = TryGetPropertyGetterExpression(exprPropDecl);
+        var innerBody = rawExpr is not null
+            ? TryExtractLambdaBody(rawExpr, semanticModel, member.SyntaxTree)
+            : null;
 
         if (innerBody is null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                exprPropDecl.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, exprPropDecl, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(originalMethodDecl.ReturnType);
         descriptor.ReturnTypeName = returnType.ToString();
         descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
 
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.ParameterList)).Parameters)
-        {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
-        }
-
-        if (originalMethodDecl.TypeParameterList is not null)
-        {
-            descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
-            foreach (var additionalTypeParameter in
-                     ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.TypeParameterList)).Parameters)
-            {
-                descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
-            }
-        }
-
-        if (originalMethodDecl.ConstraintClauses.Any())
-        {
-            descriptor.ConstraintClauses = SyntaxFactory.List(
-                originalMethodDecl.ConstraintClauses
-                    .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x)));
-        }
+        ApplyParameterList(originalMethodDecl.ParameterList, declarationSyntaxRewriter, descriptor);
+        ApplyTypeParameters(originalMethodDecl, declarationSyntaxRewriter, descriptor);
 
         return true;
     }
@@ -192,42 +121,14 @@ public static partial class ProjectableInterpreter
         SourceProductionContext context,
         ProjectableDescriptor descriptor)
     {
-        ExpressionSyntax? innerBody = null;
-        string? firstParamName = null;
-
-        if (exprPropDecl.ExpressionBody?.Expression is { } exprBodyExpr)
-        {
-            // Expression-bodied property: Prop => @this => …  OR  Prop => storedExpr
-            (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(exprBodyExpr, semanticModel, member.SyntaxTree);
-        }
-        else if (exprPropDecl.AccessorList is not null)
-        {
-            var getter = exprPropDecl.AccessorList.Accessors
-                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-            if (getter?.ExpressionBody?.Expression is { } getterExprBody)
-            {
-                // get => @this => …  OR  get => storedExpr
-                (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(getterExprBody, semanticModel, member.SyntaxTree);
-            }
-            else if (getter?.Body is not null)
-            {
-                // Block-bodied getter: get { return @this => …; } or get { return storedExpr; }
-                var returnStmt = getter.Body.Statements
-                    .OfType<ReturnStatementSyntax>()
-                    .FirstOrDefault();
-
-                (innerBody, firstParamName) = TryExtractLambdaBodyAndFirstParam(returnStmt?.Expression, semanticModel, member.SyntaxTree);
-            }
-        }
+        var rawExpr = TryGetPropertyGetterExpression(exprPropDecl);
+        var (innerBody, firstParamName) = rawExpr is not null
+            ? TryExtractLambdaBodyAndFirstParam(rawExpr, semanticModel, member.SyntaxTree)
+            : (null, null);
 
         if (innerBody is null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                exprPropDecl.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, exprPropDecl, memberSymbol.Name);
         }
 
         // The generated lambda always uses @this as the receiver parameter name.
@@ -304,11 +205,7 @@ public static partial class ProjectableInterpreter
 
         if (bodyExpression is null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                propertyDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, propertyDeclarationSyntax, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
@@ -349,11 +246,7 @@ public static partial class ProjectableInterpreter
         descriptor.ReturnTypeName = fullTypeName;
 
         // Add the constructor's own parameters to the lambda parameter list
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(constructorDeclarationSyntax.ParameterList)).Parameters)
-        {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
-        }
+        ApplyParameterList(constructorDeclarationSyntax.ParameterList, declarationSyntaxRewriter, descriptor);
 
         // Accumulated property-name → expression map (later converted to member-init)
         var accumulatedAssignments = new Dictionary<string, ExpressionSyntax>();
@@ -407,11 +300,7 @@ public static partial class ProjectableInterpreter
 
         if (accumulatedAssignments.Count == 0)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                constructorDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, constructorDeclarationSyntax, memberSymbol.Name);
         }
 
         // Verify the containing type has an accessible parameterless (instance) constructor.
@@ -530,39 +419,15 @@ public static partial class ProjectableInterpreter
             // Property: unwrap its body the same way we unwrap the outer property.
             if (declSyntax is PropertyDeclarationSyntax followedProp)
             {
-                if (followedProp.ExpressionBody?.Expression is { } followedExprBody)
+                var result = TryExtractLambdaBodyAndFirstParam(
+                    TryGetPropertyGetterExpression(followedProp), semanticModel, memberSyntaxTree, depth + 1);
+                if (result.body is not null)
                 {
-                    var result = TryExtractLambdaBodyAndFirstParam(followedExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result.body is not null)
-                    {
-                        return result;
-                    }
-                }
-
-                var followedGetter = followedProp.AccessorList?.Accessors
-                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-                if (followedGetter?.ExpressionBody?.Expression is { } getterExprBody)
-                {
-                    var result = TryExtractLambdaBodyAndFirstParam(getterExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result.body is not null)
-                    {
-                        return result;
-                    }
-                }
-
-                var returnResult = TryExtractLambdaBodyAndFirstParam(
-                    followedGetter?.Body?.Statements
-                        .OfType<ReturnStatementSyntax>()
-                        .FirstOrDefault()?.Expression,
-                    semanticModel, memberSyntaxTree, depth + 1);
-
-                if (returnResult.body is not null)
-                {
-                    return returnResult;
+                    return result;
                 }
             }
         }
+
 
         return (null, null);
     }

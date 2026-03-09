@@ -235,25 +235,17 @@ public static partial class ProjectableInterpreter
     }
 
     /// <summary>Returns true when a <see cref="PropertyDeclarationSyntax"/> has a readable body.</summary>
-    private static bool HasReadablePropertyBody(PropertyDeclarationSyntax xProp)
+    private static bool HasReadablePropertyBody(PropertyDeclarationSyntax prop)
     {
-        if (xProp.ExpressionBody is not null)
+        if (prop.ExpressionBody is not null)
         {
             return true;
         }
 
-        if (xProp.AccessorList is not null)
-        {
-            var getter = xProp.AccessorList.Accessors
-                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-            if (getter?.ExpressionBody is not null || getter?.Body is not null)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        var getter = prop.AccessorList?.Accessors
+            .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+        
+        return getter?.ExpressionBody is not null || getter?.Body is not null;
     }
 
     /// <summary>Returns true when a symbol is a property returning <c>Expression&lt;TDelegate&gt;</c>.</summary>
