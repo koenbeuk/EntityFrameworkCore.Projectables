@@ -75,6 +75,42 @@ public abstract class ProjectionExpressionGeneratorTestsBase
         return references;
     }
 
+    /// <summary>
+    /// Creates a test compilation from multiple source strings (e.g., to simulate split partial classes
+    /// across different files). Each element in <paramref name="sources"/> becomes a separate
+    /// <see cref="SyntaxTree"/> so that cross-tree resolution paths are exercised.
+    /// </summary>
+    protected Compilation CreateCompilation(params string[] sources)
+    {
+        var references = GetDefaultReferences();
+
+        var compilation = CSharpCompilation.Create("compilation",
+            sources.Select(s => CSharpSyntaxTree.ParseText(s)).ToArray(),
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+#if DEBUG
+        var compilationDiagnostics = compilation.GetDiagnostics();
+
+        if (!compilationDiagnostics.IsEmpty)
+        {
+            _testOutputHelper.WriteLine($"Original compilation diagnostics produced:");
+
+            foreach (var diagnostic in compilationDiagnostics)
+            {
+                _testOutputHelper.WriteLine($" > " + diagnostic.ToString());
+            }
+
+            if (compilationDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error))
+            {
+                Debug.Fail("Compilation diagnostics produced");
+            }
+        }
+#endif
+
+        return compilation;
+    }
+
     protected Compilation CreateCompilation([StringSyntax("csharp")] string source)
     {
         var references = GetDefaultReferences();

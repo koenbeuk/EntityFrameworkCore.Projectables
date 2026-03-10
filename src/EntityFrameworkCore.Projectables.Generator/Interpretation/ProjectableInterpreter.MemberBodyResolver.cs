@@ -235,6 +235,9 @@ static internal partial class ProjectableInterpreter
         // These don't need to share the member's static modifier because a
         // static Expression<Func<...>> property can legitimately back either
         // a static or an instance projectable method.
+        // They are also allowed to live in a different file (e.g. a split partial class):
+        // a direct lambda body can be extracted purely syntactically without a shared
+        // SemanticModel; the runtime fallback handles any cases the generator can't inline.
         if (resolvedBody is null && compatibleExprPropertyCandidates.Count > 0)
         {
             resolvedBody = compatibleExprPropertyCandidates
@@ -243,7 +246,7 @@ static internal partial class ProjectableInterpreter
                 .OfType<MemberDeclarationSyntax>()
                 .FirstOrDefault(x =>
                 {
-                    if (x == null || x.SyntaxTree != member.SyntaxTree)
+                    if (x == null)
                     {
                         return false;
                     }

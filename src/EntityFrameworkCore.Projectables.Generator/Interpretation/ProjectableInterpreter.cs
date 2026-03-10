@@ -76,7 +76,7 @@ static internal partial class ProjectableInterpreter
 
             // Projectable property whose body is an Expression<TDelegate> property
             (PropertyDeclarationSyntax originalPropertyDecl, PropertyDeclarationSyntax exprPropDecl)
-                when semanticModel.GetDeclaredSymbol(exprPropDecl) is IPropertySymbol s && IsExpressionDelegateProperty(s) =>
+                when IsExpressionDelegatePropertyDecl(exprPropDecl, semanticModel) =>
                 TryApplyExpressionPropertyBodyForProperty(originalPropertyDecl, exprPropDecl,
                     semanticModel, member, memberSymbol,
                     expressionSyntaxRewriter, declarationSyntaxRewriter, context, descriptor),
@@ -288,5 +288,28 @@ static internal partial class ProjectableInterpreter
                     SyntaxFactory.IdentifierName(tp.Name),
                     SyntaxFactory.SeparatedList<TypeParameterConstraintSyntax>(constraints)));
         }
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="prop"/> is a property that returns
+    /// <c>Expression&lt;TDelegate&gt;</c>.
+    /// <para>
+    /// For nodes in the same <see cref="SyntaxTree"/> as the <paramref name="semanticModel"/>,
+    /// a full semantic check is performed.  For cross-tree nodes (e.g., a backing property
+    /// declared in a different file of a split partial class), a syntactic name check is used
+    /// as a safe fallback — <see cref="TryResolveMemberBody"/> has already validated
+    /// compatibility semantically before handing us the node.
+    /// </para>
+    /// </summary>
+    private static bool IsExpressionDelegatePropertyDecl(PropertyDeclarationSyntax prop, SemanticModel semanticModel)
+    {
+        if (prop.SyntaxTree == semanticModel.SyntaxTree)
+        {
+            return semanticModel.GetDeclaredSymbol(prop) is IPropertySymbol s && IsExpressionDelegateProperty(s);
+        }
+
+        // Cross-tree: syntactic name check (type is Expression<...> or qualified variant).
+        return prop.Type is GenericNameSyntax { Identifier.ValueText: "Expression" }
+            || prop.Type is QualifiedNameSyntax { Right: GenericNameSyntax { Identifier.ValueText: "Expression" } };
     }
 }
