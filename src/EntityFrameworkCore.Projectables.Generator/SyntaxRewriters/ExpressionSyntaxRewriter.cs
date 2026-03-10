@@ -3,9 +3,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.SyntaxRewriters;
 
-public partial class ExpressionSyntaxRewriter : CSharpSyntaxRewriter
+internal partial class ExpressionSyntaxRewriter : CSharpSyntaxRewriter
 {
     readonly INamedTypeSymbol _targetTypeSymbol;
     readonly SemanticModel _semanticModel;

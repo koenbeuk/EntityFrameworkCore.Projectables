@@ -1,11 +1,11 @@
 using Microsoft.CodeAnalysis;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.Models;
 
 /// <summary>
 /// Plain-data snapshot of the [Projectable] attribute arguments.
 /// </summary>
-public readonly record struct ProjectableAttributeData
+readonly internal record struct ProjectableAttributeData
 {
     public NullConditionalRewriteSupport NullConditionalRewriteSupport { get; }
     public string? UseMemberBody { get; }
@@ -25,7 +25,7 @@ public readonly record struct ProjectableAttributeData
             var value = namedArgument.Value;
             switch (key)
             {
-                case "NullConditionalRewriteSupport":
+                case nameof(NullConditionalRewriteSupport):
                     if (value.Kind == TypedConstantKind.Enum &&
                         value.Value is not null &&
                         Enum.IsDefined(typeof(NullConditionalRewriteSupport), value.Value))
@@ -33,19 +33,19 @@ public readonly record struct ProjectableAttributeData
                         nullConditionalRewriteSupport = (NullConditionalRewriteSupport)value.Value;
                     }
                     break;
-                case "UseMemberBody":
+                case nameof(UseMemberBody):
                     if (value.Value is string s)
                     {
                         useMemberBody = s;
                     }
                     break;
-                case "ExpandEnumMethods":
+                case nameof(ExpandEnumMethods):
                     if (value.Value is bool expand && expand)
                     {
                         expandEnumMethods = true;
                     }
                     break;
-                case "AllowBlockBody":
+                case nameof(AllowBlockBody):
                     if (value.Value is bool allow && allow)
                     {
                         allowBlockBody = true;

@@ -2,9 +2,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.SyntaxRewriters;
 
-public partial class ExpressionSyntaxRewriter
+internal partial class ExpressionSyntaxRewriter
 {
     private bool TryExpandEnumMethodCall(InvocationExpressionSyntax node, MemberAccessExpressionSyntax memberAccess, IMethodSymbol methodSymbol, out ExpressionSyntax? expandedExpression)
     {

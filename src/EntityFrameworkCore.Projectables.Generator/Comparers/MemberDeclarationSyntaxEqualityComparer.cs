@@ -1,9 +1,13 @@
 ﻿using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.Comparers;
 
-public class MemberDeclarationSyntaxEqualityComparer : IEqualityComparer<MemberDeclarationSyntax>
+/// <summary>
+/// Equality comparer for MemberDeclarationSyntax nodes that treats nodes as equal if they are from the same syntax
+/// tree and have the same structure, even if they are different instances.
+/// </summary>
+internal class MemberDeclarationSyntaxEqualityComparer : IEqualityComparer<MemberDeclarationSyntax>
 {
     public bool Equals(MemberDeclarationSyntax x, MemberDeclarationSyntax y)
     {

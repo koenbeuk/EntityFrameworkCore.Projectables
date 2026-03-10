@@ -1,12 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
+using EntityFrameworkCore.Projectables.Generator.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.Comparers;
 
-public class MemberDeclarationSyntaxAndCompilationEqualityComparer
+/// <summary>
+/// Equality comparer for tuples of (MemberDeclarationSyntax, ProjectableAttributeData) and Compilation,
+/// used as keys in the registry to determine if a member's projectable status has changed across incremental generation steps.
+/// </summary>
+internal class MemberDeclarationSyntaxAndCompilationEqualityComparer
     : IEqualityComparer<((MemberDeclarationSyntax Member, ProjectableAttributeData Attribute), Compilation)>
 {
     private readonly static MemberDeclarationSyntaxEqualityComparer _memberComparer = new();

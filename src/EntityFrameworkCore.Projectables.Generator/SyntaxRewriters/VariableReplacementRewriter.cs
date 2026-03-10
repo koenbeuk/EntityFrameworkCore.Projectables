@@ -1,9 +1,10 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-namespace EntityFrameworkCore.Projectables.Generator;
 
-public class VariableReplacementRewriter : CSharpSyntaxRewriter
+namespace EntityFrameworkCore.Projectables.Generator.SyntaxRewriters;
+
+internal class VariableReplacementRewriter : CSharpSyntaxRewriter
 {
     private readonly string _variableName;
     private readonly ExpressionSyntax _replacement;
