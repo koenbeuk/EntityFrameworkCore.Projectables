@@ -47,11 +47,7 @@ public static partial class ProjectableInterpreter
         }
         else
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                methodDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, methodDeclarationSyntax, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ReturnType);
@@ -62,28 +58,8 @@ public static partial class ProjectableInterpreter
             ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(bodyExpression)
             : bodyExpression;
 
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.ParameterList)).Parameters)
-        {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
-        }
-
-        if (methodDeclarationSyntax.TypeParameterList is not null)
-        {
-            descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
-            foreach (var additionalTypeParameter in
-                     ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(methodDeclarationSyntax.TypeParameterList)).Parameters)
-            {
-                descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
-            }
-        }
-
-        if (methodDeclarationSyntax.ConstraintClauses.Any())
-        {
-            descriptor.ConstraintClauses = SyntaxFactory.List(
-                methodDeclarationSyntax.ConstraintClauses
-                    .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x)));
-        }
+        ApplyParameterList(methodDeclarationSyntax.ParameterList, declarationSyntaxRewriter, descriptor);
+        ApplyTypeParameters(methodDeclarationSyntax, declarationSyntaxRewriter, descriptor);
 
         return true;
     }
@@ -106,69 +82,150 @@ public static partial class ProjectableInterpreter
         SourceProductionContext context,
         ProjectableDescriptor descriptor)
     {
-        ExpressionSyntax? innerBody = null;
-
-        if (exprPropDecl.ExpressionBody?.Expression is { } exprBodyExpr)
-        {
-            // Expression-bodied property: Prop => (x) => …  OR  Prop => storedExpr
-            innerBody = TryExtractLambdaBody(exprBodyExpr, semanticModel, member.SyntaxTree);
-        }
-        else if (exprPropDecl.AccessorList is not null)
-        {
-            var getter = exprPropDecl.AccessorList.Accessors
-                .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-            if (getter?.ExpressionBody?.Expression is { } getterExprBody)
-            {
-                // get => (x) => …  OR  get => storedExpr
-                innerBody = TryExtractLambdaBody(getterExprBody, semanticModel, member.SyntaxTree);
-            }
-            else if (getter?.Body is not null)
-            {
-                // Block-bodied getter: get { return (x) => …; } or get { return storedExpr; }
-                var returnStmt = getter.Body.Statements
-                    .OfType<ReturnStatementSyntax>()
-                    .FirstOrDefault();
-
-                innerBody = TryExtractLambdaBody(returnStmt?.Expression, semanticModel, member.SyntaxTree);
-            }
-        }
+        var rawExpr = TryGetPropertyGetterExpression(exprPropDecl);
+        var (innerBody, lambdaParamNames) = rawExpr is not null
+            ? TryExtractLambdaBodyAndParams(rawExpr, semanticModel, member.SyntaxTree)
+            : (null, []);
 
         if (innerBody is null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                exprPropDecl.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, exprPropDecl, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(originalMethodDecl.ReturnType);
         descriptor.ReturnTypeName = returnType.ToString();
-        descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
 
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.ParameterList)).Parameters)
+        // expressionSyntaxRewriter uses the semantic model which requires the original
+        // (pre-rename) syntax nodes, so we must visit before renaming.
+        // For cross-tree expression properties the rewriter's SemanticModel cannot resolve
+        // nodes from the other file — skip rewriting in that case (simple lambda bodies need
+        // no rewrites; advanced features like null-conditional rewriting are unsupported cross-file).
+        var visitedBody = exprPropDecl.SyntaxTree == member.SyntaxTree
+            ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody)
+            : innerBody;
+
+        // For instance methods and C#14 extension members, BuildBaseDescriptor adds an
+        // implicit @this receiver parameter.  If the expression property lambda uses a
+        // different parameter name (e.g. c => c.Value > 0), rename it so the generated
+        // code references @this instead of an undefined identifier.
+        var isExtensionMember = memberSymbol.ContainingType is { IsExtension: true };
+        var hasImplicitReceiver = isExtensionMember
+            || !originalMethodDecl.Modifiers.Any(SyntaxKind.StaticKeyword);
+
+        // Collect (lambdaParamName → methodParamName) rename pairs to apply in a
+        // single multi-variable pass, avoiding cascading renames when names overlap.
+        var renames = new List<(string From, string To)>();
+
+        var lambdaOffset = 0;
+        if (hasImplicitReceiver)
         {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
+            if (lambdaParamNames.Count > 0 && lambdaParamNames[0] != "@this")
+            {
+                renames.Add((lambdaParamNames[0], "@this"));
+            }
+
+            lambdaOffset = 1;
         }
 
-        if (originalMethodDecl.TypeParameterList is not null)
+        // Rename each explicit method parameter from its lambda counterpart name.
+        var methodParams = originalMethodDecl.ParameterList.Parameters;
+        for (var i = 0; i < methodParams.Count; i++)
         {
-            descriptor.TypeParameterList = SyntaxFactory.TypeParameterList();
-            foreach (var additionalTypeParameter in
-                     ((TypeParameterListSyntax)declarationSyntaxRewriter.Visit(originalMethodDecl.TypeParameterList)).Parameters)
+            var lambdaIdx = lambdaOffset + i;
+            if (lambdaIdx >= lambdaParamNames.Count)
             {
-                descriptor.TypeParameterList = descriptor.TypeParameterList.AddParameters(additionalTypeParameter);
+                break;
+            }
+
+            var lambdaName = lambdaParamNames[lambdaIdx];
+            var methodName = methodParams[i].Identifier.ValueText;
+            if (lambdaName != methodName)
+            {
+                renames.Add((lambdaName, methodName));
             }
         }
 
-        if (originalMethodDecl.ConstraintClauses.Any())
+        // Apply all renames. To avoid cascading substitutions when names overlap
+        // (e.g. swapped parameter names), use a unique sentinel prefix for each
+        // intermediate name, then replace sentinels with the final names.
+        if (renames.Count > 0)
         {
-            descriptor.ConstraintClauses = SyntaxFactory.List(
-                originalMethodDecl.ConstraintClauses
-                    .Select(x => (TypeParameterConstraintClauseSyntax)declarationSyntaxRewriter.Visit(x)));
+            // Phase 1: rename each source name to a collision-free sentinel.
+            var sentinels = new List<(string Sentinel, string To)>(renames.Count);
+            for (var i = 0; i < renames.Count; i++)
+            {
+                var sentinel = $"__rename_sentinel_{i}__";
+                visitedBody = (ExpressionSyntax)new VariableReplacementRewriter(
+                    renames[i].From,
+                    SyntaxFactory.IdentifierName(sentinel)).Visit(visitedBody);
+                sentinels.Add((sentinel, renames[i].To));
+            }
+
+            // Phase 2: replace each sentinel with the final target name.
+            foreach (var (sentinel, to) in sentinels)
+            {
+                visitedBody = (ExpressionSyntax)new VariableReplacementRewriter(
+                    sentinel,
+                    SyntaxFactory.IdentifierName(to)).Visit(visitedBody);
+            }
         }
+
+        descriptor.ExpressionBody = visitedBody;
+
+        ApplyParameterList(originalMethodDecl.ParameterList, declarationSyntaxRewriter, descriptor);
+        ApplyTypeParameters(originalMethodDecl, declarationSyntaxRewriter, descriptor);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Fills <paramref name="descriptor"/> for a projectable property whose body is
+    /// delegated to an <c>Expression&lt;TDelegate&gt;</c> property (specified via
+    /// <c>UseMemberBody</c>). Unwraps the inner lambda and uses the projectable
+    /// property's own return type. The implicit <c>@this</c> parameter is already
+    /// added by <see cref="BuildBaseDescriptor"/>.
+    /// Returns <c>false</c> and reports diagnostics on failure.
+    /// </summary>
+    private static bool TryApplyExpressionPropertyBodyForProperty(
+        PropertyDeclarationSyntax originalPropertyDecl,
+        PropertyDeclarationSyntax exprPropDecl,
+        SemanticModel semanticModel,
+        MemberDeclarationSyntax member,
+        ISymbol memberSymbol,
+        ExpressionSyntaxRewriter expressionSyntaxRewriter,
+        DeclarationSyntaxRewriter declarationSyntaxRewriter,
+        SourceProductionContext context,
+        ProjectableDescriptor descriptor)
+    {
+        var rawExpr = TryGetPropertyGetterExpression(exprPropDecl);
+        var (innerBody, firstParamName) = rawExpr is not null
+            ? TryExtractLambdaBodyAndFirstParam(rawExpr, semanticModel, member.SyntaxTree)
+            : (null, null);
+
+        if (innerBody is null)
+        {
+            return ReportRequiresBodyAndFail(context, exprPropDecl, memberSymbol.Name);
+        }
+
+        // The generated lambda always uses @this as the receiver parameter name.
+        // If the expression property used a different name (e.g. `x => x.Id`), rename it.
+        // NOTE: renaming must happen AFTER expressionSyntaxRewriter.Visit because the rewriter
+        // uses the semantic model which requires the original (pre-rename) syntax nodes.
+        // For cross-tree expression properties the rewriter's SemanticModel cannot resolve
+        // nodes from the other file — skip rewriting in that case.
+        var visitedBody = exprPropDecl.SyntaxTree == member.SyntaxTree
+            ? (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody)
+            : innerBody;
+        if (firstParamName is not null && firstParamName != "@this")
+        {
+            visitedBody = (ExpressionSyntax)new VariableReplacementRewriter(
+                firstParamName,
+                SyntaxFactory.IdentifierName("@this")).Visit(visitedBody);
+        }
+
+        var returnType = declarationSyntaxRewriter.Visit(originalPropertyDecl.Type);
+        descriptor.ReturnTypeName = returnType.ToString();
+        descriptor.ExpressionBody = visitedBody;
 
         return true;
     }
@@ -228,11 +285,7 @@ public static partial class ProjectableInterpreter
 
         if (bodyExpression is null)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                propertyDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, propertyDeclarationSyntax, memberSymbol.Name);
         }
 
         var returnType = declarationSyntaxRewriter.Visit(propertyDeclarationSyntax.Type);
@@ -273,11 +326,7 @@ public static partial class ProjectableInterpreter
         descriptor.ReturnTypeName = fullTypeName;
 
         // Add the constructor's own parameters to the lambda parameter list
-        foreach (var additionalParameter in
-                 ((ParameterListSyntax)declarationSyntaxRewriter.Visit(constructorDeclarationSyntax.ParameterList)).Parameters)
-        {
-            descriptor.ParametersList = descriptor.ParametersList!.AddParameters(additionalParameter);
-        }
+        ApplyParameterList(constructorDeclarationSyntax.ParameterList, declarationSyntaxRewriter, descriptor);
 
         // Accumulated property-name → expression map (later converted to member-init)
         var accumulatedAssignments = new Dictionary<string, ExpressionSyntax>();
@@ -331,11 +380,7 @@ public static partial class ProjectableInterpreter
 
         if (accumulatedAssignments.Count == 0)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.RequiresBodyDefinition,
-                constructorDeclarationSyntax.GetLocation(),
-                memberSymbol.Name));
-            return false;
+            return ReportRequiresBodyAndFail(context, constructorDeclarationSyntax, memberSymbol.Name);
         }
 
         // Verify the containing type has an accessible parameterless (instance) constructor.
@@ -390,17 +435,50 @@ public static partial class ProjectableInterpreter
         SemanticModel semanticModel,
         SyntaxTree memberSyntaxTree,
         int depth = 0)
+        => TryExtractLambdaBodyAndParams(expression, semanticModel, memberSyntaxTree, depth).body;
+
+    /// <summary>
+    /// Like <see cref="TryExtractLambdaBody"/>, but also returns the first lambda parameter name
+    /// so callers can rename it (e.g. to <c>@this</c>) in the extracted body.
+    /// </summary>
+    private static (ExpressionSyntax? body, string? firstParamName) TryExtractLambdaBodyAndFirstParam(
+        ExpressionSyntax? expression,
+        SemanticModel semanticModel,
+        SyntaxTree memberSyntaxTree,
+        int depth = 0)
+    {
+        var (body, paramNames) = TryExtractLambdaBodyAndParams(expression, semanticModel, memberSyntaxTree, depth);
+        return (body, paramNames.Count > 0 ? paramNames[0] : null);
+    }
+
+    /// <summary>
+    /// Like <see cref="TryExtractLambdaBody"/>, but also returns all lambda parameter names
+    /// (in declaration order) so callers can rename them in the extracted body.
+    /// </summary>
+    private static (ExpressionSyntax? body, IReadOnlyList<string> paramNames) TryExtractLambdaBodyAndParams(
+        ExpressionSyntax? expression,
+        SemanticModel semanticModel,
+        SyntaxTree memberSyntaxTree,
+        int depth = 0)
     {
         if (expression is null || depth > 5)
         {
-            return null;
+            return (null, []);
         }
 
-        // Lambda literal → extract its expression body directly.
-        // Block-bodied lambda (e.g. x => { return x > 5; }) yields null → falls through to EFP0006.
-        if (expression is LambdaExpressionSyntax lambda)
+        // Lambda literal → extract its expression body and parameter names directly.
+        // Block-bodied lambda yields null body → falls through to EFP0006.
+        if (expression is SimpleLambdaExpressionSyntax simpleLambda)
         {
-            return lambda.Body as ExpressionSyntax;
+            return (simpleLambda.Body as ExpressionSyntax, [simpleLambda.Parameter.Identifier.ValueText]);
+        }
+
+        if (expression is ParenthesizedLambdaExpressionSyntax parenLambda)
+        {
+            var names = parenLambda.ParameterList.Parameters
+                .Select(p => p.Identifier.ValueText)
+                .ToList();
+            return (parenLambda.Body as ExpressionSyntax, names);
         }
 
         // Non-lambda: resolve the symbol and follow the reference to its source
@@ -408,7 +486,7 @@ public static partial class ProjectableInterpreter
         var symbol = semanticModel.GetSymbolInfo(expression).Symbol;
         if (symbol is not (IFieldSymbol or IPropertySymbol))
         {
-            return null;
+            return (null, []);
         }
 
         foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
@@ -425,8 +503,8 @@ public static partial class ProjectableInterpreter
             // Field: private static readonly Expression<Func<…>> _f = @this => …;
             if (declSyntax is VariableDeclaratorSyntax { Initializer.Value: var initValue })
             {
-                var result = TryExtractLambdaBody(initValue, semanticModel, memberSyntaxTree, depth + 1);
-                if (result is not null)
+                var result = TryExtractLambdaBodyAndParams(initValue, semanticModel, memberSyntaxTree, depth + 1);
+                if (result.body is not null)
                 {
                     return result;
                 }
@@ -435,40 +513,15 @@ public static partial class ProjectableInterpreter
             // Property: unwrap its body the same way we unwrap the outer property.
             if (declSyntax is PropertyDeclarationSyntax followedProp)
             {
-                if (followedProp.ExpressionBody?.Expression is { } followedExprBody)
+                var result = TryExtractLambdaBodyAndParams(
+                    TryGetPropertyGetterExpression(followedProp), semanticModel, memberSyntaxTree, depth + 1);
+                if (result.body is not null)
                 {
-                    var result = TryExtractLambdaBody(followedExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result is not null)
-                    {
-                        return result;
-                    }
-                }
-
-                var followedGetter = followedProp.AccessorList?.Accessors
-                    .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-
-                if (followedGetter?.ExpressionBody?.Expression is { } getterExprBody)
-                {
-                    var result = TryExtractLambdaBody(getterExprBody, semanticModel, memberSyntaxTree, depth + 1);
-                    if (result is not null)
-                    {
-                        return result;
-                    }
-                }
-
-                var returnResult = TryExtractLambdaBody(
-                    followedGetter?.Body?.Statements
-                        .OfType<ReturnStatementSyntax>()
-                        .FirstOrDefault()?.Expression,
-                    semanticModel, memberSyntaxTree, depth + 1);
-
-                if (returnResult is not null)
-                {
-                    return returnResult;
+                    return result;
                 }
             }
         }
 
-        return null;
+        return (null, []);
     }
 }
