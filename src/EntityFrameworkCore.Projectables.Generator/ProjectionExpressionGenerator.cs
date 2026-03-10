@@ -228,8 +228,6 @@ public class ProjectionExpressionGenerator : IIncrementalGenerator
                     )
             );
 
-#nullable disable
-
         var compilationUnit = CompilationUnit();
 
         foreach (var usingDirective in projectable.UsingDirectives!)
@@ -267,7 +265,12 @@ public class ProjectionExpressionGenerator : IIncrementalGenerator
         {
             var lambdaTypeArguments = TypeArgumentList(
                 SeparatedList(
-                    // TODO: Document where clause
+                    // In Roslyn's syntax model, ParameterSyntax.Type is nullable: it is null for
+                    // implicitly-typed lambda parameters (e.g. `(x, y) => x + y`).
+                    // We filter those out to avoid passing null nodes into TypeArgumentList,
+                    // which would cause a NullReferenceException at generation time.
+                    // In practice all [Projectable] members have explicitly-typed parameters,
+                    // so this filter acts as a defensive guard rather than a functional branch.
                     projectable.ParametersList?.Parameters.Where(p => p.Type is not null).Select(p => p.Type!)
                 )
             );
@@ -280,8 +283,6 @@ public class ProjectionExpressionGenerator : IIncrementalGenerator
             return lambdaTypeArguments;
         }
     }
-
-#nullable restore
 
     /// <summary>
     /// Extracts a <see cref="ProjectionRegistryEntry"/> from a member declaration.
