@@ -616,6 +616,137 @@ namespace Foo {
     }
 
     [Fact]
+    public Task Method_UsesExpressionPropertyBody_InstanceMethod_WithAlternativeReceiverName()
+    {
+        // Regression test: when the Expression<TDelegate> property lambda uses a different
+        // parameter name for the receiver (e.g. 'c' instead of '@this'), the generated
+        // code must still reference @this — not the original lambda parameter name which
+        // would be undefined in the generated lambda.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+
+        // Uses 'c' instead of '@this' as the lambda receiver parameter name
+        private static Expression<Func<C, bool>> IsPositiveExpr => c => c.Value > 0;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_InstanceMethod_WithParamsAndAlternativeReceiverName()
+    {
+        // Same regression: method with extra parameters, receiver lambda param renamed to @this,
+        // remaining explicit parameters keep their names from the method declaration.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(ExceedsThresholdExpr))]
+        public bool ExceedsThreshold(int threshold) => Value > threshold;
+
+        // Uses 'entity' instead of '@this' as the receiver parameter name
+        private static Expression<Func<C, int, bool>> ExceedsThresholdExpr =>
+            (entity, threshold) => entity.Value > threshold;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_InstanceMethod_NestedLambdaShadowingReceiverName_NotRenamed()
+    {
+        // Regression: the scope-unaware VariableReplacementRewriter used to rename every
+        // occurrence of the outer lambda's receiver parameter — including identifiers in
+        // nested lambdas that re-declare the same name (shadowing).
+        // Only the outer receiver parameter should be renamed to @this; the inner lambda's
+        // parameter with the same name must remain unchanged.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public IEnumerable<int> Items { get; set; }
+
+        [Projectable(UseMemberBody = nameof(DoubledItemsExpr))]
+        public IEnumerable<int> DoubledItems() => Items.Select(x => x * 2);
+
+        // Outer parameter is named 'c'; nested lambda also uses 'c' (shadows outer).
+        private static Expression<Func<C, IEnumerable<int>>> DoubledItemsExpr =>
+            c => c.Items.Select(c => c * 2);
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_InstanceMethod_NestedLambdaCapturesRenamedReceiver()
+    {
+        // Complement to the shadowing test: when the nested lambda does NOT reuse the outer
+        // parameter name but captures the outer receiver, references to the outer variable
+        // inside the inner lambda body MUST still be renamed to @this.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public IEnumerable<int> Items { get; set; }
+        public int Multiplier { get; set; }
+
+        [Projectable(UseMemberBody = nameof(ScaledItemsExpr))]
+        public IEnumerable<int> ScaledItems() => Items.Select(x => x * Multiplier);
+
+        // Nested lambda uses 'item' (different from outer 'c'), but references the outer 'c'
+        // inside its body via c.Multiplier — that reference must be renamed to @this.
+        private static Expression<Func<C, IEnumerable<int>>> ScaledItemsExpr =>
+            c => c.Items.Select(item => item * c.Multiplier);
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
     public void UseMemberBody_InstanceMethod_ExpressionProperty_IncompatibleReturnType_EmitsEFP0011()
     {
         // Instance method: Expression<Func<C, ???>> — return type mismatch.

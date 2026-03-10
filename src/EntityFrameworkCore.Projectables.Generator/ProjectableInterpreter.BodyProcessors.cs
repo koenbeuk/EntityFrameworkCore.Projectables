@@ -83,9 +83,9 @@ public static partial class ProjectableInterpreter
         ProjectableDescriptor descriptor)
     {
         var rawExpr = TryGetPropertyGetterExpression(exprPropDecl);
-        var innerBody = rawExpr is not null
-            ? TryExtractLambdaBody(rawExpr, semanticModel, member.SyntaxTree)
-            : null;
+        var (innerBody, firstParamName) = rawExpr is not null
+            ? TryExtractLambdaBodyAndFirstParam(rawExpr, semanticModel, member.SyntaxTree)
+            : (null, null);
 
         if (innerBody is null)
         {
@@ -94,7 +94,27 @@ public static partial class ProjectableInterpreter
 
         var returnType = declarationSyntaxRewriter.Visit(originalMethodDecl.ReturnType);
         descriptor.ReturnTypeName = returnType.ToString();
-        descriptor.ExpressionBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
+
+        // expressionSyntaxRewriter uses the semantic model which requires the original
+        // (pre-rename) syntax nodes, so we must visit before renaming.
+        var visitedBody = (ExpressionSyntax)expressionSyntaxRewriter.Visit(innerBody);
+
+        // For instance methods and C#14 extension members, BuildBaseDescriptor adds an
+        // implicit @this receiver parameter.  If the expression property lambda uses a
+        // different parameter name (e.g. c => c.Value > 0), rename it so the generated
+        // code references @this instead of an undefined identifier.
+        var isExtensionMember = memberSymbol.ContainingType is { IsExtension: true };
+        var hasImplicitReceiver = isExtensionMember
+            || !originalMethodDecl.Modifiers.Any(SyntaxKind.StaticKeyword);
+
+        if (hasImplicitReceiver && firstParamName is not null && firstParamName != "@this")
+        {
+            visitedBody = (ExpressionSyntax)new VariableReplacementRewriter(
+                firstParamName,
+                SyntaxFactory.IdentifierName("@this")).Visit(visitedBody);
+        }
+
+        descriptor.ExpressionBody = visitedBody;
 
         ApplyParameterList(originalMethodDecl.ParameterList, declarationSyntaxRewriter, descriptor);
         ApplyTypeParameters(originalMethodDecl, declarationSyntaxRewriter, descriptor);
