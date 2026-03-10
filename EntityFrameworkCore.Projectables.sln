@@ -42,6 +42,17 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EntityFrameworkCore.Projectables.Benchmarks", "benchmarks\EntityFrameworkCore.Projectables.Benchmarks\EntityFrameworkCore.Projectables.Benchmarks.csproj", "{F2F01B61-5FB8-4F96-A6DE-824C9756B365}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "github", "github", "{C95A2C5D-4A3B-440C-A703-2D5892ABA7FE}"
+	ProjectSection(SolutionItems) = preProject
+		.github\copilot-instructions.md = .github\copilot-instructions.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{31596010-788E-434F-BF00-4EBC6E232822}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\build.yml = .github\workflows\build.yml
+		.github\workflows\release.yml = .github\workflows\release.yml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,6 +104,7 @@ Global
 		{A36F5471-0C16-4453-811B-818326931313} = {F5E4436F-87F2-46AB-A9EB-59B4BF21BF7A}
 		{6F63E04C-9267-4211-8AC7-290C60331D60} = {07584D01-2D30-404B-B0D1-32080C0CC18A}
 		{F2F01B61-5FB8-4F96-A6DE-824C9756B365} = {D1DB50EE-D639-46B0-8966-D0AA5F569620}
+		{31596010-788E-434F-BF00-4EBC6E232822} = {C95A2C5D-4A3B-440C-A703-2D5892ABA7FE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D17BD356-592C-4628-9D81-A04E24FF02F3}
