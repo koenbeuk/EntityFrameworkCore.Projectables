@@ -316,7 +316,7 @@ Multiple `[Projectable]` constructors (overloads) per class are fully supported.
 
 #### Can I redirect the expression body to a different member with `UseMemberBody`?
 
-Yes! The `UseMemberBody` property on `[Projectable]` lets you redirect the source of the generated expression to a *different* member on the same type (and in the same file). 
+Yes! The `UseMemberBody` property on `[Projectable]` lets you redirect the source of the generated expression to a *different* member on the same type.
 
 This is useful when you want to:
 
@@ -343,6 +343,8 @@ public class Entity
 
 The generated expression is `(@this) => @this.Id * 2`, so `Computed` projects as `Id * 2` in SQL even though the arrow body says `Id`.
 
+> **Note:** When delegating to a regular method or property body the target member must be declared in the **same source file** as the `[Projectable]` member so the generator can read its body.
+
 ##### Using an `Expression<Func<...>>` property as the body
 
 For even more control you can supply the body as a typed `Expression<Func<...>>` property. This lets you write the expression once and reuse it from both the `[Projectable]` member and any runtime code that needs the expression tree directly:
@@ -360,9 +362,26 @@ public class Entity
 }
 ```
 
-> **Note:** When the projectable member is a *property*, the `Expression<Func<...>>` property body is handled entirely by the runtime resolver — no extra source is generated. This works transparently.
+Unlike regular method/property delegation, `Expression<Func<...>>` backing properties may be declared in a **different file** — for example in a separate part of a `partial class`:
 
-For **instance methods**, name the lambda parameter `@this` so that it matches the generator's own naming convention:
+```csharp
+// File: Entity.cs
+public partial class Entity
+{
+    public int Id { get; set; }
+
+    [Projectable(UseMemberBody = nameof(IdDoubledExpr))]
+    public int Computed => Id;
+}
+
+// File: Entity.Expressions.cs
+public partial class Entity
+{
+    private static Expression<Func<Entity, int>> IdDoubledExpr => @this => @this.Id * 2;
+}
+```
+
+For **instance methods**, the generator automatically aligns lambda parameter names with the method's own parameter names, so you are free to choose any names in the lambda. Using `@this` for the receiver is conventional and avoids any renaming:
 
 ```csharp
 public class Entity
@@ -372,8 +391,17 @@ public class Entity
     [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
     public bool IsPositive() => Value > 0;
 
+    // Any receiver name works; @this is conventional
     private static Expression<Func<Entity, bool>> IsPositiveExpr => @this => @this.Value > 0;
 }
+```
+
+If the lambda parameter names differ from the method's parameter names the generator renames them automatically:
+
+```csharp
+// Lambda uses (c, t) but method parameter is named threshold — generated code uses threshold
+private static Expression<Func<Entity, int, bool>> ExceedsThresholdExpr =>
+    (c, t) => c.Value > t;
 ```
 
 ##### Static extension methods

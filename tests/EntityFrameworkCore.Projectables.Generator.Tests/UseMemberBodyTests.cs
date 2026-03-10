@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using VerifyXunit;
 using Xunit;
 using Xunit.Abstractions;
@@ -738,6 +739,109 @@ namespace Foo {
     }
 }
 ");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_InstanceMethod_WithDifferentExplicitParamNames()
+    {
+        // Regression test (Issue 2): when ALL lambda parameter names differ from the method's
+        // parameter names (not just the receiver), the generated code must rename them all.
+        // Here 'c' → '@this' and 't' → 'threshold'.
+        var compilation = CreateCompilation(@"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(ExceedsThresholdExpr))]
+        public bool ExceedsThreshold(int threshold) => Value > threshold;
+
+        // Uses 'c' for the receiver and 't' for the parameter — both differ from method names
+        private static Expression<Func<C, int, bool>> ExceedsThresholdExpr =>
+            (c, t) => c.Value > t;
+    }
+}
+");
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Method_UsesExpressionPropertyBody_ExpressionPropertyInDifferentFile()
+    {
+        // Regression test (Issue 1): the Expression<TDelegate> backing property is declared
+        // in a different file (separate SyntaxTree) than the [Projectable] method, as is
+        // typical for split partial classes.  Previously this caused EFP0011; now the
+        // generator should inline the lambda and emit the expression tree.
+        var compilation = CreateCompilation(
+            @"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class C {
+        public int Value { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IsPositiveExpr))]
+        public bool IsPositive() => Value > 0;
+    }
+}",
+            @"
+using System;
+using System.Linq.Expressions;
+namespace Foo {
+    partial class C {
+        private static Expression<Func<C, bool>> IsPositiveExpr => @this => @this.Value > 0;
+    }
+}");
+
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
+    public Task Property_UsesExpressionPropertyBody_ExpressionPropertyInDifferentFile()
+    {
+        // Regression test (Issue 1): same as the method variant above but for a projectable
+        // property.  The Expression<Func<C, int>> backing property lives in a second file.
+        var compilation = CreateCompilation(
+            @"
+using System;
+using System.Linq.Expressions;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    partial class C {
+        public int Id { get; set; }
+
+        [Projectable(UseMemberBody = nameof(IdDoubledExpr))]
+        public int Computed => Id;
+    }
+}",
+            @"
+using System;
+using System.Linq.Expressions;
+namespace Foo {
+    partial class C {
+        private static Expression<Func<C, int>> IdDoubledExpr => @this => @this.Id * 2;
+    }
+}");
+
         var result = RunGenerator(compilation);
 
         Assert.Empty(result.Diagnostics);
