@@ -118,7 +118,7 @@ With framework suffix when using `UniqueForTargetFrameworkAndVersion()`:
 
 **When you add or change a test that uses `Verify`:**
 - Delete the old `.verified.txt` file(s) if the output changes
-- Run the tests; because `AutoVerify` is enabled in the initializers, new snapshots are accepted automatically on the developer machine
+- Run the tests; if you enable `AutoVerify` by setting `VERIFY_AUTO_APPROVE=true`, new snapshots are accepted automatically on your machine
 - **Review the generated `.verified.txt` files** before committing — they are the ground truth
 
 ### AutoVerify & culture (developer machine)
