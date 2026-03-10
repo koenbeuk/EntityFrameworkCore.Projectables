@@ -1,10 +1,12 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using EntityFrameworkCore.Projectables.Generator.Infrastructure;
+using EntityFrameworkCore.Projectables.Generator.SyntaxRewriters;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.Interpretation;
 
-public static partial class ProjectableInterpreter
+static internal partial class ProjectableInterpreter
 {
     /// <summary>
     /// Collects the property-assignment expressions that the delegated constructor (base/this)

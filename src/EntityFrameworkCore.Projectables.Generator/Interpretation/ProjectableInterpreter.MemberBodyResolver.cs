@@ -1,10 +1,11 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using EntityFrameworkCore.Projectables.Generator.Infrastructure;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace EntityFrameworkCore.Projectables.Generator;
+namespace EntityFrameworkCore.Projectables.Generator.Interpretation;
 
-public static partial class ProjectableInterpreter
+static internal partial class ProjectableInterpreter
 {
     /// <summary>
     /// Resolves the member body syntax to use.
