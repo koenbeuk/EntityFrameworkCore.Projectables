@@ -163,7 +163,10 @@ ORDER BY (COALESCE("u"."FirstName", '') || ' ') || COALESCE("u"."LastName", '')
 
 #### Can I use block-bodied members instead of expression-bodied members?
 
-Yes! As of version 6.x, you can now use traditional block-bodied members with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
+> [!NOTE]
+> This feature is available starting from version 6.x and is considered experimental. 
+
+Yes! you can now use traditional block-bodied members with `[Projectable]`. This makes code more readable when dealing with complex conditional logic:
 
 ```csharp
 // Expression-bodied (still supported)
@@ -195,7 +198,10 @@ The generator will also detect and report side effects (assignments, method call
 
 #### Can I use `[Projectable]` on a constructor?
 
-Yes! As of version 6.x, constructors can now be marked with `[Projectable]`. The generator will produce a member-init expression (`new T() { Prop = value, … }`) that EF Core can translate to a SQL projection.
+> [!NOTE]
+> This feature is available starting from version 6.x.
+
+Yes! constructors can now be marked with `[Projectable]`. The generator will produce a member-init expression (`new T() { Prop = value, … }`) that EF Core can translate to a SQL projection.
 
 **Requirements:**
 - The class must expose an accessible **parameterless constructor** (public, internal, or protected-internal), because the generated code relies on `new T() { … }` syntax.
@@ -312,7 +318,8 @@ The generated expression inlines both the base constructor and the derived const
 
 Multiple `[Projectable]` constructors (overloads) per class are fully supported.
 
-> **Note:** If the delegated constructor's source is not available in the current compilation, the generator reports **EFP0009** and skips the projection.
+> [!NOTE]
+> If the delegated constructor's source is not available in the current compilation, the generator reports **EFP0009** and skips the projection.
 
 #### Can I redirect the expression body to a different member with `UseMemberBody`?
 
@@ -343,7 +350,8 @@ public class Entity
 
 The generated expression is `(@this) => @this.Id * 2`, so `Computed` projects as `Id * 2` in SQL even though the arrow body says `Id`.
 
-> **Note:** When delegating to a regular method or property body the target member must be declared in the **same source file** as the `[Projectable]` member so the generator can read its body.
+> [!NOTE]
+> When delegating to a regular method or property body the target member must be declared in the **same source file** as the `[Projectable]` member so the generator can read its body.
 
 ##### Using an `Expression<Func<...>>` property as the body
 
@@ -430,7 +438,10 @@ The generated expression is `(Foo a, Foo b) => a.Name == b.Name` — the same la
 
 #### Can I use pattern matching in projectable members?
 
-Yes! As of version 6.x, the generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
+> [!NOTE]
+> This feature is available starting from version 6.x.
+
+Yes! the generator supports a rich set of C# pattern-matching constructs and rewrites them into expression-tree-compatible ternary/binary expressions that EF Core can translate to SQL CASE expressions.
 
 **Switch expressions** with the following arm patterns are supported:
 
@@ -503,7 +514,11 @@ public static ItemData ToData(this Item item) =>
 Unsupported patterns (e.g. positional/deconstruct patterns, variable designations outside switch arms) are reported as **EFP0007**.
 
 #### How do I expand enum extension methods?
-As of version 6.x, when you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
+
+> [!NOTE]
+> This feature is available starting from version 6.x.
+
+When you have an enum property and want to call an extension method on it (like getting a display name from a `[Display]` attribute), you can use the `ExpandEnumMethods` property on the `[Projectable]` attribute. This will expand the enum method call into a chain of ternary expressions for each enum value, allowing EF Core to translate it to SQL CASE expressions.
 
 ```csharp
 public enum OrderStatus
