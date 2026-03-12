@@ -237,14 +237,27 @@ namespace EntityFrameworkCore.Projectables.Services
             {
                 try
                 {
-                    var value = Expression
-                        .Lambda<Func<object>>(Expression.Convert(node, typeof(object)))
-                        .Compile()
-                        .Invoke();
+                    // Cheap type check first: only call GetValue() when the member could
+                    // possibly hold an IQueryable.  FieldType / PropertyType are free
+                    // property reads on an already-materialised MemberInfo object.
+                    var memberType = node.Member switch {
+                        FieldInfo field => field.FieldType,
+                        PropertyInfo prop => prop.PropertyType,
+                        _ => null
+                    };
 
-                    if (value is IQueryable queryable && ReferenceEquals(queryable.Provider, _currentQueryProvider))
+                    if (memberType is not null && typeof(IQueryable).IsAssignableFrom(memberType))
                     {
-                        return Visit(queryable.Expression);
+                        var value = node.Member switch {
+                            FieldInfo field => field.GetValue(constant.Value),
+                            PropertyInfo prop => prop.GetValue(constant.Value),
+                            _ => null
+                        };
+
+                        if (value is IQueryable queryable && ReferenceEquals(queryable.Provider, _currentQueryProvider))
+                        {
+                            return Visit(queryable.Expression);
+                        }
                     }
                 }
                 catch
