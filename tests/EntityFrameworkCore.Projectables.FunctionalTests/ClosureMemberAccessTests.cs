@@ -4,23 +4,40 @@ using Microsoft.EntityFrameworkCore;
 namespace EntityFrameworkCore.Projectables.FunctionalTests;
 
 /// <summary>
-/// Validates that closure member evaluation via the reflection switch (FieldInfo/PropertyInfo)
-/// produces the same query output as the prior Expression.Compile()-based approach.
+/// Validates closure-variable handling in <c>ProjectableExpressionReplacer.VisitMember</c>.
 ///
-/// The code under test is in ProjectableExpressionReplacer.VisitMember:
-///   var value = node.Member switch {
-///       FieldInfo field => field.GetValue(constant.Value),
-///       PropertyInfo prop => prop.GetValue(constant.Value),
-///       _ => null
-///   };
+/// <b>How the current implementation works:</b>
+/// When a <see cref="System.Linq.Expressions.MemberExpression"/> accesses a member of a
+/// compiler-generated closure object the replacer first checks the member's <em>declared type</em>
+/// (<c>FieldInfo.FieldType</c> / <c>PropertyInfo.PropertyType</c>).  Only when that declared type
+/// is assignable to <see cref="IEnumerable"/> does it call <c>GetValue()</c> to read the runtime
+/// value.  If the value is an <see cref="IQueryable"/> whose provider matches the current query
+/// provider, the captured query's expression tree is inlined into the outer query.
 ///
-/// Scenarios covered:
-///   1. Closure capturing a value-type field (int) – FieldInfo branch, non-IQueryable result
-///   2. Closure capturing a reference-type field (string) – FieldInfo branch, non-IQueryable result
-///   3. Closure capturing two int fields – multiple FieldInfo accesses
-///   4. Closure capturing an IQueryable subquery – FieldInfo branch, IQueryable inlining via .Any()
-///   5. Closure capturing an IQueryable subquery – IQueryable inlining used in .Count() projection
-///   6. Closure capturing both a value-type field and an IQueryable – combined path
+/// <see cref="IEnumerable"/> (not <see cref="IQueryable"/>) is used as the gate because a variable
+/// declared as <c>IEnumerable&lt;T&gt;</c> may legally hold an EF Core <c>IQueryable&lt;T&gt;</c>
+/// at runtime; using <c>IQueryable</c> alone would miss that case.
+///
+/// For scalar captures (e.g., <c>int</c>, <c>bool</c>) the declared type is <em>not</em>
+/// assignable to <see cref="IEnumerable"/>, so <c>GetValue()</c> is never called; the closure
+/// member expression is passed through unchanged and EF Core resolves it as a normal query
+/// parameter via its own parameter-extraction pipeline.
+///
+/// Note on the <c>PropertyInfo</c> branch: standard C# compiler closures always use fields, not
+/// properties, so the <c>PropertyInfo prop =&gt; prop.GetValue(...)</c> arm is a defensive path
+/// that cannot be reached through ordinary C# lambdas.  It is covered by a direct unit test in
+/// <c>ProjectableExpressionReplacerTests</c> that constructs the expression tree manually.
+///
+/// <b>Scenarios covered:</b>
+///   1. Closure capturing an <c>int</c> field – scalar, NOT via reflection; EF Core handles it as a parameter
+///   2. Closure capturing a <c>string</c> field – GetValue() is called (string implements IEnumerable&lt;char&gt;),
+///      but the runtime value is not IQueryable so it falls through; EF Core handles it as a parameter
+///   3. Closure capturing two <c>int</c> fields – multiple scalars, NOT via reflection
+///   4. Closure capturing an <c>IQueryable&lt;Entity&gt;</c> field – FieldInfo.GetValue() path, inlined via .Any()
+///   5. Closure capturing an <c>IQueryable&lt;Entity&gt;</c> field – FieldInfo.GetValue() path, inlined in .Count() projection
+///   6. Closure capturing both an <c>int</c> field and an <c>IQueryable&lt;Entity&gt;</c> field – combined paths
+///   7. Closure capturing an <c>IEnumerable&lt;Entity&gt;</c> field holding an EF query – GetValue() is called
+///      because IEnumerable&lt;T&gt; satisfies the type gate; runtime value is IQueryable, so the subquery is inlined
 /// </summary>
 [UsesVerify]
 public class ClosureMemberAccessTests
@@ -41,10 +58,11 @@ public class ClosureMemberAccessTests
     }
 
     // -----------------------------------------------------------------------
-    // 1. Closure captures a single int field (FieldInfo branch, int value)
-    //    The compiler stores `lowerBound` as a field on the generated closure
-    //    class.  FieldInfo.GetValue() must return the correct int so that EF
-    //    can emit a SQL parameter for it – same result as Expression.Compile().
+    // 1. Closure captures a single int field – scalar, EF Core parameter path.
+    //    Because int is not assignable to IQueryable, the declared-type check
+    //    in VisitMember does NOT invoke GetValue(); the compiler-generated
+    //    closure member expression falls through unchanged and EF Core's own
+    //    ParameterExtractingExpressionVisitor turns it into a SQL parameter.
     // -----------------------------------------------------------------------
     [Fact]
     public Task CapturedIntField_UsedInProjectableMethod()
@@ -59,9 +77,11 @@ public class ClosureMemberAccessTests
     }
 
     // -----------------------------------------------------------------------
-    // 2. Closure captures a string field (FieldInfo branch, string value)
-    //    Ensures the PropertyInfo fallback is not needed for ordinary locals
-    //    and that reference-type values are retrieved correctly.
+    // 2. Closure captures a string field – EF Core parameter path.
+    //    string implements IEnumerable<char>, so the IEnumerable gate in
+    //    VisitMember is satisfied and GetValue() IS called.  However, the
+    //    runtime value is a string (not IQueryable), so the provider check
+    //    fails and the code falls through; EF Core handles it as a parameter.
     // -----------------------------------------------------------------------
     [Fact]
     public Task CapturedStringField_UsedInProjectableMethod()
@@ -76,9 +96,9 @@ public class ClosureMemberAccessTests
     }
 
     // -----------------------------------------------------------------------
-    // 3. Closure captures two int fields (multiple FieldInfo accesses)
-    //    Both `lower` and `upper` are read via separate FieldInfo.GetValue()
-    //    calls and must arrive intact as SQL parameters.
+    // 3. Closure captures two int fields – multiple scalars, EF Core parameter path.
+    //    Neither `lower` nor `upper` triggers GetValue() (int is not assignable to
+    //    IQueryable); EF Core emits a separate SQL parameter for each captured int.
     // -----------------------------------------------------------------------
     [Fact]
     public Task CapturedMultipleIntFields_UsedInProjectableMethod()
@@ -152,6 +172,31 @@ public class ClosureMemberAccessTests
 
         var query = dbContext.Set<Entity>()
             .Where(x => x.IsWithinRange(minCount, 50) || highIds.Any(h => h.Id == x.Id));
+
+        return Verifier.Verify(query.ToQueryString());
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. Closure captures an IQueryable declared as IEnumerable<Entity>.
+    //    The IEnumerable gate in VisitMember is satisfied (IEnumerable<T> is
+    //    assignable to IEnumerable), so GetValue() IS called.  The runtime
+    //    value is the EF Core IQueryable<Entity>, whose provider matches, so
+    //    the subquery is inlined — identical result to scenario 4.
+    // -----------------------------------------------------------------------
+    [Fact]
+    public Task CapturedIQueryable_DeclaredAsIEnumerable_IsInlined()
+    {
+        using var dbContext = new SampleDbContext<Entity>();
+
+        // Declared as IEnumerable<Entity> but assigned an EF Core query.
+        // With the IEnumerable gate the replacer calls GetValue(), recognises
+        // the runtime value as an IQueryable with a matching provider and
+        // inlines the subquery expression — no translation error.
+        IEnumerable<Entity> subsetAsEnumerable = dbContext.Set<Entity>()
+            .Where(x => x.IsWithinRange(1, 5));
+
+        var query = dbContext.Set<Entity>()
+            .Where(x => subsetAsEnumerable.Any(s => s.Id == x.Id));
 
         return Verifier.Verify(query.ToQueryString());
     }

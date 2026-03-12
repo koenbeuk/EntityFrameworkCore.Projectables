@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -32,11 +31,12 @@ namespace EntityFrameworkCore.Projectables.Services
                 (q => q.Where(x => true))).Body).Method.GetGenericMethodDefinition();
 
         // Static caches — keyed by CLR type, shared across all instances for the AppDomain lifetime.
-        // Safe because: type metadata is immutable, LambdaExpression trees are immutable, MethodInfo is stable.
-        private readonly static ConcurrentDictionary<Type, bool> _compilerGeneratedClosureCache = new();
-        private readonly static ConcurrentDictionary<Type, PropertyInfo[]> _projectablePropertiesCache = new();
-        private readonly static ConcurrentDictionary<Type, MethodInfo> _closedSelectCache = new();
-        private readonly static ConcurrentDictionary<Type, MethodInfo> _closedWhereCache = new();
+        // ConditionalWeakTable uses "ephemeron" semantics: the Type key is not kept alive by the
+        // cache entry, so types from collectible AssemblyLoadContexts can still be unloaded.
+        private readonly static ConditionalWeakTable<Type, StrongBox<bool>> _compilerGeneratedClosureCache = new();
+        private readonly static ConditionalWeakTable<Type, PropertyInfo[]> _projectablePropertiesCache = new();
+        private readonly static ConditionalWeakTable<Type, MethodInfo> _closedSelectCache = new();
+        private readonly static ConditionalWeakTable<Type, MethodInfo> _closedWhereCache = new();
 
         public ProjectableExpressionReplacer(IProjectionExpressionResolver projectionExpressionResolver, bool trackByDefault = false)
         {
@@ -108,8 +108,7 @@ namespace EntityFrameworkCore.Projectables.Services
                             // before the query become executed by EF (before the .First()), we rewrite the .First(where)
                             // as .Where(where).Select(x => ...).First()
             
-                            var whereMethod = _closedWhereCache.GetOrAdd(
-                                _entityType.ClrType, static (t, m) => m.MakeGenericMethod(t), _where);
+                            var whereMethod = _closedWhereCache.GetValue(_entityType.ClrType, t => _where.MakeGenericMethod(t));
                             var where = Expression.Call(null, whereMethod, call.Arguments);
                             // The call instance is based on the wrong polymorphied method.
                             var first  = call.Method.DeclaringType?.GetMethods()
@@ -254,16 +253,20 @@ namespace EntityFrameworkCore.Projectables.Services
             {
                 try
                 {
-                    // Cheap type check first: only call GetValue() when the member could
-                    // possibly hold an IQueryable.  FieldType / PropertyType are free
-                    // property reads on an already-materialised MemberInfo object.
+                    // Cheap type check first: only call GetValue() when the declared type
+                    // could possibly hold an IQueryable at runtime.  We use IEnumerable as
+                    // the gate (rather than IQueryable) because a variable legitimately
+                    // declared as IEnumerable<T> may hold an EF Core IQueryable<T> at
+                    // runtime — both interfaces share the same assignability chain.
+                    // FieldType / PropertyType are free property reads on already-
+                    // materialised MemberInfo objects, so this check is cheap.
                     var memberType = node.Member switch {
                         FieldInfo field => field.FieldType,
                         PropertyInfo prop => prop.PropertyType,
                         _ => null
                     };
 
-                    if (memberType is not null && typeof(IQueryable).IsAssignableFrom(memberType))
+                    if (memberType is not null && typeof(IEnumerable).IsAssignableFrom(memberType))
                     {
                         var value = node.Member switch {
                             FieldInfo field => field.GetValue(constant.Value),
@@ -327,7 +330,7 @@ namespace EntityFrameworkCore.Projectables.Services
 
         private Expression _AddProjectableSelect(Expression node, IEntityType entityType)
         {
-            var projectableProperties = _projectablePropertiesCache.GetOrAdd(
+            var projectableProperties = _projectablePropertiesCache.GetValue(
                 entityType.ClrType,
                 static t => t.GetProperties()
                     .Where(x => x.IsDefined(typeof(ProjectableAttribute), false) && x.CanWrite)
@@ -352,8 +355,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 .Where(x => projectableProperties.All(y => x.Name != y.Name && x.Name != $"<{y.Name}>k__BackingField"));
 
             // Replace db.Entities to db.Entities.Select(x => new Entity { Property1 = x.Property1, Rewritted = rewrittedProperty })
-            var select = _closedSelectCache.GetOrAdd(
-                entityType.ClrType, static (t, m) => m.MakeGenericMethod(t, t), _select);
+            var select = _closedSelectCache.GetValue(entityType.ClrType, t => _select.MakeGenericMethod(t, t));
             var xParam = Expression.Parameter(entityType.ClrType);
             return Expression.Call(
                 null,
@@ -385,7 +387,7 @@ namespace EntityFrameworkCore.Projectables.Services
             // TypeAttributes.NestedPrivate is a cheap flag check that rules out most types before
             // touching the attribute cache.
             type.Attributes.HasFlag(TypeAttributes.NestedPrivate) &&
-            _compilerGeneratedClosureCache.GetOrAdd(type, static t =>
-                Attribute.IsDefined(t, typeof(CompilerGeneratedAttribute), inherit: true));
+            _compilerGeneratedClosureCache.GetValue(type, static t =>
+                new StrongBox<bool>(Attribute.IsDefined(t, typeof(CompilerGeneratedAttribute), inherit: true))).Value;
     }
 }
