@@ -17,17 +17,32 @@ namespace EntityFrameworkCore.Projectables.Extensions
             return name;
         }
 
-        public static IEnumerable<Type> GetNestedTypePath(this Type type)
+        public static Type[] GetNestedTypePath(this Type type)
         {
-            if (type.IsNested && type.DeclaringType is not null)
+            // First pass: count the nesting depth so we can size the array exactly.
+            var depth = 0;
+            var current = type;
+            while (true)
             {
-                foreach (var containingType in type.DeclaringType.GetNestedTypePath())
+                depth++;
+                if (!current.IsNested || current.DeclaringType is null)
                 {
-                    yield return containingType;
+                    break;
                 }
+
+                current = current.DeclaringType;
             }
 
-            yield return type;
+            // Second pass: fill the array outermost-first by walking back from the leaf.
+            var path = new Type[depth];
+            current = type;
+            for (var i = depth - 1; i >= 0; i--)
+            {
+                path[i] = current;
+                current = current.DeclaringType!;
+            }
+
+            return path;
         }
 
         private static bool CanHaveOverridingMethod(this Type derivedType, MethodInfo methodInfo)

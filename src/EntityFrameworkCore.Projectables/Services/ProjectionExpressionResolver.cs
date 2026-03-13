@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using EntityFrameworkCore.Projectables.Extensions;
 
 namespace EntityFrameworkCore.Projectables.Services
@@ -10,8 +12,44 @@ namespace EntityFrameworkCore.Projectables.Services
     public sealed class ProjectionExpressionResolver : IProjectionExpressionResolver
     {
         // We never store null in the dictionary; assemblies without a registry use a sentinel delegate.
-        private readonly static Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
-        private readonly static ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
+        private static readonly Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
+        private static readonly ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
+
+        /// <summary>
+        /// Caches the fully-resolved <see cref="LambdaExpression"/> per <see cref="MemberInfo"/> so that
+        /// EF Core never repeats reflection work for the same member across queries.
+        /// </summary>
+        private static readonly ConcurrentDictionary<MemberInfo, LambdaExpression> _expressionCache = new();
+
+        /// <summary>
+        /// Caches <see cref="Type"/> → C#-formatted name strings, since the same parameter types
+        /// appear repeatedly across different projectable members.
+        /// </summary>
+        private static readonly ConditionalWeakTable<Type, string> _typeNameCache = new();
+
+        /// <summary>
+        /// O(1) hash-table lookup replacing the original 16 sequential <c>if</c> checks.
+        /// Rearranging the entries has no effect on lookup cost (hash-based), but the most common
+        /// EF Core types (<c>int</c>, <c>string</c>, <c>bool</c>) are listed first for readability.
+        /// </summary>
+        private static readonly Dictionary<Type, string> _csharpKeywords = new(16)
+        {
+            [typeof(int)]     = "int",
+            [typeof(string)]  = "string",
+            [typeof(bool)]    = "bool",
+            [typeof(long)]    = "long",
+            [typeof(double)]  = "double",
+            [typeof(decimal)] = "decimal",
+            [typeof(float)]   = "float",
+            [typeof(byte)]    = "byte",
+            [typeof(sbyte)]   = "sbyte",
+            [typeof(char)]    = "char",
+            [typeof(uint)]    = "uint",
+            [typeof(ulong)]   = "ulong",
+            [typeof(short)]   = "short",
+            [typeof(ushort)]  = "ushort",
+            [typeof(object)]  = "object",
+        };
 
         /// <summary>
         /// Looks up the generated <c>ProjectionRegistry</c> class in an assembly (once, then caches it).
@@ -39,6 +77,9 @@ namespace EntityFrameworkCore.Projectables.Services
         }
 
         public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
+            => _expressionCache.GetOrAdd(projectableMemberInfo, static mi => ResolveExpressionCore(mi));
+
+        private static LambdaExpression ResolveExpressionCore(MemberInfo projectableMemberInfo)
         {
             var projectableAttribute = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
                 ?? throw new InvalidOperationException("Expected member to have a Projectable attribute. None found");
@@ -100,30 +141,28 @@ namespace EntityFrameworkCore.Projectables.Services
                 case MethodInfo method:
                 {
                     var methodParams = method.GetParameters();
-                        
+
                     // The lambda's return type must match the method's return type.
-                    if (lambda.ReturnType != method.ReturnType) 
+                    if (lambda.ReturnType != method.ReturnType)
                     {
                         return null;
                     }
-                        
+
                     if (method.IsStatic)
                     {
                         // Static methods (including extension methods): all parameters are explicit.
-                        // The lambda maps directly to the method's parameter list — no implicit 'this'.
                         if (lambda.Parameters.Count == methodParams.Length &&
-                            !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            ParameterTypesMatch(lambda.Parameters, 0, methodParams))
                         {
                             return lambda;
                         }
                     }
                     else
                     {
-                        // Instance methods: the lambda's first parameter is the implicit 'this' (the declaring
-                        // type), followed by the explicit method parameters — i.e. (@this, arg1, arg2, ...) => ...
+                        // Instance methods: lambda's first parameter is the implicit 'this'.
                         if (lambda.Parameters.Count == methodParams.Length + 1 &&
                             lambda.Parameters[0].Type == declaringType &&
-                            !lambda.Parameters.Skip(1).Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            ParameterTypesMatch(lambda.Parameters, 1, methodParams))
                         {
                             return lambda;
                         }
@@ -134,6 +173,26 @@ namespace EntityFrameworkCore.Projectables.Services
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Compares lambda parameter types against method parameter types starting at <paramref name="offset"/>,
+        /// avoiding LINQ allocations (no Zip/Any enumerators or delegates).
+        /// </summary>
+        private static bool ParameterTypesMatch(
+            ReadOnlyCollection<ParameterExpression> lambdaParams,
+            int offset,
+            ParameterInfo[] methodParams)
+        {
+            for (var i = 0; i < methodParams.Length; i++)
+            {
+                if (lambdaParams[offset + i].Type != methodParams[i].ParameterType)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -211,7 +270,15 @@ namespace EntityFrameworkCore.Projectables.Services
             return null;
         }
 
+        /// <summary>
+        /// Returns the C#-formatted full name of <paramref name="type"/>.
+        /// Results are memoised in <see cref="_typeNameCache"/>; the same <see cref="Type"/> object
+        /// is encountered repeatedly across projectable members (e.g. <c>int</c>, <c>string</c>).
+        /// </summary>
         private static string GetFullTypeName(Type type)
+            => _typeNameCache.GetValue(type, static t => ComputeFullTypeName(t));
+
+        private static string ComputeFullTypeName(Type type)
         {
             // Handle generic type parameters (e.g., T, TEntity)
             if (type.IsGenericParameter)
@@ -284,24 +351,13 @@ namespace EntityFrameworkCore.Projectables.Services
             return type.Name;
         }
 
-        private static string? GetCSharpKeyword(Type type)
-        {
-            if (type == typeof(bool)) return "bool";
-            if (type == typeof(byte)) return "byte";
-            if (type == typeof(sbyte)) return "sbyte";
-            if (type == typeof(char)) return "char";
-            if (type == typeof(decimal)) return "decimal";
-            if (type == typeof(double)) return "double";
-            if (type == typeof(float)) return "float";
-            if (type == typeof(int)) return "int";
-            if (type == typeof(uint)) return "uint";
-            if (type == typeof(long)) return "long";
-            if (type == typeof(ulong)) return "ulong";
-            if (type == typeof(short)) return "short";
-            if (type == typeof(ushort)) return "ushort";
-            if (type == typeof(object)) return "object";
-            if (type == typeof(string)) return "string";
-            return null;
-        }
+        /// <summary>
+        /// O(1) dictionary lookup — replaces the original 16 sequential <c>if</c> checks.
+        /// Note: reordering the entries in <see cref="_csharpKeywords"/> has <em>no effect</em> on
+        /// performance because <see cref="Dictionary{TKey,TValue}"/> uses hashing, not linear scan.
+        /// (Reordering only mattered with the old <c>if</c>-chain, where placing <c>int</c> / <c>string</c>
+        /// / <c>bool</c> first would have reduced average comparisons from ~8 to ~1.)
+        /// </summary>
+        private static string? GetCSharpKeyword(Type type) => _csharpKeywords.GetValueOrDefault(type);
     }
 }
