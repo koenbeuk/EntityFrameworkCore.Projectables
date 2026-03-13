@@ -12,27 +12,27 @@ namespace EntityFrameworkCore.Projectables.Services
     public sealed class ProjectionExpressionResolver : IProjectionExpressionResolver
     {
         // We never store null in the dictionary; assemblies without a registry use a sentinel delegate.
-        private static readonly Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
-        private static readonly ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
+        private readonly static Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
+        private readonly static ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
 
         /// <summary>
         /// Caches the fully-resolved <see cref="LambdaExpression"/> per <see cref="MemberInfo"/> so that
         /// EF Core never repeats reflection work for the same member across queries.
         /// </summary>
-        private static readonly ConcurrentDictionary<MemberInfo, LambdaExpression> _expressionCache = new();
+        private readonly static ConcurrentDictionary<MemberInfo, LambdaExpression> _expressionCache = new();
 
         /// <summary>
         /// Caches <see cref="Type"/> → C#-formatted name strings, since the same parameter types
         /// appear repeatedly across different projectable members.
         /// </summary>
-        private static readonly ConditionalWeakTable<Type, string> _typeNameCache = new();
+        private readonly static ConditionalWeakTable<Type, string> _typeNameCache = new();
 
         /// <summary>
         /// O(1) hash-table lookup replacing the original 16 sequential <c>if</c> checks.
         /// Rearranging the entries has no effect on lookup cost (hash-based), but the most common
         /// EF Core types (<c>int</c>, <c>string</c>, <c>bool</c>) are listed first for readability.
         /// </summary>
-        private static readonly Dictionary<Type, string> _csharpKeywords = new(16)
+        private readonly static Dictionary<Type, string> _csharpKeywords = new(16)
         {
             [typeof(int)]     = "int",
             [typeof(string)]  = "string",
@@ -76,12 +76,15 @@ namespace EntityFrameworkCore.Projectables.Services
             return ReferenceEquals(registry, _nullRegistry) ? null : registry;
         }
 
-        public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
-            => _expressionCache.GetOrAdd(projectableMemberInfo, static mi => ResolveExpressionCore(mi));
+        public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo,
+            ProjectableAttribute? projectableAttribute = null)
+            => _expressionCache.GetOrAdd(projectableMemberInfo, static (mi, a) => ResolveExpressionCore(mi, a),
+                projectableAttribute);
 
-        private static LambdaExpression ResolveExpressionCore(MemberInfo projectableMemberInfo)
+        private static LambdaExpression ResolveExpressionCore(MemberInfo projectableMemberInfo,
+            ProjectableAttribute? projectableAttribute = null)
         {
-            var projectableAttribute = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
+            projectableAttribute ??= projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
                 ?? throw new InvalidOperationException("Expected member to have a Projectable attribute. None found");
 
             var expression = GetExpressionFromGeneratedType(projectableMemberInfo);
@@ -196,78 +199,144 @@ namespace EntityFrameworkCore.Projectables.Services
         }
 
         /// <summary>
+        /// Sentinel stored in <see cref="_reflectionFactoryCache"/> to represent
+        /// "no generated type found for this member", distinguishing it from a not-yet-populated entry.
+        /// <see cref="ConcurrentDictionary{TKey,TValue}"/> does not allow null values, so a sentinel is required.
+        /// </summary>
+        private readonly static Func<LambdaExpression> _reflectionNotFoundSentinel = static () => null!;
+
+        /// <summary>
+        /// Caches a pre-compiled <c>Func&lt;LambdaExpression&gt;</c> delegate per <see cref="MemberInfo"/>
+        /// so that <c>Assembly.GetType</c>, <c>GetMethod</c>, <c>MakeGenericType</c>, and
+        /// <c>MakeGenericMethod</c> are only paid once per member. All subsequent calls execute
+        /// native JIT-compiled code with zero reflection overhead.
+        /// </summary>
+        private readonly static ConcurrentDictionary<MemberInfo, Func<LambdaExpression>> _reflectionFactoryCache = new();
+
+        /// <summary>
         /// Resolves the <see cref="LambdaExpression"/> for a <c>[Projectable]</c> member using the
         /// reflection-based slow path only, bypassing the static registry.
         /// Useful for benchmarking and for members not yet in the registry (e.g. open-generic types).
         /// </summary>
         public static LambdaExpression? FindGeneratedExpressionViaReflection(MemberInfo projectableMemberInfo)
         {
-            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+            var factory = _reflectionFactoryCache.GetOrAdd(projectableMemberInfo, static mi => BuildReflectionFactory(mi));
+            return ReferenceEquals(factory, _reflectionNotFoundSentinel) ? null : factory.Invoke();
+        }
 
-            // Keep track of the original declaring type's generic arguments for later use
+        /// <summary>
+        /// Performs the one-time reflection work for a member and returns a compiled native delegate
+        /// (or <see cref="_reflectionNotFoundSentinel"/> if no generated type exists).
+        /// <para>
+        /// We use <c>Expression.Lambda&lt;TDelegate&gt;(...).Compile()</c> rather than
+        /// <c>Delegate.CreateDelegate</c> because the generated <c>Expression()</c> factory method
+        /// returns <c>Expression&lt;TDelegate&gt;</c> (a subtype of <see cref="LambdaExpression"/>), and
+        /// <c>CreateDelegate</c> requires an exact return-type match in most runtime environments.
+        /// The expression-tree wrapper handles the covariant cast cleanly and compiles to native code.
+        /// </para>
+        /// </summary>
+        private static Func<LambdaExpression> BuildReflectionFactory(MemberInfo projectableMemberInfo)
+        {
+            var declaringType = projectableMemberInfo.DeclaringType
+                ?? throw new InvalidOperationException("Expected a valid type here");
+
             var originalDeclaringType = declaringType;
 
-            // For generic types, use the generic type definition to match the generated name
-            // which is based on the open generic type
+            // For generic types, use the generic type definition to match the generated name.
             if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
             {
                 declaringType = declaringType.GetGenericTypeDefinition();
             }
 
-            // Get parameter types for method overload disambiguation
-            // Use the same format as Roslyn's SymbolDisplayFormat.FullyQualifiedFormat
-            // which uses C# keywords for primitive types (int, string, etc.)
+            // Build parameter type name array with a plain for-loop — avoids IEnumerator + delegate allocations.
             string[]? parameterTypeNames = null;
-            string memberLookupName = projectableMemberInfo.Name;
+            var memberLookupName = projectableMemberInfo.Name;
+
             if (projectableMemberInfo is MethodInfo method)
             {
-                // For generic methods, use the generic definition to get parameter types
-                // This ensures type parameters like TEntity are used instead of concrete types
+                // For generic methods, use the generic definition so type parameters (TEntity, etc.)
+                // are used instead of the concrete closed-generic arguments.
                 var methodToInspect = method.IsGenericMethod ? method.GetGenericMethodDefinition() : method;
+                var parameters = methodToInspect.GetParameters();
 
-                parameterTypeNames = methodToInspect.GetParameters()
-                    .Select(p => GetFullTypeName(p.ParameterType))
-                    .ToArray();
+                if (parameters.Length > 0)
+                {
+                    parameterTypeNames = new string[parameters.Length];
+                    for (var i = 0; i < parameters.Length; i++)
+                    {
+                        parameterTypeNames[i] = GetFullTypeName(parameters[i].ParameterType);
+                    }
+                }
             }
             else if (projectableMemberInfo is ConstructorInfo ctor)
             {
-                // Constructors are stored under the synthetic name "_ctor"
+                // Constructors are stored under the synthetic name "_ctor".
                 memberLookupName = "_ctor";
-                parameterTypeNames = ctor.GetParameters()
-                    .Select(p => GetFullTypeName(p.ParameterType))
-                    .ToArray();
+                var parameters = ctor.GetParameters();
+
+                if (parameters.Length > 0)
+                {
+                    parameterTypeNames = new string[parameters.Length];
+                    for (var i = 0; i < parameters.Length; i++)
+                    {
+                        parameterTypeNames[i] = GetFullTypeName(parameters[i].ParameterType);
+                    }
+                }
             }
 
-            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), memberLookupName, parameterTypeNames);
+            // GetNestedTypePath() returns a Type[] — project to string[] with a direct loop, no LINQ Select.
+            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(
+                declaringType.Namespace,
+                NestedTypePathToNames(declaringType.GetNestedTypePath()),
+                memberLookupName,
+                parameterTypeNames);
 
             var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
 
-            if (expressionFactoryType is not null)
+            if (expressionFactoryType is null)
             {
-                if (expressionFactoryType.IsGenericTypeDefinition)
-                {
-                    expressionFactoryType = expressionFactoryType.MakeGenericType(originalDeclaringType.GenericTypeArguments);
-                }
-
-                var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
-
-                var methodGenericArguments = projectableMemberInfo switch {
-                    MethodInfo methodInfo => methodInfo.GetGenericArguments(),
-                    _ => null
-                };
-
-                if (expressionFactoryMethod is not null)
-                {
-                    if (methodGenericArguments is { Length: > 0 })
-                    {
-                        expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(methodGenericArguments);
-                    }
-
-                    return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
-                }
+                return _reflectionNotFoundSentinel;
             }
 
-            return null;
+            if (expressionFactoryType.IsGenericTypeDefinition)
+            {
+                expressionFactoryType = expressionFactoryType.MakeGenericType(originalDeclaringType.GenericTypeArguments);
+            }
+
+            var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
+
+            if (expressionFactoryMethod is null)
+            {
+                return _reflectionNotFoundSentinel;
+            }
+
+            if (projectableMemberInfo is MethodInfo mi && mi.GetGenericArguments() is { Length: > 0 } methodGenericArgs)
+            {
+                expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(methodGenericArgs);
+            }
+
+            // Compile a native delegate: () => (LambdaExpression)GeneratedClass.Expression()
+            // Expression.Call + Convert handles the covariant return type (Expression<TDelegate> → LambdaExpression).
+            // The one-time Compile() cost is amortized; all subsequent calls are direct native-code invocations.
+            var call = Expression.Call(expressionFactoryMethod);
+            var cast = Expression.Convert(call, typeof(LambdaExpression));
+            return Expression.Lambda<Func<LambdaExpression>>(cast).Compile();
+        }
+
+        /// <summary>
+        /// Projects an array of <see cref="Type"/> objects — in practice always the
+        /// <c>Type[]</c> returned by <see cref="EntityFrameworkCore.Projectables.Extensions.TypeExtensions.GetNestedTypePath"/> — to a <c>string[]</c>
+        /// of simple type names without allocating a LINQ enumerator or intermediate delegate.
+        /// </summary>
+        private static string[] NestedTypePathToNames(Type[] types)
+        {
+            var names = new string[types.Length];
+            for (var i = 0; i < types.Length; i++)
+            {
+                names[i] = types[i].Name;
+            }
+
+            return names;
         }
 
         /// <summary>
