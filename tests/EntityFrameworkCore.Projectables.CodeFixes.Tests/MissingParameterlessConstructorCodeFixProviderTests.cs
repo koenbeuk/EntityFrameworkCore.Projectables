@@ -11,7 +11,7 @@ namespace EntityFrameworkCore.Projectables.CodeFixes.Tests;
 /// The fix inserts a <c>public ClassName() { }</c> constructor at the top of the class body.
 /// </summary>
 [UsesVerify]
-public class MissingParameterlessConstructorCodeFixProviderTests : CodeFixTestBase
+public class MissingParamLessConstructorCodeFixProviderTests : CodeFixTestBase
 {
     private readonly static MissingParameterlessConstructorCodeFixProvider _provider = new();
 
@@ -47,7 +47,7 @@ namespace Foo {
     }
 
     [Fact]
-    public Task AddParameterlessConstructor_ToClassWithSingleParameterizedConstructor() =>
+    public Task AddParamLessConstructor_ToClassWithSingleParamConstructor() =>
         Verifier.Verify(
             ApplyCodeFixAsync(
                 @"
@@ -67,7 +67,7 @@ namespace Foo {
                 _provider));
 
     [Fact]
-    public Task AddParameterlessConstructor_IsInsertedBeforeExistingMembers() =>
+    public Task AddParamLessConstructor_IsInsertedBeforeExistingMembers() =>
         Verifier.Verify(
             ApplyCodeFixAsync(
                 @"
@@ -89,7 +89,7 @@ namespace Foo {
                 _provider));
 
     [Fact]
-    public Task AddParameterlessConstructor_ToClassWithNoOtherMembers() =>
+    public Task AddParamLessConstructor_ToClassWithNoOtherMembers() =>
         Verifier.Verify(
             ApplyCodeFixAsync(
                 @"
