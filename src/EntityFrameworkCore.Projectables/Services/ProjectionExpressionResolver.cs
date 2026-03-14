@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using EntityFrameworkCore.Projectables.Extensions;
 
 namespace EntityFrameworkCore.Projectables.Services
@@ -12,6 +14,42 @@ namespace EntityFrameworkCore.Projectables.Services
         // We never store null in the dictionary; assemblies without a registry use a sentinel delegate.
         private readonly static Func<MemberInfo, LambdaExpression> _nullRegistry = static _ => null!;
         private readonly static ConcurrentDictionary<Assembly, Func<MemberInfo, LambdaExpression>> _assemblyRegistries = new();
+
+        /// <summary>
+        /// Caches the fully-resolved <see cref="LambdaExpression"/> per <see cref="MemberInfo"/> so that
+        /// EF Core never repeats reflection work for the same member across queries.
+        /// </summary>
+        private readonly static ConcurrentDictionary<MemberInfo, LambdaExpression> _expressionCache = new();
+
+        /// <summary>
+        /// Caches <see cref="Type"/> → C#-formatted name strings, since the same parameter types
+        /// appear repeatedly across different projectable members.
+        /// </summary>
+        private readonly static ConditionalWeakTable<Type, string> _typeNameCache = new();
+
+        /// <summary>
+        /// O(1) hash-table lookup replacing the original 16 sequential <c>if</c> checks.
+        /// Rearranging the entries has no effect on lookup cost (hash-based), but the most common
+        /// EF Core types (<c>int</c>, <c>string</c>, <c>bool</c>) are listed first for readability.
+        /// </summary>
+        private readonly static Dictionary<Type, string> _csharpKeywords = new(16)
+        {
+            [typeof(int)]     = "int",
+            [typeof(string)]  = "string",
+            [typeof(bool)]    = "bool",
+            [typeof(long)]    = "long",
+            [typeof(double)]  = "double",
+            [typeof(decimal)] = "decimal",
+            [typeof(float)]   = "float",
+            [typeof(byte)]    = "byte",
+            [typeof(sbyte)]   = "sbyte",
+            [typeof(char)]    = "char",
+            [typeof(uint)]    = "uint",
+            [typeof(ulong)]   = "ulong",
+            [typeof(short)]   = "short",
+            [typeof(ushort)]  = "ushort",
+            [typeof(object)]  = "object",
+        };
 
         /// <summary>
         /// Looks up the generated <c>ProjectionRegistry</c> class in an assembly (once, then caches it).
@@ -38,9 +76,15 @@ namespace EntityFrameworkCore.Projectables.Services
             return ReferenceEquals(registry, _nullRegistry) ? null : registry;
         }
 
-        public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo)
+        public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo,
+            ProjectableAttribute? projectableAttribute = null)
+            => _expressionCache.GetOrAdd(projectableMemberInfo, static (mi, a) => ResolveExpressionCore(mi, a),
+                projectableAttribute);
+
+        private static LambdaExpression ResolveExpressionCore(MemberInfo projectableMemberInfo,
+            ProjectableAttribute? projectableAttribute = null)
         {
-            var projectableAttribute = projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
+            projectableAttribute ??= projectableMemberInfo.GetCustomAttribute<ProjectableAttribute>()
                 ?? throw new InvalidOperationException("Expected member to have a Projectable attribute. None found");
 
             var expression = GetExpressionFromGeneratedType(projectableMemberInfo);
@@ -100,30 +144,28 @@ namespace EntityFrameworkCore.Projectables.Services
                 case MethodInfo method:
                 {
                     var methodParams = method.GetParameters();
-                        
+
                     // The lambda's return type must match the method's return type.
-                    if (lambda.ReturnType != method.ReturnType) 
+                    if (lambda.ReturnType != method.ReturnType)
                     {
                         return null;
                     }
-                        
+
                     if (method.IsStatic)
                     {
                         // Static methods (including extension methods): all parameters are explicit.
-                        // The lambda maps directly to the method's parameter list — no implicit 'this'.
                         if (lambda.Parameters.Count == methodParams.Length &&
-                            !lambda.Parameters.Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            ParameterTypesMatch(lambda.Parameters, 0, methodParams))
                         {
                             return lambda;
                         }
                     }
                     else
                     {
-                        // Instance methods: the lambda's first parameter is the implicit 'this' (the declaring
-                        // type), followed by the explicit method parameters — i.e. (@this, arg1, arg2, ...) => ...
+                        // Instance methods: lambda's first parameter is the implicit 'this'.
                         if (lambda.Parameters.Count == methodParams.Length + 1 &&
                             lambda.Parameters[0].Type == declaringType &&
-                            !lambda.Parameters.Skip(1).Zip(methodParams, (a, b) => a.Type != b.ParameterType).Any())
+                            ParameterTypesMatch(lambda.Parameters, 1, methodParams))
                         {
                             return lambda;
                         }
@@ -137,81 +179,175 @@ namespace EntityFrameworkCore.Projectables.Services
         }
 
         /// <summary>
+        /// Compares lambda parameter types against method parameter types starting at <paramref name="offset"/>,
+        /// avoiding LINQ allocations (no Zip/Any enumerators or delegates).
+        /// </summary>
+        private static bool ParameterTypesMatch(
+            ReadOnlyCollection<ParameterExpression> lambdaParams,
+            int offset,
+            ParameterInfo[] methodParams)
+        {
+            for (var i = 0; i < methodParams.Length; i++)
+            {
+                if (lambdaParams[offset + i].Type != methodParams[i].ParameterType)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Sentinel stored in <see cref="_reflectionFactoryCache"/> to represent
+        /// "no generated type found for this member", distinguishing it from a not-yet-populated entry.
+        /// <see cref="ConcurrentDictionary{TKey,TValue}"/> does not allow null values, so a sentinel is required.
+        /// </summary>
+        private readonly static Func<LambdaExpression> _reflectionNotFoundSentinel = static () => null!;
+
+        /// <summary>
+        /// Caches a pre-compiled <c>Func&lt;LambdaExpression&gt;</c> delegate per <see cref="MemberInfo"/>
+        /// so that <c>Assembly.GetType</c>, <c>GetMethod</c>, <c>MakeGenericType</c>, and
+        /// <c>MakeGenericMethod</c> are only paid once per member. All subsequent calls execute
+        /// native JIT-compiled code with zero reflection overhead.
+        /// </summary>
+        private readonly static ConcurrentDictionary<MemberInfo, Func<LambdaExpression>> _reflectionFactoryCache = new();
+
+        /// <summary>
         /// Resolves the <see cref="LambdaExpression"/> for a <c>[Projectable]</c> member using the
         /// reflection-based slow path only, bypassing the static registry.
         /// Useful for benchmarking and for members not yet in the registry (e.g. open-generic types).
         /// </summary>
         public static LambdaExpression? FindGeneratedExpressionViaReflection(MemberInfo projectableMemberInfo)
         {
-            var declaringType = projectableMemberInfo.DeclaringType ?? throw new InvalidOperationException("Expected a valid type here");
+            var factory = _reflectionFactoryCache.GetOrAdd(projectableMemberInfo, static mi => BuildReflectionFactory(mi));
+            return ReferenceEquals(factory, _reflectionNotFoundSentinel) ? null : factory.Invoke();
+        }
 
-            // Keep track of the original declaring type's generic arguments for later use
+        /// <summary>
+        /// Performs the one-time reflection work for a member and returns a compiled native delegate
+        /// (or <see cref="_reflectionNotFoundSentinel"/> if no generated type exists).
+        /// <para>
+        /// We use <c>Expression.Lambda&lt;TDelegate&gt;(...).Compile()</c> rather than
+        /// <c>Delegate.CreateDelegate</c> because the generated <c>Expression()</c> factory method
+        /// returns <c>Expression&lt;TDelegate&gt;</c> (a subtype of <see cref="LambdaExpression"/>), and
+        /// <c>CreateDelegate</c> requires an exact return-type match in most runtime environments.
+        /// The expression-tree wrapper handles the covariant cast cleanly and compiles to native code.
+        /// </para>
+        /// </summary>
+        private static Func<LambdaExpression> BuildReflectionFactory(MemberInfo projectableMemberInfo)
+        {
+            var declaringType = projectableMemberInfo.DeclaringType
+                ?? throw new InvalidOperationException("Expected a valid type here");
+
             var originalDeclaringType = declaringType;
 
-            // For generic types, use the generic type definition to match the generated name
-            // which is based on the open generic type
+            // For generic types, use the generic type definition to match the generated name.
             if (declaringType.IsGenericType && !declaringType.IsGenericTypeDefinition)
             {
                 declaringType = declaringType.GetGenericTypeDefinition();
             }
 
-            // Get parameter types for method overload disambiguation
-            // Use the same format as Roslyn's SymbolDisplayFormat.FullyQualifiedFormat
-            // which uses C# keywords for primitive types (int, string, etc.)
+            // Build parameter type name array with a plain for-loop — avoids IEnumerator + delegate allocations.
             string[]? parameterTypeNames = null;
-            string memberLookupName = projectableMemberInfo.Name;
+            var memberLookupName = projectableMemberInfo.Name;
+
             if (projectableMemberInfo is MethodInfo method)
             {
-                // For generic methods, use the generic definition to get parameter types
-                // This ensures type parameters like TEntity are used instead of concrete types
+                // For generic methods, use the generic definition so type parameters (TEntity, etc.)
+                // are used instead of the concrete closed-generic arguments.
                 var methodToInspect = method.IsGenericMethod ? method.GetGenericMethodDefinition() : method;
+                var parameters = methodToInspect.GetParameters();
 
-                parameterTypeNames = methodToInspect.GetParameters()
-                    .Select(p => GetFullTypeName(p.ParameterType))
-                    .ToArray();
+                if (parameters.Length > 0)
+                {
+                    parameterTypeNames = new string[parameters.Length];
+                    for (var i = 0; i < parameters.Length; i++)
+                    {
+                        parameterTypeNames[i] = GetFullTypeName(parameters[i].ParameterType);
+                    }
+                }
             }
             else if (projectableMemberInfo is ConstructorInfo ctor)
             {
-                // Constructors are stored under the synthetic name "_ctor"
+                // Constructors are stored under the synthetic name "_ctor".
                 memberLookupName = "_ctor";
-                parameterTypeNames = ctor.GetParameters()
-                    .Select(p => GetFullTypeName(p.ParameterType))
-                    .ToArray();
+                var parameters = ctor.GetParameters();
+
+                if (parameters.Length > 0)
+                {
+                    parameterTypeNames = new string[parameters.Length];
+                    for (var i = 0; i < parameters.Length; i++)
+                    {
+                        parameterTypeNames[i] = GetFullTypeName(parameters[i].ParameterType);
+                    }
+                }
             }
 
-            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(declaringType.Namespace, declaringType.GetNestedTypePath().Select(x => x.Name), memberLookupName, parameterTypeNames);
+            // GetNestedTypePath() returns a Type[] — project to string[] with a direct loop, no LINQ Select.
+            var generatedContainingTypeName = ProjectionExpressionClassNameGenerator.GenerateFullName(
+                declaringType.Namespace,
+                NestedTypePathToNames(declaringType.GetNestedTypePath()),
+                memberLookupName,
+                parameterTypeNames);
 
             var expressionFactoryType = declaringType.Assembly.GetType(generatedContainingTypeName);
 
-            if (expressionFactoryType is not null)
+            if (expressionFactoryType is null)
             {
-                if (expressionFactoryType.IsGenericTypeDefinition)
-                {
-                    expressionFactoryType = expressionFactoryType.MakeGenericType(originalDeclaringType.GenericTypeArguments);
-                }
-
-                var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
-
-                var methodGenericArguments = projectableMemberInfo switch {
-                    MethodInfo methodInfo => methodInfo.GetGenericArguments(),
-                    _ => null
-                };
-
-                if (expressionFactoryMethod is not null)
-                {
-                    if (methodGenericArguments is { Length: > 0 })
-                    {
-                        expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(methodGenericArguments);
-                    }
-
-                    return expressionFactoryMethod.Invoke(null, null) as LambdaExpression ?? throw new InvalidOperationException("Expected lambda");
-                }
+                return _reflectionNotFoundSentinel;
             }
 
-            return null;
+            if (expressionFactoryType.IsGenericTypeDefinition)
+            {
+                expressionFactoryType = expressionFactoryType.MakeGenericType(originalDeclaringType.GenericTypeArguments);
+            }
+
+            var expressionFactoryMethod = expressionFactoryType.GetMethod("Expression", BindingFlags.Static | BindingFlags.NonPublic);
+
+            if (expressionFactoryMethod is null)
+            {
+                return _reflectionNotFoundSentinel;
+            }
+
+            if (projectableMemberInfo is MethodInfo mi && mi.GetGenericArguments() is { Length: > 0 } methodGenericArgs)
+            {
+                expressionFactoryMethod = expressionFactoryMethod.MakeGenericMethod(methodGenericArgs);
+            }
+
+            // Compile a native delegate: () => (LambdaExpression)GeneratedClass.Expression()
+            // Expression.Call + Convert handles the covariant return type (Expression<TDelegate> → LambdaExpression).
+            // The one-time Compile() cost is amortized; all subsequent calls are direct native-code invocations.
+            var call = Expression.Call(expressionFactoryMethod);
+            var cast = Expression.Convert(call, typeof(LambdaExpression));
+            return Expression.Lambda<Func<LambdaExpression>>(cast).Compile();
         }
 
+        /// <summary>
+        /// Projects an array of <see cref="Type"/> objects — in practice always the
+        /// <c>Type[]</c> returned by <see cref="EntityFrameworkCore.Projectables.Extensions.TypeExtensions.GetNestedTypePath"/> — to a <c>string[]</c>
+        /// of simple type names without allocating a LINQ enumerator or intermediate delegate.
+        /// </summary>
+        private static string[] NestedTypePathToNames(Type[] types)
+        {
+            var names = new string[types.Length];
+            for (var i = 0; i < types.Length; i++)
+            {
+                names[i] = types[i].Name;
+            }
+
+            return names;
+        }
+
+        /// <summary>
+        /// Returns the C#-formatted full name of <paramref name="type"/>.
+        /// Results are memoised in <see cref="_typeNameCache"/>; the same <see cref="Type"/> object
+        /// is encountered repeatedly across projectable members (e.g. <c>int</c>, <c>string</c>).
+        /// </summary>
         private static string GetFullTypeName(Type type)
+            => _typeNameCache.GetValue(type, static t => ComputeFullTypeName(t));
+
+        private static string ComputeFullTypeName(Type type)
         {
             // Handle generic type parameters (e.g., T, TEntity)
             if (type.IsGenericParameter)
@@ -284,24 +420,13 @@ namespace EntityFrameworkCore.Projectables.Services
             return type.Name;
         }
 
-        private static string? GetCSharpKeyword(Type type)
-        {
-            if (type == typeof(bool)) return "bool";
-            if (type == typeof(byte)) return "byte";
-            if (type == typeof(sbyte)) return "sbyte";
-            if (type == typeof(char)) return "char";
-            if (type == typeof(decimal)) return "decimal";
-            if (type == typeof(double)) return "double";
-            if (type == typeof(float)) return "float";
-            if (type == typeof(int)) return "int";
-            if (type == typeof(uint)) return "uint";
-            if (type == typeof(long)) return "long";
-            if (type == typeof(ulong)) return "ulong";
-            if (type == typeof(short)) return "short";
-            if (type == typeof(ushort)) return "ushort";
-            if (type == typeof(object)) return "object";
-            if (type == typeof(string)) return "string";
-            return null;
-        }
+        /// <summary>
+        /// O(1) dictionary lookup — replaces the original 16 sequential <c>if</c> checks.
+        /// Note: reordering the entries in <see cref="_csharpKeywords"/> has <em>no effect</em> on
+        /// performance because <see cref="Dictionary{TKey,TValue}"/> uses hashing, not linear scan.
+        /// (Reordering only mattered with the old <c>if</c>-chain, where placing <c>int</c> / <c>string</c>
+        /// / <c>bool</c> first would have reduced average comparisons from ~8 to ~1.)
+        /// </summary>
+        private static string? GetCSharpKeyword(Type type) => _csharpKeywords.GetValueOrDefault(type);
     }
 }

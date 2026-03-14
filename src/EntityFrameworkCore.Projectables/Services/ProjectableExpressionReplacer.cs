@@ -51,7 +51,7 @@ namespace EntityFrameworkCore.Projectables.Services
                 var projectableAttribute = memberInfo.GetCustomAttribute<ProjectableAttribute>(false);
 
                 reflectedExpression = projectableAttribute is not null
-                    ? _resolver.FindGeneratedExpression(memberInfo)
+                    ? _resolver.FindGeneratedExpression(memberInfo, projectableAttribute)
                     : null;
 
                 _projectableMemberCache.Add(memberInfo, reflectedExpression);

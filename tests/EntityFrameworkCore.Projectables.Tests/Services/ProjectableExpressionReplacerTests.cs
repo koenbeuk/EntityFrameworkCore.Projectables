@@ -15,14 +15,15 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
     {
         public class ProjectableExpressionResolverStub : IProjectionExpressionResolver
         {
-            readonly Func<MemberInfo, LambdaExpression> _implementation;
+            readonly Func<MemberInfo, ProjectableAttribute?, LambdaExpression> _implementation;
 
-            public ProjectableExpressionResolverStub(Func<MemberInfo, LambdaExpression> implementation)
+            public ProjectableExpressionResolverStub(Func<MemberInfo, ProjectableAttribute?, LambdaExpression> implementation)
             {
                 _implementation = implementation;
             }
 
-            public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo) => _implementation(projectableMemberInfo);
+            public LambdaExpression FindGeneratedExpression(MemberInfo projectableMemberInfo,
+                ProjectableAttribute? projectableAttribute = null) => _implementation(projectableMemberInfo, projectableAttribute);
         }
 
         class Entity
@@ -58,7 +59,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => 0;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -74,7 +75,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => 0;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -90,7 +91,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => 0;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -106,7 +107,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => x.Id;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -122,7 +123,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => x.Id;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -138,7 +139,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => 0;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -154,7 +155,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Expression<Func<Entity, int>> expected = x => 0;
 
             var resolver = new ProjectableExpressionResolverStub(
-                x => expected
+                (x, a) => expected
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
@@ -188,7 +189,7 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             var memberAccess = Expression.MakeMemberAccess(closureConst, propertyInfo);
 
             var resolver = new ProjectableExpressionResolverStub(
-                _ => throw new InvalidOperationException("Resolver should not be called for non-projectable members.")
+                (x, a) => throw new InvalidOperationException("Resolver should not be called for non-projectable members.")
             );
             var subject = new ProjectableExpressionReplacer(resolver);
 
