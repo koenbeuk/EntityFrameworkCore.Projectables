@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using EntityFrameworkCore.Projectables.FunctionalTests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
-using ScenarioTests;
 using VerifyXunit;
 using Xunit;
 
