@@ -31,9 +31,7 @@
     </_RoslynVariant>
   </ItemGroup>
 
-  <!-- Build Generator + CodeFixes against each Roslyn variant so NuGet picks the
-       host-compatible analyzer DLL via analyzers/dotnet/roslyn{X.Y}/cs/. -->
-  <Target Name="_BuildAnalyzerVariants" BeforeTargets="GenerateNuspec">
+  <Target Name="_BuildAnalyzerVariants" BeforeTargets="GenerateNuspec" Condition="'$(NoBuild)' != 'true'">
     <MSBuild
       Projects="..\EntityFrameworkCore.Projectables.Generator\EntityFrameworkCore.Projectables.Generator.csproj"
       Targets="Restore;Build"
@@ -44,6 +42,11 @@
       Targets="Restore;Build"
       Properties="Configuration=$(Configuration);RoslynAnalyzerVersion=%(_RoslynVariant.Identity);BaseOutputPath=$(_AnalyzerVariantsDir)\CodeFixes-%(_RoslynVariant.Folder)\bin\;BaseIntermediateOutputPath=$(_AnalyzerVariantsDir)\CodeFixes-%(_RoslynVariant.Folder)\obj\"
       RemoveProperties="TargetFramework" />
+  </Target>
+
+  <Target Name="_CheckAnalyzerVariants" BeforeTargets="GenerateNuspec" Condition="'$(NoBuild)' == 'true'">
+    <Error Condition="!Exists('$(_AnalyzerVariantsDir)\Generator-roslyn4.8\bin\$(Configuration)\netstandard2.0\EntityFrameworkCore.Projectables.Generator.dll') OR !Exists('$(_AnalyzerVariantsDir)\Generator-roslyn5.0\bin\$(Configuration)\netstandard2.0\EntityFrameworkCore.Projectables.Generator.dll')"
+           Text="Roslyn-variant analyzer DLLs are missing under '$(_AnalyzerVariantsDir)'. Run 'dotnet pack' without --no-build to produce them." />
   </Target>
 
   <Target Name="_CleanAnalyzerVariants" AfterTargets="Clean">
