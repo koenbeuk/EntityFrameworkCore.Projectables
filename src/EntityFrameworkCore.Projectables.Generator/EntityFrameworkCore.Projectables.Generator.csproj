@@ -6,13 +6,21 @@
 	<NoWarn>$(NoWarn);NU5128</NoWarn>
 	<IsPackable>false</IsPackable>
 	<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+	<!-- Exclude bin/ and obj/ from auto-Compile glob unconditionally. For canonical builds
+	     this duplicates the SDK's existing exclusion (no-op). For Roslyn-variant builds
+	     (BaseOutputPath/BaseIntermediateOutputPath relocated outside the project), it
+	     prevents the canonical obj/ — populated by the cascaded ProjectReference build
+	     in the same pack invocation — from being picked up and CS0579-conflicting with
+	     the variant's own generated AssemblyInfo.cs. -->
+	<DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <!-- Define ROSLYN_5_0_OR_LATER when building with .NET SDK 10+ (NETCoreSdkVersion is set by
-       Microsoft.NET.Sdk.props, which runs before this project file body is evaluated).
-       This enables C# 14 extension-type support in the generator code.
-       On SDK 9 the constant is absent and extension block members are skipped safely. -->
-  <PropertyGroup Condition="'$(NETCoreSdkVersion)' != '' AND $([MSBuild]::VersionGreaterThanOrEquals('$(NETCoreSdkVersion)', '10.0.0'))">
+  <!-- Define ROSLYN_5_0_OR_LATER when compiling against Roslyn 5.0+ reference assemblies.
+       Keyed off $(RoslynAnalyzerVersion) (auto-detected in Directory.Build.props, or
+       overridden by the dual-build target in EntityFrameworkCore.Projectables.Abstractions.csproj)
+       so a recursive build with RoslynAnalyzerVersion=4.8.0 produces a Roslyn-4.8-compatible
+       DLL even on a host running .NET SDK 10. -->
+  <PropertyGroup Condition="'$(RoslynAnalyzerVersion)' != '' AND $([MSBuild]::VersionGreaterThanOrEquals('$(RoslynAnalyzerVersion)', '5.0.0'))">
     <DefineConstants>$(DefineConstants);ROSLYN_5_0_OR_LATER</DefineConstants>
   </PropertyGroup>
 
