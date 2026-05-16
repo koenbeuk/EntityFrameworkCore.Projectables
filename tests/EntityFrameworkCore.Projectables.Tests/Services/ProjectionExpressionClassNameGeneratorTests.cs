@@ -50,6 +50,31 @@ namespace EntityFrameworkCore.Projectables.Tests.Services
             Assert.Equal(expected, result);
         }
 
+        /// <summary>
+        /// Verifies that the verbatim identifier prefix <c>@</c> is stripped from parameter type
+        /// names. Roslyn's <c>FullyQualifiedFormat</c> includes it for types whose names are
+        /// reserved C# keywords (e.g. <c>@event</c>), but the CLR runtime name never includes
+        /// <c>@</c> — so both sides must agree on the sanitised name.
+        /// </summary>
+        [Theory]
+        [InlineData(
+            "global::Foo.Storage.@event",
+            "ns_a_m_P0_Foo_Storage_event")]
+        [InlineData(
+            "@event",
+            "ns_a_m_P0_event")]
+        [InlineData(
+            "global::Foo.@delegate",
+            "ns_a_m_P0_Foo_delegate")]
+        public void GenerateName_WithVerbatimAtPrefixInParamType_StripsAtSign(
+            string paramTypeName, string expected)
+        {
+            var result = ProjectionExpressionClassNameGenerator.GenerateName(
+                "ns", new[] { "a" }, "m", new[] { paramTypeName });
+
+            Assert.Equal(expected, result);
+        }
+
         [Fact]
         public void GeneratedFullName()
         {

@@ -140,6 +140,16 @@ namespace EntityFrameworkCore.Projectables.Services
                     continue;
                 }
 
+                // Skip the verbatim identifier prefix '@' — it is a C# syntactic escape for
+                // reserved keywords (e.g. '@event') and has no meaning at the CLR level.
+                // The CLR type name is just 'event', so stripping '@' keeps the generated name
+                // consistent with the runtime resolver's output.
+                if (typeName[i] == '@')
+                {
+                    i++;
+                    continue;
+                }
+
                 var c = typeName[i];
                 sb.Append(IsInvalidIdentifierChar(c) ? '_' : c);
                 i++;

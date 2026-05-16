@@ -106,6 +106,32 @@ namespace Foo {
     }
 
     [Fact]
+    public Task ProjectableExtensionMethod_WithVerbatimKeywordParameterType()
+    {
+        var compilation = CreateCompilation(@"
+using System;
+using EntityFrameworkCore.Projectables;
+namespace Foo {
+    class @event {
+        public int Id { get; set; }
+    }
+    
+    static class EventExtensions {
+        [Projectable]
+        public static int GetId(this @event e) => e.Id;
+    }
+}
+");
+
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
     public Task ProjectableExtensionMethod_WithExpressionPropertyBody()
     {
         var compilation = CreateCompilation(@"
