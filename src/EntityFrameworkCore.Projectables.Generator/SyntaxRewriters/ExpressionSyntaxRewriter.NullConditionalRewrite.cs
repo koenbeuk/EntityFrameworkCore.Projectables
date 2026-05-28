@@ -26,7 +26,25 @@ internal partial class ExpressionSyntaxRewriter
         else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Ignore)
         {
             // Ignore the conditional access and simply visit the WhenNotNull expression
-            return Visit(node.WhenNotNull);
+            var rewrittenExpression = (ExpressionSyntax?)Visit(node.WhenNotNull);
+            if (rewrittenExpression is null)
+            {
+                return null;
+            }
+
+            var typeInfo = _semanticModel.GetTypeInfo(node);
+            if (IsCoalesceLeftOperand(node) &&
+                typeInfo.ConvertedType is INamedTypeSymbol { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullableType &&
+                _semanticModel.GetTypeInfo(node.WhenNotNull).Type is { IsValueType: true } rewrittenType &&
+                SymbolEqualityComparer.Default.Equals(nullableType.TypeArguments[0], rewrittenType))
+            {
+                return SyntaxFactory.CastExpression(
+                    SyntaxFactory.ParseTypeName(nullableType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                    SyntaxFactory.ParenthesizedExpression(rewrittenExpression)
+                );
+            }
+
+            return rewrittenExpression;
         }
 
         else if (_nullConditionalRewriteSupport is NullConditionalRewriteSupport.Rewrite)
@@ -104,5 +122,20 @@ internal partial class ExpressionSyntaxRewriter
     {
         return type is { IsValueType: true } &&
                type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+    }
+
+    private static bool IsCoalesceLeftOperand(ConditionalAccessExpressionSyntax node)
+    {
+        ExpressionSyntax current = node;
+        var parent = node.Parent;
+
+        while (parent is ParenthesizedExpressionSyntax parenthesizedExpression)
+        {
+            current = parenthesizedExpression;
+            parent = parenthesizedExpression.Parent;
+        }
+
+        return parent is BinaryExpressionSyntax { RawKind: (int)SyntaxKind.CoalesceExpression } coalesceExpression &&
+               coalesceExpression.Left == current;
     }
 }
