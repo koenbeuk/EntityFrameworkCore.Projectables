@@ -33,10 +33,14 @@ internal partial class ExpressionSyntaxRewriter
             }
 
             var typeInfo = _semanticModel.GetTypeInfo(node);
+            var whenNotNullType = _semanticModel.GetTypeInfo(node.WhenNotNull).Type;
             if (IsCoalesceLeftOperand(node) &&
                 typeInfo.ConvertedType is INamedTypeSymbol { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullableType &&
-                _semanticModel.GetTypeInfo(node.WhenNotNull).Type is { IsValueType: true } rewrittenType &&
-                SymbolEqualityComparer.Default.Equals(nullableType.TypeArguments[0], rewrittenType))
+                whenNotNullType is { IsValueType: true } rewrittenType &&
+                (
+                    SymbolEqualityComparer.Default.Equals(nullableType.TypeArguments[0], rewrittenType) ||
+                    SymbolEqualityComparer.Default.Equals(nullableType, rewrittenType)
+                ))
             {
                 return SyntaxFactory.CastExpression(
                     SyntaxFactory.ParseTypeName(nullableType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
