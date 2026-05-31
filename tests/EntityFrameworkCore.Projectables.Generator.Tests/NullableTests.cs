@@ -489,6 +489,34 @@ class Foo {
     }
 
     [Fact]
+    public Task NullConditionalNullCoalesceTypeConversion_WithIgnoreSupport()
+    {
+        var compilation = CreateCompilation(@"
+using EntityFrameworkCore.Projectables;
+
+public class Price {
+    public decimal Amount { get; set; }
+}
+
+public class Product {
+    public Price? Price { get; set; }
+
+    [Projectable(AllowBlockBody = true, NullConditionalRewriteSupport = NullConditionalRewriteSupport.Ignore)]
+    public decimal GetCost() {
+        return Price?.Amount ?? 0m;
+    }
+}
+");
+
+        var result = RunGenerator(compilation);
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Single(result.GeneratedTrees);
+
+        return Verifier.Verify(result.GeneratedTrees[0].ToString());
+    }
+
+    [Fact]
     public Task NullableValueType_MemberAccess_WithRewriteSupport_IsBeingRewritten()
     {
         var compilation = CreateCompilation(@"
